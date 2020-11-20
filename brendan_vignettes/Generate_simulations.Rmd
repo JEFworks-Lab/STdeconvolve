@@ -1,0 +1,1316 @@
+---
+title: "Generate Topic Model Simulations"
+author: "Brendan F. Miller"
+date: "11/17/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load libraries and data
+
+```{r}
+
+library(MUDAN)
+library(Matrix)
+library(MERINGUE)
+library(reticulate) # make calls to python
+use_condaenv("topic_models")
+
+data(pbmcA)
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mpoa_merfish_clean.RData")
+
+```
+
+# scRNA-seq data and assign clusters
+
+## `pmbcA`
+
+```{r}
+
+plot.new()
+
+## filter out poor genes and cells
+geneCountsClean <- cleanCounts(pbmcA,
+                  min.reads = 10,
+                  min.detected = 10,
+                  verbose=FALSE)
+
+## CPM normalization
+geneCountsClean_CPM <- MERINGUE::normalizeCounts(geneCountsClean,
+                                                 depthScale = 1e+06,
+                                                 log = FALSE,
+                                                 verbose=FALSE)
+
+## variance normalize, identify overdispersed genes
+CPM_OD <- normalizeVariance(geneCountsClean_CPM,
+                                  details=TRUE,
+                                  verbose=FALSE)
+
+## variance normalized counts 
+CPM_varAdj_genes <- CPM_OD$mat
+
+## log transformed
+CPM_varAdj_genes_lg = log10(CPM_varAdj_genes + 1)
+
+# the OD genes:
+# dim(CPM_ODgenes[CPM_OD$ods,])
+
+```
+
+```{r}
+
+set.seed(0)
+
+## 30 PCs on overdispersed genes (var adjusted and log transformed)
+pcs <- getPcs(CPM_varAdj_genes_lg[CPM_OD$ods,],
+              nGenes=length(CPM_OD$ods),
+              nPcs=30,
+              verbose=FALSE)
+
+## get tSNE embedding on PCs
+emb <- Rtsne::Rtsne(pcs,
+                    is_distance=FALSE,
+                    perplexity=30,
+                    num_threads=parallel::detectCores(),
+                    verbose=FALSE)$Y
+
+rownames(emb) <- rownames(pcs)
+
+## get clusters
+com <- getComMembership(pcs, k=15, method=igraph::cluster_louvain)
+
+par(mfrow=c(1,1), mar=c(0.5,0.5,2,0.5))
+plotEmbedding(emb, groups=com, mark.clusters = TRUE)
+
+```
+
+# -----------------------------------------------------------
+
+# Simple Simulation
+
+- 3 cell types
+  - 2 distinct, 1 correlated
+- 10 genes
+- 50 spots
+
+```{r}
+
+set.seed(0)
+
+# sample base gene counts from normal distribution with mean. convert to positive integers
+base = abs(round(rnorm(10, 10)))
+names(base) <- paste0('gene', 1:10)
+base
+
+```
+
+```{r}
+
+## cell-type A upregulates genes 1 to 4
+x1 = base
+x1[1:4] = base[1:4] + 10
+
+## cell-type B upregulates genes 7 to 10
+x2 = base
+x2[7:10] = base[7:10] + 10
+
+## cell-type C upregulates genes 5 to 10 
+x3 = base
+x3[5:10] = base[5:10] + 10
+
+## visualize transcriptional distinctness
+mat <- rbind(x1, x2, x3)
+heatmap(mat, scale='none')
+## some cell-types are more correlated than others
+cor(t(mat))
+
+mat
+
+```
+
+##`train.data` and  `train.data.sub`
+
+```{r}
+
+## training data is differing proportions of
+## cell-type A and cell-type B with random cell-type C
+
+set.seed(0)
+
+# 80 cells plus up to 20 ctC cells
+# proportions of ctA and ctB adjusted in increments of 5 (6.25%)
+train.data <- do.call(rbind, lapply(seq(1,80, by=5), function(i) {
+  rand = round(runif(1)*20) # random int from 0 - 20 (ctC counts)
+  ground.truth <- c(i, 80-i, rand) # counts of ctA, ctB, and ctC
+  names(ground.truth) <- c('ctA', 'ctB', 'ctC')
+  # number of cells in spot can be between 80 and 100
+  y = ground.truth[1]*x1 + ground.truth[2]*x2 + rand*x3 # multiply and add gene counts by all cells
+  c(y, ground.truth/sum(ground.truth)) # convert cell counts to proportions
+}))
+
+rownames(train.data) <- paste0('sim', 1:nrow(train.data))
+head(train.data)
+
+## remove ct label columns
+train.data.sub <- as.data.frame(train.data[, names(x1)])
+head(train.data.sub)
+dim(train.data.sub)
+
+# new gene counts
+heatmap(as.matrix(train.data.sub), scale='none', Rowv = NA, Colv = NA)
+
+# train.data -> gene counts and ct proportions
+# trian.data.sub -> just gene counts and a data.frame
+
+```
+
+# -----------------------------------------------------------
+# Complex Simulation
+
+## 1. simulate cell counts
+
+1. pick some number of cell types to be in a spot
+2. Some total number of cells in a spot, variable
+3. Proportion of the selected cells types, variable
+
+Thoughts:
+Perhaps the total number of cells in a spot should model the distribution of nuclei counts I see after the cell segmentation
+
+What about number of cell types?
+Look at mousebrain and maybe way to infer this based on the distances of single cells sequenced?
+Then, set a limit of cell types in a spot, but also randomly sample from the total pool of cell types.
+Better yet, a way to know which cell types are probabilistically more likely to be associated with each other
+
+```{r}
+
+simulate_cell_counts <- function (tot_types, number_spots, max_cells, seed) {
+  
+  set.seed(seed)
+  tot_types <- tot_types # total cell types to mix
+  number_spots <- number_spots # total number of spots to simulate
+  max_cells <- max_cells # upper limit of cells in a spot
+  
+  cell_type_labels <- seq(1:tot_types)
+  
+  # matrix of counts of simulated cell types (columns) for each simulated spot (row)
+  spot_cell_type_counts <- do.call(rbind, lapply(1:number_spots, function(n) {
+    
+    # print(n) 
+    
+    # -------------------------------------------
+    # 1. choose number of cell types in a spot
+    num_types <- sample(seq(1,tot_types), 1)
+    
+    # print(num_types)
+    
+    # -------------------------------------------
+    # 2. Which cell types?
+    # 1's = cell types in spot
+    cell_type_vector <- c(sample(c(1), num_types, replace = TRUE),
+                          sample(c(0), tot_types-num_types, replace = TRUE))
+    
+    # order randomly. The positions with 1's will be the cell types selected
+    # vector of 1 and 0 randomly ordered, vector length = tot_types, sum = selected types in spot
+    cell_type_vector <- sample(cell_type_vector) 
+    
+    # print(cell_type_vector)
+    
+    # get labels of cell types based on positions of 1's in `cell_type_vector`
+    cell_types <- cell_type_labels[as.logical(cell_type_vector)]
+    
+    # print(cell_types)
+    
+    # -------------------------------------------
+    # 3. Proportions of each
+    
+    # uniform distribution to choose proportions of each cell type
+    p <- runif(num_types, 0, 1)
+    cell_type_proportions <- p/sum(p) # should sum to 1
+    
+    # print(cell_type_proportions)
+    
+    # -------------------------------------------
+    # 4. Total cells in spot, and absolute number of each cell type
+    
+    # pick a number between the number of cell types and max_cells
+    tot_cells <- sample(seq(num_types, max_cells), 1)
+    
+    # print(tot_cells)
+    
+    # get number of cells of each cell type based on proportions and desired total cells
+    # Note that depending on proportions and total cells, could be values less than one
+    # So just round up to nearest whole integer
+    cell_type_counts <- ceiling(cell_type_proportions * tot_cells) # round up to whole integers
+    
+    # print(cell_type_counts)
+    # print(sum(cell_type_counts)) # the actual total number of cells after rounding
+    
+    # -------------------------------------------
+    # 5. Append total counts of each cell type to `cell_type_vector`
+    
+    # append cell counts for each cell type present in spot to cell_type_vector at the correct position
+    # based on the ID of each value in cell_types
+    
+    # cell_type_vector needs to be same length as total cell types, but only the 1's need to be replaced.
+    # the cell types are essentially labeled as "1", "2", "3", etc based on cluster
+    # Use these as the indices to select the position
+    # in `cell_type_vector` and the cell_type count to be appended in `cell_type_counts`
+    
+    for (i in seq(length(cell_types))) {
+      cell_type_vector[as.integer(cell_types[i])] <- cell_type_counts[i]
+    }
+    
+    # the new row of cell counts for each cell type in a simulated spot
+    # do.call(rbind adds this as row to `spot_cell_type_counts`
+    cell_type_vector 
+    
+  }))
+  
+  return(spot_cell_type_counts)
+  
+}
+
+```
+
+### `spot_counts_ct3_mx50_s1000`
+
+```{r}
+
+spot_counts_ct3_mx50_s1000 <- simulate_cell_counts(tot_types = 3,
+                                              number_spots = 1000,
+                                              max_cells = 50,
+                                              seed = 0)
+
+head(spot_counts_ct3_mx50_s1000)
+spot_proportions_ct3_mx50_s1000 <- spot_counts_ct3_mx50_s1000 / rowSums(spot_counts_ct3_mx50_s1000)
+head(spot_proportions_ct3_mx50_s1000)
+
+```
+
+## 2. simulate gene counts
+
+With the simulate spots, need to generate a corresponding gene count matrix
+
+Option A:
+  Sample from single cell count matrix, where Each cell is assigned to a cell type
+  
+  For each simulated spot:
+    sample single cells that belong to each cell type in spot
+    combine the gene counts for the sampled cells
+    
+  Resulting matrix: each spot a columns, rows are genes, values are summed counts for the spot
+
+Option B:
+  Use simulated gene counts
+  Similar to the "Simple Simulation", each cell type has a base expression profile
+  
+  For each simulated spot:
+    multiply the base expression profiles by the number of cells of each cell type
+
+
+Option A:
+
+```{r}
+
+simulate_gene_counts <- function (simulated_ct_counts, gene_counts, communities, total_cts, spots, seed) {
+  
+  # # simulated spot cell type counts
+  # simulated_ct_counts
+  
+  # # gene x single_cell matrix
+  # gene_counts
+  
+  # # factor with names() the single cell ids and levels() the assigned clusters
+  # # levels need to be characters "1" through K, that correspond to the K cell-types
+  # communities
+  
+  # # same as total cell types used to generate simulated spot counts
+  # total_cts
+  
+  # # number os spots to compute gene counts for. Equal to or less than length of `simulated_ct_counts`
+  # spots
+  
+  set.seed(seed)
+  
+  # return matrix where rows are genes and columns are spots, cells are summed gene counts for samples cells in spot
+  
+  simulated_gene_counts <- do.call(cbind, lapply(1:spots, function(n) {
+    
+    # the cell-type labels as characters
+    # Matrix columns 1 through K correspond to cell types "1" through "K"
+    cell_types <- as.character(seq(1:dim(simulated_ct_counts)[2]))
+    
+    # simulated cell type counts for a spot (a row)
+    cell_type_counts <- simulated_ct_counts[n, ] 
+    
+    # for each cell type (column), sample single cell ids equal to number of cells
+    # append all sampled single cell IDs for the given spot to a vector
+    cell_list <- c()
+    for (i in seq(1:total_cts)) {
+      # goes through all cell type counts in spot, some cell types could be 0, ignore these.
+      # Just sample ids for cell types with values in row
+      if (cell_type_counts[i] > 0){
+        # sample cells with cell_type[i], number of samples = cell_type_counts[i]
+        sampled_cells <- sample(names(communities[which(communities == as.character(i))]),
+                                cell_type_counts[i],
+                                replace = TRUE)
+      cell_list <- append(cell_list, sampled_cells)
+      }
+    }
+  
+    # get total counts of each gene across the samples cells
+    if (length(cell_list) > 1) {
+      rowSums(gene_counts[ ,cell_list])
+    } else {
+      gene_counts[ ,cell_list]
+    }
+    
+  }))
+  
+  return(simulated_gene_counts)
+
+}
+
+```
+
+### `spot_genes_ct3_mx50_s1000`
+
+```{r}
+
+# note that `com` is the clustering for pmbcA.
+# `spot_genes_ct3_mx50_s1000` would sample from first 3 clusters ("1", "2", "3")
+
+spot_genes_ct3_mx50_s1000 <- simulate_gene_counts(simulated_ct_counts = spot_counts_ct3_mx50_s1000,
+                                                  gene_counts = geneCountsClean,
+                                                  communities = com,
+                                                  total_cts = 3,
+                                                  spots = 1000,
+                                                  seed = 0)
+
+dim(spot_genes_ct3_mx50_s1000)
+spot_genes_ct3_mx50_s1000[1:20,1:20]
+
+```
+
+## 3. select cell_type descriptive genes
+
+```{r}
+
+# Identify significantly differentially unregulated genes
+# in each identified cluster by Wilcox test
+
+# variance adjusted, log transformed values of the OD genes
+OD_genes <- as.matrix(CPM_varAdj_genes_lg[CPM_OD$ods,])
+
+# diffGenes <- getDifferentialGenes(OD_genes, com)
+
+selected_cts <- com[which(com %in% c("1", "2", "3"))]
+diffGenes <- getDifferentialGenes(OD_genes, selected_cts)
+
+signDiffGenes <- lapply(diffGenes, function(x) {
+  x <- x[x$p.adj < 0.05,]
+  x <- na.omit(x)
+  x <- x[x$highest,]
+  rownames(x)
+})
+
+# print(lapply(signDiffGenes, length))
+
+sigClusterGenes_ct3 <- as.vector(unlist(signDiffGenes))
+length(sigClusterGenes_ct3)
+
+```
+
+### `clusters 1, 2, 3`
+
+```{r}
+
+spot_genes_ct3_mx50_s1000[sigClusterGenes_ct3,][1:10,1:10]
+
+```
+
+These are raw counts. But shouldn't they be adjusted or normalized in some way between spots?
+
+The gene counts are coming from sampled single cells. Shouldn't each cell be normalized wrt to the others based on sequencing depth?
+
+If I CPM normalize, I no longer have integers.
+
+One thing to consider is that the higher the gene counts, the higher the words, and it seems the slower HDP
+
+```{r}
+
+## CPM depth normalization
+spot_genes_ct3_mx50_sigGenes_depthNorm <- MERINGUE::normalizeCounts(spot_genes_ct3_mx50_s1000[sigClusterGenes_ct3,],
+                                                              depthScale = 1e+04,
+                                                              log = FALSE,
+                                                              verbose=FALSE)
+
+spot_genes_ct3_mx50_sigGenes_depthNorm <- round(spot_genes_ct3_mx50_sigGenes_depthNorm)
+
+spot_genes_ct3_mx50_sigGenes_depthNorm[1:10,1:10]
+
+```
+
+```{r}
+
+# new gene counts
+heatmap(as.matrix(log10(spot_genes_ct3_mx50_sigGenes_depthNorm + 1)), scale='none')
+
+```
+
+
+
+# -----------------------------------------------------------
+# Stereoscope Simulation
+
+Also consider simulated data from `stereoscope`
+
+```{r}
+
+# hippocampus mouse simulated ST spots from hippocampus mousebrain single cell data
+
+repo_dir_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/stereoscope/"
+counts_path <- paste0(repo_dir_path, "data/comp/comp-data/synthetic/counts.st-hippo-comp.tsv")
+members_path <- paste0(repo_dir_path, "data/comp/comp-data/synthetic/members.st-hippo-comp.tsv")
+proportions_path <- paste0(repo_dir_path, "data/comp/comp-data/synthetic/proportions.st-hippo-comp.tsv")
+
+# gene counts for spots (1000 spots x 500 genes)
+synth_hippo_counts <- read.table(file = counts_path, sep = '\t', header = TRUE, row.names = 1)
+# counts of cell types (10)
+synth_hippo_members <- read.table(file = members_path, sep = '\t', header = TRUE, row.names = 1)
+# proportions of cell types (10)
+synth_hippo_proportions <- read.table(file = proportions_path, sep = '\t', header = TRUE, row.names = 1)
+
+
+```
+
+```{r}
+
+synth_hippo_counts[1:10,1:10]
+dim(synth_hippo_counts)
+
+synth_hippo_members[1:10,1:10]
+dim(synth_hippo_members)
+
+synth_hippo_proportions[1:10,1:10]
+dim(synth_hippo_proportions)
+
+
+```
+
+```{r}
+
+# new gene counts
+heatmap(as.matrix(t(log10(synth_hippo_counts + 1))), scale='none')
+
+```
+
+
+# -----------------------------------------------------------
+# -----------------------------------------------------------
+# -----------------------------------------------------------
+
+Compare LDA and HDP wrt simple and complex datasets
+
+Compare wrt correlation between predicted and true proportions
+Compare wrt gene expression ? check notes
+
+HDP in terms of tomotopy or gensim
+Figure out how to get topic proportions. Also must be a way to filter for topics like R hdp does (the posterior has some sort of cosine > 0.9 filter to choose topics)
+
+Way to "use biology" to help inform if the cluster choice in LDA is appropriate
+
+then there is the hungarian sort algorithm to get optimal matching
+library(clue)
+
+matching predicted topics to actual cell types. 
+
+Some way to simulate cells that are correlated strongly?
+
+Well, clusters in pmbcA 1,2,3 based on the tSNE, 1 and 2 are "similar" and 3 is distinct. But should be careful about interpreting the tSNE clustering. Distance between clusters may not mean anything
+
+# R library(topicmodels)
+
+## LDA
+
+### 1. Simple Simulation
+
+```{r}
+
+library(topicmodels)
+library(slam)
+library(tidytext)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+K=3
+
+# generate model
+train.data.lda <- topicmodels::LDA(slam::as.simple_triplet_matrix(as.matrix(train.data.sub)),
+                                    k=K,
+                                    control = list(seed = 0))
+
+# ----------------------------------------------------------------------------
+
+# # matrix of prob of each word associated with topic
+# train.data.topic_words <- tidy(train.data.lda, matrix = "beta")
+# train.data.topic_words
+# 
+# # visualize top words in each topic
+# train.data.topic.top_words <- train.data.topic_words %>%
+#   group_by(topic) %>%
+#   top_n(10, beta) %>%
+#   ungroup() %>%
+#   arrange(topic, -beta)
+# 
+# train.data.topic.top_words %>%
+#   mutate(term = reorder_within(term, beta, topic)) %>%
+#   ggplot(aes(term, beta, fill = factor(topic))) +
+#   geom_col(show.legend = FALSE) +
+#   facet_wrap(~topic, scales = "free") +
+#   coord_flip() +
+#   scale_x_reordered()
+# 
+# # matrix of log-likelihood of word being associated with topic 1 or 2
+# train.data.beta_spread <- train.data.topic_words %>%
+#   mutate(topic = paste0("topic", topic)) %>%
+#   spread(topic, beta) %>%
+#   filter(topic1 > .001 | topic2 > .001) %>%
+#   mutate(log_ratio = log2(topic2 / topic1))
+
+# ----------------------------------------------------------------------------
+
+# matrix of prob of each document associated with topic
+train.data.doc_topics <- tidy(train.data.lda, matrix = "gamma")
+# train.data.doc_topics
+
+# matrix proportions of topics (columns) in each document (rows)
+train.data.topic_proportions <- cast_sparse(train.data.doc_topics, document, topic, gamma) # row, columns, cells
+train.data.topic_proportions
+
+```
+
+```{r}
+
+train.data.ground_truth <- train.data[,c("ctA", "ctB", "ctC")]
+train.data.ground_truth
+
+```
+
+#### compare document topic proportions
+
+```{r}
+
+train.data.ground_truth <- train.data[,c("ctA", "ctB", "ctC")]
+
+## compare via correlation for each predicted cell-type
+## to each real cell-type in terms of proportions
+## across all spots
+compare <- do.call(rbind, lapply(1:ncol(train.data.ground_truth), function(i) {
+  sapply(1:ncol(train.data.topic_proportions), function(j) {
+    cor(train.data.ground_truth[,i], train.data.topic_proportions[,j])
+  })
+}))
+
+# table(is.na(compare))
+# compare[is.na(compare)] <- 0
+
+rownames(compare) <- colnames(train.data.ground_truth)
+colnames(compare) <- colnames(train.data.topic_proportions)
+compare
+heatmap(compare)
+
+```
+
+##### hungarian sort
+
+```{r}
+
+## use hungarian sort algorithm
+## to get optimal matching
+library(clue)
+
+order <- clue::solve_LSAP(compare-min(compare), maximum = TRUE)
+heatmap(compare[seq_along(order), order], Rowv=NA, Colv=NA, scale='row')
+
+## also visualize things without matches
+no.pairs <-setdiff(1:length(colnames(train.data.ground_truth)), as.numeric(order))
+heatmap(compare[, c(order, no.pairs)], Rowv=NA, Colv=NA, scale='row')
+
+```
+
+#### compare topic word associations
+
+Compare gene expression vector of topics in ground truth to proportions of genes associated with predicted topics in modeling.
+
+Which predicted topics correlate with ground truth topics?
+Consistent with proportions of predicted topics for each and the ground truth proportions?
+
+##### get predictions and ground truths
+
+```{r}
+
+# matrix of prob of each word associated with topic
+train.data.lda_topic_words <- tidy(train.data.lda, matrix = "beta")
+
+train.data.lda_topic_words <- as.matrix(cast_sparse(train.data.lda_topic_words, topic, term, beta)) # row, columns, cells
+train.data.lda_topic_words
+
+```
+
+From example of "MERFISH mOA:
+
+125 genes x 36K cells = cd
+36K cells x 9 cell types = mm
+
+cd x mm = summed counts of each gene for each cell type. (9 cell types x 125 genes)
+
+Divide by row sums (cell types) and get the fraction of each gene that contributes to the overall cell type expression
+
+For all cells of a given cell type, sum up the gene counts.
+
+Equivalent to the "topic words", i.e. proportion each word is associated with a topic
+
+For "Simple Simulation", we have:
+```{r}
+
+mat
+# a matrix where each row is ctA, B, C, and the gene base counts for that cell type.
+# So this is probably the appropriate matrix to use to get the contribution of each gene to each cell type.
+train.data.gt_gene_freq <- mat / rowSums(mat)
+train.data.gt_gene_freq
+
+# When making train.data, each vector (row in mat) was multiplied by number of cells of given type
+# and then summed together to get total gene expression for that simulated spot.
+# Multipling these total gene counts for each spot by the proportion of each cell type
+# should give the total counts of each gene for each cell type across all the spots
+# Then dividing by rowSums (cell type) should also give fraction of each gene that contributes to each type
+train.data.ct_tot_gene_counts <- t(t(as.matrix(train.data.sub)) %*% train.data.ground_truth)
+train.data.ct_gene_freq <- train.data.ct_tot_gene_counts / rowSums(train.data.ct_tot_gene_counts)
+train.data.ct_gene_freq
+
+heatmap(train.data.gt_gene_freq, scale='none')
+heatmap(train.data.ct_gene_freq, scale='none')
+
+# they're different...why??
+
+```
+
+##### compare
+
+```{r}
+
+compare2 <- do.call(rbind, lapply(1:nrow(train.data.gt_gene_freq), function(i) {
+  sapply(1:nrow(train.data.lda_topic_words), function(j) {
+    cor(train.data.gt_gene_freq[i,], train.data.lda_topic_words[j,])
+  })
+}))
+rownames(compare2) <- rownames(train.data.gt_gene_freq)
+colnames(compare2) <- rownames(train.data.lda_topic_words)
+head(compare2)
+heatmap(compare2)
+
+
+compare3 <- do.call(rbind, lapply(1:nrow(train.data.ct_gene_freq), function(i) {
+  sapply(1:nrow(train.data.lda_topic_words), function(j) {
+    cor(train.data.ct_gene_freq[i,], train.data.lda_topic_words[j,])
+  })
+}))
+rownames(compare3) <- rownames(train.data.ct_gene_freq)
+colnames(compare3) <- rownames(train.data.lda_topic_words)
+head(compare3)
+heatmap(compare3)
+
+```
+
+###### hungarian sort
+
+```{r}
+
+## optimal match
+#compare2 <- t(compare2)
+order <- clue::solve_LSAP(compare2-min(compare2), maximum = TRUE)
+heatmap(compare2[seq_along(order), order], Rowv=NA, Colv=NA, scale='row')
+
+order <- clue::solve_LSAP(compare3-min(compare3), maximum = TRUE)
+heatmap(compare3[seq_along(order), order], Rowv=NA, Colv=NA, scale='row')
+
+```
+
+### 2. Complex Simulation
+
+```{r}
+
+library(topicmodels)
+library(slam)
+library(tidytext)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+simulated_spots <- t(as.matrix(spot_genes_ct3_mx50_sigGenes_depthNorm))
+
+K=3
+
+# generate model
+lda <- topicmodels::LDA(slam::as.simple_triplet_matrix(simulated_spots),
+                                    k=K,
+                                    control = list(seed = 0))
+
+# ----------------------------------------------------------------------------
+
+# # matrix of prob of each word associated with topic
+# train.data.topic_words <- tidy(train.data.lda, matrix = "beta")
+# train.data.topic_words
+# 
+# # visualize top words in each topic
+# train.data.topic.top_words <- train.data.topic_words %>%
+#   group_by(topic) %>%
+#   top_n(10, beta) %>%
+#   ungroup() %>%
+#   arrange(topic, -beta)
+# 
+# train.data.topic.top_words %>%
+#   mutate(term = reorder_within(term, beta, topic)) %>%
+#   ggplot(aes(term, beta, fill = factor(topic))) +
+#   geom_col(show.legend = FALSE) +
+#   facet_wrap(~topic, scales = "free") +
+#   coord_flip() +
+#   scale_x_reordered()
+# 
+# # matrix of log-likelihood of word being associated with topic 1 or 2
+# train.data.beta_spread <- train.data.topic_words %>%
+#   mutate(topic = paste0("topic", topic)) %>%
+#   spread(topic, beta) %>%
+#   filter(topic1 > .001 | topic2 > .001) %>%
+#   mutate(log_ratio = log2(topic2 / topic1))
+
+# ----------------------------------------------------------------------------
+
+# matrix of prob of each document associated with topic
+doc_topics <- tidy(lda, matrix = "gamma")
+# train.data.doc_topics
+
+# matrix proportions of topics (columns) in each document (rows)
+topic_proportions <- cast_sparse(doc_topics, document, topic, gamma) # row, columns, cells
+topic_proportions
+
+```
+
+```{r}
+
+ground_truth <- spot_proportions_ct3_mx50_s1000
+colnames(ground_truth) <- paste0('ct', seq_len(dim(ground_truth)[2]))
+
+```
+
+#### compare document topic proportions
+
+```{r}
+
+## compare via correlation for each predicted cell-type
+## to each real cell-type in terms of proportions
+## across all spots
+compare <- do.call(rbind, lapply(1:ncol(ground_truth), function(i) {
+  sapply(1:ncol(topic_proportions), function(j) {
+    cor(ground_truth[,i], topic_proportions[,j])
+  })
+}))
+
+# table(is.na(compare))
+# compare[is.na(compare)] <- 0
+
+rownames(compare) <- colnames(ground_truth)
+colnames(compare) <- colnames(topic_proportions)
+compare
+heatmap(compare)
+
+```
+
+##### hungarian sort
+
+```{r}
+
+## use hungarian sort algorithm
+## to get optimal matching
+library(clue)
+
+order <- clue::solve_LSAP(compare-min(compare), maximum = TRUE)
+heatmap(compare[seq_along(order), order], Rowv=NA, Colv=NA, scale='row')
+
+## also visualize things without matches
+no.pairs <-setdiff(1:length(colnames(train.data.ground_truth)), as.numeric(order))
+heatmap(compare[, c(order, no.pairs)], Rowv=NA, Colv=NA, scale='row')
+
+```
+
+#### compare topic word associations
+
+Compare gene expression vector of topics in ground truth to proportions of genes associated with predicted topics in modeling.
+
+Which predicted topics correlate with ground truth topics?
+Consistent with proportions of predicted topics for each and the ground truth proportions?
+
+##### get predictions and ground truths
+
+```{r}
+
+# matrix of prob of each word associated with topic
+lda_topic_words <- tidy(lda, matrix = "beta")
+
+lda_topic_words <- as.matrix(cast_sparse(lda_topic_words, topic, term, beta)) # row, columns, cells
+lda_topic_words
+
+```
+
+From example of "MERFISH mOA:
+
+125 genes x 36K cells = cd
+36K cells x 9 cell types = mm
+
+cd x mm = summed counts of each gene for each cell type. (9 cell types x 125 genes)
+
+Divide by row sums (cell types) and get the fraction of each gene that contributes to the overall cell type expression
+
+For all cells of a given cell type, sum up the gene counts.
+
+Equivalent to the "topic words", i.e. proportion each word is associated with a topic
+
+For "Complex Simulation", we have:
+
+```{r}
+
+mm <- model.matrix(~ 0 + com) # com is the factor with single cell IDs and the clusters they belong to
+colnames(mm) <- levels(com)
+ct.gexp <- t(geneCountsClean %*% mm)
+
+# now select the cell types sampled and the significant genes:
+ground_truth_topic_words <- ct.gexp[1:3, sigClusterGenes_ct3]
+rownames(ground_truth_topic_words) <- paste0('gt', seq_len(3))
+
+ground_truth_topic_words_freq <- ground_truth_topic_words / rowSums(ground_truth_topic_words)
+ground_truth_topic_words_freq
+
+```
+
+##### compare
+
+```{r}
+
+compare2 <- do.call(rbind, lapply(1:nrow(ground_truth_topic_words_freq), function(i) {
+  sapply(1:nrow(lda_topic_words), function(j) {
+    cor(ground_truth_topic_words_freq[i,], lda_topic_words[j,])
+  })
+}))
+rownames(compare2) <- rownames(ground_truth_topic_words_freq)
+colnames(compare2) <- rownames(lda_topic_words)
+head(compare2)
+heatmap(compare2)
+
+```
+
+###### hungarian sort
+
+```{r}
+
+## optimal match
+#compare2 <- t(compare2)
+order <- clue::solve_LSAP(compare2-min(compare2), maximum = TRUE)
+heatmap(compare2[seq_along(order), order], Rowv=NA, Colv=NA, scale='row')
+
+```
+
+# -----------------------------------------------------------
+
+# Save input and ground truth to pickle
+
+library(hdp) is just really slow. Shift to using other libraries like tomotopy or gensim.
+
+Load simulated datasets into pickle objects to be transferred into jupyter notebook
+
+```{r}
+
+train_data_sub <- train.data.sub
+
+train_data_ground_truth <- train.data.ground_truth
+train_data_ground_truth_rows <- rownames(train_data_ground_truth)
+train_data_ground_truth_cols <- colnames(train_data_ground_truth)
+
+train_data_gt_gene_freq <- train.data.gt_gene_freq
+train_data_gt_gene_freq_rows <- rownames(train_data_gt_gene_freq)
+train_data_gt_gene_freq_cols <- colnames(train_data_gt_gene_freq)
+
+train_data_ct_gene_freq <- train.data.ct_gene_freq
+train_data_ct_gene_freq_rows <- rownames(train_data_ct_gene_freq)
+train_data_ct_gene_freq_cols <- colnames(train_data_ct_gene_freq)
+
+simulated_spots_rows <- rownames(simulated_spots)
+simulated_spots_cols <- colnames(simulated_spots)
+
+ground_truth_rows <- rownames(ground_truth)
+ground_truth_cols <- colnames(ground_truth)
+
+ground_truth_topic_words <- as.matrix(ground_truth_topic_words)
+ground_truth_topic_words_rows <- rownames(ground_truth_topic_words)
+ground_truth_topic_words_cols <- colnames(ground_truth_topic_words)
+
+ground_truth_topic_words_freq <- as.matrix(ground_truth_topic_words_freq)
+ground_truth_topic_words_freq_rows <- rownames(ground_truth_topic_words_freq)
+ground_truth_topic_words_freq_cols <- colnames(ground_truth_topic_words_freq)
+
+```
+
+
+```{python}
+
+import pickle
+import pandas as pd
+import numpy as np
+
+# Simple Simulation:
+
+train_data_sub = pd.DataFrame(r.train_data_sub)
+train_data_ground_truth = pd.DataFrame(r.train_data_ground_truth,
+                                        index=r.train_data_ground_truth_rows,
+                                        columns=r.train_data_ground_truth_cols)
+train_data_gt_gene_freq = pd.DataFrame(r.train_data_gt_gene_freq,
+                                        index=r.train_data_gt_gene_freq_rows,
+                                        columns=r.train_data_gt_gene_freq_cols)
+train_data_ct_gene_freq = pd.DataFrame(r.train_data_ct_gene_freq,
+                                        index=r.train_data_ct_gene_freq_rows,
+                                        columns=r.train_data_ct_gene_freq_cols)
+
+# Complex Simulation:
+
+# simulated_spots <- t(as.matrix(spot_genes_ct3_mx50_sigGenes_depthNorm))
+simulated_spots = pd.DataFrame(r.simulated_spots,
+                                index=r.simulated_spots_rows,
+                                columns=r.simulated_spots_cols)
+
+# ground_truth <- spot_proportions_ct3_mx50_s1000
+ground_truth = pd.DataFrame(r.ground_truth,
+                            index=r.ground_truth_rows,
+                            columns=r.ground_truth_cols)
+
+# ground_truth_topic_words <- ct.gexp[1:3, sigClusterGenes_ct3]
+# rownames(ground_truth_topic_words) <- paste0('gt', seq_len(3))
+ground_truth_topic_words = pd.DataFrame(r.ground_truth_topic_words,
+                                        index=r.ground_truth_topic_words_rows,
+                                        columns=r.ground_truth_topic_words_cols)
+
+# ground_truth_topic_words_freq <- ground_truth_topic_words / rowSums(ground_truth_topic_words)
+ground_truth_topic_words_freq = pd.DataFrame(r.ground_truth_topic_words_freq,
+                                              index=r.ground_truth_topic_words_freq_rows,
+                                              columns=r.ground_truth_topic_words_freq_cols)
+
+
+
+```
+
+```{python}
+
+st_image_array_saved_data = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/Generate_simulations_ct3_mx50_s1000.pickle"
+
+with open(st_image_array_saved_data, 'wb') as f:
+    pickle.dump([train_data_sub,
+                train_data_ground_truth,
+                train_data_gt_gene_freq,
+                train_data_ct_gene_freq,
+                simulated_spots,
+                ground_truth,
+                ground_truth_topic_words,
+                ground_truth_topic_words_freq], f)
+
+```
+
+# -----------------------------------------------------------
+
+# R library(hdp)
+
+## 1. Simple Simulation
+
+```{r}
+
+library(hdp)
+
+train.data.sub.quick_hdp <- hdp_quick_init(as.matrix(train.data.sub))
+train.data.sub.quick_chain <- hdp_posterior(train.data.sub.quick_hdp, burnin=100, n=100, space=5, seed=1234)
+
+# Note: 5000 total iterations seems to reduce performance?
+# The likelihood increased up to approx 500 then started decreasing. 
+# Try lowering iterations?
+
+# It actually improved
+
+```
+
+```{r}
+
+## check chain convergence
+par(mfrow=c(1,3))
+plot_lik(train.data.sub.quick_chain, bty="L")
+plot_numcluster(train.data.sub.quick_chain, bty="L")
+plot_data_assigned(train.data.sub.quick_chain, bty="L")
+
+```
+
+```{r}
+
+#################### Evaluate performance
+## extract results for cell-type proportions
+train.data.sub.quick_chain <- hdp_extract_components(train.data.sub.quick_chain)
+train.data.sub.hdp_results <- comp_dp_distn(train.data.sub.quick_chain)$mean
+dim(train.data.sub.hdp_results)
+
+train.data.sub.hdp_results <- train.data.sub.hdp_results[-1,] ## bug it seems
+
+rownames(train.data.sub.hdp_results) <- rownames(train.data.sub)
+colnames(train.data.sub.hdp_results) <- paste0('ct', 1:ncol(train.data.sub.hdp_results))
+head(train.data.sub.hdp_results)
+dim(train.data.sub.hdp_results)
+
+```
+
+### compare document topic proportions
+
+```{r}
+
+## compare via correlation for each predicted cell-type
+## to each real cell-type in terms of proportions
+## across all spots
+compare <- do.call(rbind, lapply(1:ncol(train.data.ground_truth), function(i) {
+  sapply(1:ncol(train.data.sub.hdp_results), function(j) {
+    cor(train.data.ground_truth[,i], train.data.sub.hdp_results[,j])
+  })
+}))
+
+table(is.na(compare))
+compare[is.na(compare)] <- 0
+
+rownames(compare) <- colnames(train.data.ground_truth)
+colnames(compare) <- colnames(train.data.sub.hdp_results)
+compare
+heatmap(compare)
+
+```
+
+#### hungarian sort
+
+```{r}
+
+## use hungarian sort algorithm
+## to get optimal matching
+library(clue)
+
+order <- clue::solve_LSAP(compare-min(compare), maximum = TRUE)
+heatmap(compare[seq_along(order), order], Rowv=NA, Colv=NA, scale='row')
+
+## also visualize things without matches
+no.pairs <-setdiff(1:length(colnames(train.data.ground_truth)), as.numeric(order))
+heatmap(compare[, c(order, no.pairs)], Rowv=NA, Colv=NA, scale='row')
+
+```
+
+### compare topic word associations
+
+Compare gene expression vector of topics in ground truth to proportions of genes associated with predicted topics in modeling.
+
+Which predicted topics correlate with ground truth topics?
+Consistent with proportions of predicted topics for each and the ground truth proportions?
+
+#### get predictions
+
+```{r}
+
+train.data.hdp_topic_words <- comp_categ_distn(train.data.sub.quick_chain)$mean
+dim(train.data.hdp_topic_words)
+rownames(train.data.hdp_topic_words) <- paste0('ct', 1:nrow(train.data.hdp_topic_words))
+colnames(train.data.hdp_topic_words) <- colnames(train.data.sub)
+head(train.data.hdp_topic_words)
+
+```
+
+#### compare
+
+```{r}
+
+compare2 <- do.call(rbind, lapply(1:nrow(train.data.gt_gene_freq), function(i) {
+  sapply(1:nrow(train.data.hdp_topic_words), function(j) {
+    cor(train.data.gt_gene_freq[i,], train.data.hdp_topic_words[j,])
+  })
+}))
+
+table(is.na(compare2))
+compare2[is.na(compare2)] <- 0
+
+rownames(compare2) <- rownames(train.data.gt_gene_freq)
+colnames(compare2) <- rownames(train.data.hdp_topic_words)
+head(compare2)
+heatmap(compare2)
+
+
+compare3 <- do.call(rbind, lapply(1:nrow(train.data.ct_gene_freq), function(i) {
+  sapply(1:nrow(train.data.hdp_topic_words), function(j) {
+    cor(train.data.ct_gene_freq[i,], train.data.hdp_topic_words[j,])
+  })
+}))
+
+table(is.na(compare3))
+compare3[is.na(compare3)] <- 0
+
+rownames(compare3) <- rownames(train.data.ct_gene_freq)
+colnames(compare3) <- rownames(train.data.hdp_topic_words)
+head(compare3)
+heatmap(compare3)
+
+```
+
+##### hungarian sort
+
+```{r}
+
+## optimal match
+#compare2 <- t(compare2)
+order <- clue::solve_LSAP(compare2-min(compare2), maximum = TRUE)
+heatmap(compare2[seq_along(order), order], Rowv=NA, Colv=NA, scale='row')
+
+```
+
+## 2. Complex Simulation
+
+```{r}
+
+library(hdp)
+
+ct3_mx50_sigGenes_depthNorm.quick_hdp <- hdp_quick_init(as.matrix(simulated_spots))
+ct3_mx50_sigGenes_depthNorm.quick_chain <- hdp_posterior(ct3_mx50_sigGenes_depthNorm.quick_hdp,
+                                                         burnin=100, n=2000, space=1, seed=1234)
+
+# 1000 iterations pretty good, but 5 predicted ct's. However, hungarian sort on gene expression actually reduces to 3
+# Also only t ook about 18 minutes. Maybe b/c reduced number of total words in spots to 10K
+# Try uping the iterations and see if improves?
+
+```
+
+```{r}
+
+## check chain convergence
+par(mfrow=c(1,3))
+plot_lik(ct3_mx50_sigGenes_depthNorm.quick_chain, bty="L")
+plot_numcluster(ct3_mx50_sigGenes_depthNorm.quick_chain, bty="L")
+plot_data_assigned(ct3_mx50_sigGenes_depthNorm.quick_chain, bty="L")
+
+```
+
+```{r}
+
+#################### Evaluate performance
+## extract results for cell-type proportions
+ct3_mx50_sigGenes_depthNorm.quick_chain <- hdp_extract_components(ct3_mx50_sigGenes_depthNorm.quick_chain)
+ct3_mx50_sigGenes_depthNorm.hdp_results <- comp_dp_distn(ct3_mx50_sigGenes_depthNorm.quick_chain)$mean
+dim(ct3_mx50_sigGenes_depthNorm.hdp_results)
+
+ct3_mx50_sigGenes_depthNorm.hdp_results <- ct3_mx50_sigGenes_depthNorm.hdp_results[-1,] ## bug it seems
+
+rownames(ct3_mx50_sigGenes_depthNorm.hdp_results) <- rownames(simulated_spots)
+colnames(ct3_mx50_sigGenes_depthNorm.hdp_results) <- paste0('ct', 1:ncol(ct3_mx50_sigGenes_depthNorm.hdp_results))
+head(ct3_mx50_sigGenes_depthNorm.hdp_results)
+dim(ct3_mx50_sigGenes_depthNorm.hdp_results)
+
+```
+
+### compare document topic proportions
+
+```{r}
+
+## compare via correlation for each predicted cell-type
+## to each real cell-type in terms of proportions
+## across all spots
+compare <- do.call(rbind, lapply(1:ncol(ground_truth), function(i) {
+  sapply(1:ncol(ct3_mx50_sigGenes_depthNorm.hdp_results), function(j) {
+    cor(ground_truth[,i], ct3_mx50_sigGenes_depthNorm.hdp_results[,j])
+  })
+}))
+
+table(is.na(compare))
+compare[is.na(compare)] <- 0
+
+rownames(compare) <- colnames(ground_truth)
+colnames(compare) <- colnames(ct3_mx50_sigGenes_depthNorm.hdp_results)
+compare
+heatmap(compare)
+
+```
+
+#### hungarian sort
+
+```{r}
+
+## use hungarian sort algorithm
+## to get optimal matching
+library(clue)
+
+order <- clue::solve_LSAP(compare-min(compare), maximum = TRUE)
+heatmap(compare[seq_along(order), order], Rowv=NA, Colv=NA, scale='row')
+
+## also visualize things without matches
+no.pairs <-setdiff(1:length(colnames(train.data.ground_truth)), as.numeric(order))
+heatmap(compare[, c(order, no.pairs)], Rowv=NA, Colv=NA, scale='row')
+
+```
+
+### compare topic word associations
+
+Compare gene expression vector of topics in ground truth to proportions of genes associated with predicted topics in modeling.
+
+Which predicted topics correlate with ground truth topics?
+Consistent with proportions of predicted topics for each and the ground truth proportions?
+
+#### get predictions
+
+```{r}
+
+ct3_mx50_sigGenes_depthNorm.hdp_topic_words <- comp_categ_distn(ct3_mx50_sigGenes_depthNorm.quick_chain)$mean
+dim(ct3_mx50_sigGenes_depthNorm.hdp_topic_words)
+rownames(ct3_mx50_sigGenes_depthNorm.hdp_topic_words) <- paste0('ct', 1:nrow(ct3_mx50_sigGenes_depthNorm.hdp_topic_words))
+colnames(ct3_mx50_sigGenes_depthNorm.hdp_topic_words) <- colnames(simulated_spots)
+head(ct3_mx50_sigGenes_depthNorm.hdp_topic_words)
+
+```
+
+#### compare
+
+```{r}
+
+compare2 <- do.call(rbind, lapply(1:nrow(ground_truth_topic_words_freq), function(i) {
+  sapply(1:nrow(ct3_mx50_sigGenes_depthNorm.hdp_topic_words), function(j) {
+    cor(ground_truth_topic_words_freq[i,], ct3_mx50_sigGenes_depthNorm.hdp_topic_words[j,])
+  })
+}))
+
+table(is.na(compare2))
+compare2[is.na(compare2)] <- 0
+
+rownames(compare2) <- rownames(ground_truth_topic_words_freq)
+colnames(compare2) <- rownames(ct3_mx50_sigGenes_depthNorm.hdp_topic_words)
+head(compare2)
+heatmap(compare2)
+
+```
+
+##### hungarian sort
+
+```{r}
+
+## optimal match
+#compare2 <- t(compare2)
+order <- clue::solve_LSAP(compare2-min(compare2), maximum = TRUE)
+heatmap(compare2[seq_along(order), order], Rowv=NA, Colv=NA, scale='row')
+
+```
+
+
