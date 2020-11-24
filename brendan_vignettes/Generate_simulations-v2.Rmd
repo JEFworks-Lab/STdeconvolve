@@ -743,6 +743,82 @@ heatmap(compare3[seq_along(order), order], Rowv=NA, Colv=NA, scale='row')
 
 ### 2. Complex Simulation
 
+#### Not Depth Normalized
+
+```{r}
+
+library(topicmodels)
+library(slam)
+library(tidytext)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/ct3_mx50_sigGenes_not_depthNorm_objects.Rdata")
+
+# simulated_spots_not_depthNorm
+
+K=3
+
+# generate model
+lda_notDn <- topicmodels::LDA(slam::as.simple_triplet_matrix(simulated_spots_not_depthNorm),
+                                    k=K,
+                                    control = list(seed = 0))
+
+# ----------------------------------------------------------------------------
+
+# # matrix of prob of each word associated with topic
+# train.data.topic_words <- tidy(train.data.lda, matrix = "beta")
+# train.data.topic_words
+# 
+# # visualize top words in each topic
+# train.data.topic.top_words <- train.data.topic_words %>%
+#   group_by(topic) %>%
+#   top_n(10, beta) %>%
+#   ungroup() %>%
+#   arrange(topic, -beta)
+# 
+# train.data.topic.top_words %>%
+#   mutate(term = reorder_within(term, beta, topic)) %>%
+#   ggplot(aes(term, beta, fill = factor(topic))) +
+#   geom_col(show.legend = FALSE) +
+#   facet_wrap(~topic, scales = "free") +
+#   coord_flip() +
+#   scale_x_reordered()
+# 
+# # matrix of log-likelihood of word being associated with topic 1 or 2
+# train.data.beta_spread <- train.data.topic_words %>%
+#   mutate(topic = paste0("topic", topic)) %>%
+#   spread(topic, beta) %>%
+#   filter(topic1 > .001 | topic2 > .001) %>%
+#   mutate(log_ratio = log2(topic2 / topic1))
+
+# ----------------------------------------------------------------------------
+
+# matrix of prob of each document associated with topic
+doc_topics_notDn <- tidy(lda_notDn, matrix = "gamma")
+# train.data.doc_topics
+
+# matrix proportions of topics (columns) in each document (rows)
+topic_proportions_notDn <- cast_sparse(doc_topics_notDn, document, topic, gamma) # row, columns, cells
+topic_proportions_notDn
+
+```
+
+##### get predictions and ground truths
+
+```{r}
+
+# matrix of prob of each word associated with topic
+lda_topic_words_notDn <- tidy(lda_notDn, matrix = "beta")
+
+lda_topic_words_notDn <- as.matrix(cast_sparse(lda_topic_words_notDn, topic, term, beta)) # row, columns, cells
+lda_topic_words_notDn
+
+```
+
+#### Depth Normalized
+
 ```{r}
 
 library(topicmodels)
@@ -1192,6 +1268,9 @@ ct3_mx50_sigGenes.quick_hdp <- hdp_quick_init(as.matrix(simulated_spots_not_dept
 ct3_mx50_sigGenes.quick_chain <- hdp_posterior(ct3_mx50_sigGenes.quick_hdp,
                                                          burnin=100, n=2000, space=1, seed=1234)
 
+
+# This took only 15 minutes. Turns our depth normalizing has about 5 mil words and deothNorm by 10K has 10 mil words. So double number of words does slow it down  a lot.
+
 ```
 
 ```{r}
@@ -1232,7 +1311,6 @@ colnames(ct3_mx50_sigGenes.hdp_topic_words) <- colnames(simulated_spots)
 head(ct3_mx50_sigGenes.hdp_topic_words)
 
 ```
-
 
 ### depthNormalized
 
@@ -1368,10 +1446,13 @@ heatmap(compare2[seq_along(order), order], Rowv=NA, Colv=NA, scale='row')
 ```
 
 # -----------------------------------------------------------
+# -----------------------------------------------------------
+
 
 # Comparisons
+# -----------------------------------------------------------
 
-# Simple Simulation
+# 1. Simple Simulation
 
 ## LDA analysis
 
@@ -1692,9 +1773,12 @@ corr_diff_rows
 
 ```
 
-# Complex Simulation
+# -----------------------------------------------------------
+# 2. Complex Simulation
 
 ## LDA analysis
+
+### DepthNormalized
 
 ```{r}
 
@@ -1766,7 +1850,7 @@ heatmap(complex_lda_topic_word_hg_pairs, Rowv=NA, Colv=NA, scale='row', main="to
 
 ```
 
-## HDP analysis
+### Not DepthNorm
 
 ```{r}
 
@@ -1778,77 +1862,526 @@ rownames(ground_truth_topic_words_freq) <- colnames(ground_truth)
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-# HDP simple sim document-topic proportions
-train.data.sub.hdp_results
+# LDA complex sim document-topic proportions
+topic_proportions_notDn
 
-simple_hdp_doc_topic_performance <- do.call(rbind, lapply(1:ncol(train.data.ground_truth), function(i) {
-  sapply(1:ncol(train.data.sub.hdp_results), function(j) {
-    cor(train.data.ground_truth[,i], train.data.sub.hdp_results[,j])
+complex_notDn_lda_doc_topic_performance <- do.call(rbind, lapply(1:ncol(ground_truth), function(i) {
+  sapply(1:ncol(topic_proportions_notDn), function(j) {
+    cor(ground_truth[,i], topic_proportions_notDn[,j])
   })
 }))
 
-table(is.na(simple_hdp_doc_topic_performance))
-simple_hdp_doc_topic_performance[is.na(simple_hdp_doc_topic_performance)] <- 0
+rownames(complex_notDn_lda_doc_topic_performance) <- colnames(ground_truth)
+colnames(complex_notDn_lda_doc_topic_performance) <- colnames(topic_proportions_notDn)
 
-rownames(simple_hdp_doc_topic_performance) <- colnames(train.data.ground_truth)
-colnames(simple_hdp_doc_topic_performance) <- paste0(seq(1:length(colnames(train.data.sub.hdp_results))))
-
-heatmap(simple_hdp_doc_topic_performance, Rowv=NA, Colv=NA, scale='row', main="doc-topic orig mtx")
+heatmap(complex_notDn_lda_doc_topic_performance, Rowv=NA, Colv=NA, scale='row', main="doc-topic orig mtx")
 
 ## ------------------------------------------
 ## hungarian sorting
 
-simple_hdp_doc_topic_order <- clue::solve_LSAP(simple_hdp_doc_topic_performance-min(simple_hdp_doc_topic_performance),
+complex_notDn_lda_doc_topic_order <- clue::solve_LSAP(complex_notDn_lda_doc_topic_performance-min(complex_notDn_lda_doc_topic_performance),
                                                maximum = TRUE)
 
-simple_hdp_doc_topics_hung_pairs <- simple_hdp_doc_topic_performance[seq_along(simple_hdp_doc_topic_order), simple_hdp_doc_topic_order]
+complex_notDn_lda_doc_topics_hg_pairs <- complex_lda_doc_topic_performance[seq_along(complex_notDn_lda_doc_topic_order), complex_notDn_lda_doc_topic_order]
 
-heatmap(simple_hdp_doc_topics_hung_pairs, Rowv=NA, Colv=NA, scale='row', main="doc-topic hg sorted mtx")
+heatmap(complex_notDn_lda_doc_topics_hg_pairs, Rowv=NA, Colv=NA, scale='row', main="doc-topic hg sorted mtx")
 
 ## ------------------------------------------
 ## also visualize things without matches
-simple_hdp_doc_topic.no_pairs <-setdiff(1:length(colnames(train.data.ground_truth)), as.numeric(simple_hdp_doc_topic_order))
+complex_notDn_lda_doc_topic.no_pairs <-setdiff(1:length(colnames(ground_truth)), as.numeric(complex_notDn_lda_doc_topic_order))
 
-simple_hdp_doc_topics_hung_pairs_and_others <- simple_hdp_doc_topic_performance[, c(simple_hdp_doc_topic_order, simple_hdp_doc_topic.no_pairs)]
+complex_notDn_lda_doc_topics_hg_pairs_and_others <- complex_notDn_lda_doc_topic_performance[, c(complex_notDn_lda_doc_topic_order, complex_notDn_lda_doc_topic.no_pairs)]
 
-heatmap(simple_hdp_doc_topics_hung_pairs_and_others, Rowv=NA, Colv=NA, scale='row', main="doc-topic hg sorted and others mtx")
+heatmap(complex_notDn_lda_doc_topics_hg_pairs_and_others, Rowv=NA, Colv=NA, scale='row', main="doc-topic hg sorted and others mtx")
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-# HDP simple sim topic-word probabilities
-train.data.hdp_topic_words
+# LDA simple sim topic-word probabilities
+lda_topic_words_notDn
 
-simple_hdp_topic_word_performance <- do.call(rbind, lapply(1:nrow(train.data.gt_gene_freq), function(i) {
-  sapply(1:nrow(train.data.hdp_topic_words), function(j) {
-    cor(train.data.gt_gene_freq[i,], train.data.hdp_topic_words[j,])
+complex_notDn_lda_topic_word_performance <- do.call(rbind, lapply(1:nrow(ground_truth_topic_words_freq), function(i) {
+  sapply(1:nrow(lda_topic_words_notDn), function(j) {
+    cor(ground_truth_topic_words_freq[i,], lda_topic_words_notDn[j,])
   })
 }))
 
-table(is.na(simple_hdp_topic_word_performance))
-simple_hdp_topic_word_performance[is.na(simple_hdp_topic_word_performance)] <- 0
+rownames(complex_notDn_lda_topic_word_performance) <- rownames(ground_truth_topic_words_freq)
+colnames(complex_notDn_lda_topic_word_performance) <- rownames(lda_topic_words_notDn)
 
-rownames(simple_hdp_topic_word_performance) <- colnames(train.data.ground_truth)
-colnames(simple_hdp_topic_word_performance) <- paste0(seq(1:length(colnames(train.data.sub.hdp_results))))
+heatmap(complex_notDn_lda_topic_word_performance, Rowv=NA, Colv=NA, scale='row', main="topic-word orig mtx")
 
-heatmap(simple_hdp_topic_word_performance, Rowv=NA, Colv=NA, scale='row', main="topic-word orig mtx")
+## ------------------------------------------
+## hungarian sorting
+
+complex_notDn_lda_topic_word_order <- clue::solve_LSAP(complex_notDn_lda_topic_word_performance-min(complex_notDn_lda_topic_word_performance),
+                                                maximum = TRUE)
+
+complex_notDn_lda_topic_word_hg_pairs <- complex_notDn_lda_topic_word_performance[seq_along(complex_notDn_lda_topic_word_order), complex_notDn_lda_topic_word_order]
+
+heatmap(complex_notDn_lda_topic_word_hg_pairs, Rowv=NA, Colv=NA, scale='row', main="topic-word hg sorted mtx")
+
+```
+
+## HDP analysis
+
+### DepthNormalized
+
+```{r}
+
+# Ground truth complex sim document-topic proportions
+# spot_proportions_ct3_mx50_s1000
+ground_truth
+# Ground truth complex sim topic-word probabilities
+rownames(ground_truth_topic_words_freq) <- colnames(ground_truth)
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# HDP complex sim document-topic proportions
+ct3_mx50_sigGenes_depthNorm.hdp_results
+colnames(ct3_mx50_sigGenes_depthNorm.hdp_results) <- paste0(seq(1:length(colnames(ct3_mx50_sigGenes_depthNorm.hdp_results))))
+
+complex_dN_hdp_doc_topic_performance <- do.call(rbind, lapply(1:ncol(ground_truth), function(i) {
+  sapply(1:ncol(ct3_mx50_sigGenes_depthNorm.hdp_results), function(j) {
+    cor(ground_truth[,i], ct3_mx50_sigGenes_depthNorm.hdp_results[,j])
+  })
+}))
+
+table(is.na(complex_dN_hdp_doc_topic_performance))
+complex_dN_hdp_doc_topic_performance[is.na(complex_dN_hdp_doc_topic_performance)] <- 0
+
+rownames(complex_dN_hdp_doc_topic_performance) <- colnames(ground_truth)
+colnames(complex_dN_hdp_doc_topic_performance) <- paste0(seq(1:length(colnames(ct3_mx50_sigGenes_depthNorm.hdp_results))))
+
+heatmap(complex_dN_hdp_doc_topic_performance, Rowv=NA, Colv=NA, scale='row', main="doc-topic orig mtx")
+
+## ------------------------------------------
+## hungarian sorting
+
+complex_dN_hdp_doc_topic_order <- clue::solve_LSAP(complex_dN_hdp_doc_topic_performance-min(complex_dN_hdp_doc_topic_performance),
+                                               maximum = TRUE)
+
+complex_dN_hdp_doc_topics_hg_pairs <- complex_dN_hdp_doc_topic_performance[seq_along(complex_dN_hdp_doc_topic_order), complex_dN_hdp_doc_topic_order]
+
+heatmap(complex_dN_hdp_doc_topics_hg_pairs, Rowv=NA, Colv=NA, scale='row', main="doc-topic hg sorted mtx")
+
+## ------------------------------------------
+## also visualize things without matches
+complex_dN_hdp_doc_topic.no_pairs <-setdiff(1:length(colnames(ground_truth)), as.numeric(complex_dN_hdp_doc_topic_order))
+
+complex_dN_hdp_doc_topics_hg_pairs_and_others <- complex_dN_hdp_doc_topic_performance[, c(complex_dN_hdp_doc_topic_order, complex_dN_hdp_doc_topic.no_pairs)]
+
+heatmap(complex_dN_hdp_doc_topics_hg_pairs_and_others, Rowv=NA, Colv=NA, scale='row', main="doc-topic hg sorted and others mtx")
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# HDP complex sim topic-word probabilities
+ct3_mx50_sigGenes_depthNorm.hdp_topic_words
+rownames(ct3_mx50_sigGenes_depthNorm.hdp_topic_words) <- colnames(ct3_mx50_sigGenes_depthNorm.hdp_results)
+
+complex_dN_hdp_topic_word_performance <- do.call(rbind, lapply(1:nrow(ground_truth_topic_words_freq), function(i) {
+  sapply(1:nrow(ct3_mx50_sigGenes_depthNorm.hdp_topic_words), function(j) {
+    cor(ground_truth_topic_words_freq[i,], ct3_mx50_sigGenes_depthNorm.hdp_topic_words[j,])
+  })
+}))
+
+table(is.na(complex_dN_hdp_topic_word_performance))
+complex_dN_hdp_topic_word_performance[is.na(complex_dN_hdp_topic_word_performance)] <- 0
+
+rownames(complex_dN_hdp_topic_word_performance) <- rownames(ground_truth_topic_words_freq)
+colnames(complex_dN_hdp_topic_word_performance) <- rownames(ct3_mx50_sigGenes_depthNorm.hdp_topic_words)
+
+heatmap(complex_dN_hdp_topic_word_performance, Rowv=NA, Colv=NA, scale='row', main="topic-word orig mtx")
 
 ## ------------------------------------------
 # hungarian sorting
 
-simple_hdp_topic_word_order <- clue::solve_LSAP(simple_hdp_topic_word_performance-min(simple_hdp_topic_word_performance),
+complex_dN_hdp_topic_word_order <- clue::solve_LSAP(complex_dN_hdp_topic_word_performance-min(complex_dN_hdp_topic_word_performance),
                                                 maximum = TRUE)
 
-simple_hdp_topic_word_hung_pairs <- simple_hdp_topic_word_performance[seq_along(simple_hdp_topic_word_order), simple_hdp_topic_word_order]
+complex_dN_hdp_topic_word_hg_pairs <- complex_dN_hdp_topic_word_performance[seq_along(complex_dN_hdp_topic_word_order), complex_dN_hdp_topic_word_order]
 
-heatmap(simple_hdp_topic_word_hung_pairs, Rowv=NA, Colv=NA, scale='row', main="topic-word hg sorted mtx")
+heatmap(complex_dN_hdp_topic_word_hg_pairs, Rowv=NA, Colv=NA, scale='row', main="topic-word hg sorted mtx")
+
+```
+
+### Not DepthNorm
+
+```{r}
+
+# Ground truth complex sim document-topic proportions
+# spot_proportions_ct3_mx50_s1000
+ground_truth
+# Ground truth complex sim topic-word probabilities
+rownames(ground_truth_topic_words_freq) <- colnames(ground_truth)
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# HDP complex sim document-topic proportions
+ct3_mx50_sigGenes.hdp_results
+colnames(ct3_mx50_sigGenes.hdp_results) <- paste0(seq(1:length(colnames(ct3_mx50_sigGenes.hdp_results))))
+
+complex_hdp_doc_topic_performance <- do.call(rbind, lapply(1:ncol(ground_truth), function(i) {
+  sapply(1:ncol(ct3_mx50_sigGenes.hdp_results), function(j) {
+    cor(ground_truth[,i], ct3_mx50_sigGenes.hdp_results[,j])
+  })
+}))
+
+table(is.na(complex_hdp_doc_topic_performance))
+complex_hdp_doc_topic_performance[is.na(complex_hdp_doc_topic_performance)] <- 0
+
+rownames(complex_hdp_doc_topic_performance) <- colnames(ground_truth)
+colnames(complex_hdp_doc_topic_performance) <- paste0(seq(1:length(colnames(ct3_mx50_sigGenes.hdp_results))))
+
+heatmap(complex_hdp_doc_topic_performance, Rowv=NA, Colv=NA, scale='row', main="doc-topic orig mtx")
+
+## ------------------------------------------
+## hungarian sorting
+
+complex_hdp_doc_topic_order <- clue::solve_LSAP(complex_hdp_doc_topic_performance-min(complex_hdp_doc_topic_performance),
+                                               maximum = TRUE)
+
+complex_hdp_doc_topics_hg_pairs <- complex_hdp_doc_topic_performance[seq_along(complex_hdp_doc_topic_order), complex_hdp_doc_topic_order]
+
+heatmap(complex_hdp_doc_topics_hg_pairs, Rowv=NA, Colv=NA, scale='row', main="doc-topic hg sorted mtx")
+
+## ------------------------------------------
+## also visualize things without matches
+complex_hdp_doc_topic.no_pairs <-setdiff(1:length(colnames(ground_truth)), as.numeric(complex_hdp_doc_topic_order))
+
+complex_hdp_doc_topics_hg_pairs_and_others <- complex_hdp_doc_topic_performance[, c(complex_hdp_doc_topic_order, complex_hdp_doc_topic.no_pairs)]
+
+heatmap(complex_hdp_doc_topics_hg_pairs_and_others, Rowv=NA, Colv=NA, scale='row', main="doc-topic hg sorted and others mtx")
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# HDP complex sim topic-word probabilities
+ct3_mx50_sigGenes.hdp_topic_words
+rownames(ct3_mx50_sigGenes.hdp_topic_words) <- colnames(ct3_mx50_sigGenes.hdp_results)
+
+complex_hdp_topic_word_performance <- do.call(rbind, lapply(1:nrow(ground_truth_topic_words_freq), function(i) {
+  sapply(1:nrow(ct3_mx50_sigGenes.hdp_topic_words), function(j) {
+    cor(ground_truth_topic_words_freq[i,], ct3_mx50_sigGenes.hdp_topic_words[j,])
+  })
+}))
+
+table(is.na(complex_hdp_topic_word_performance))
+complex_hdp_topic_word_performance[is.na(complex_hdp_topic_word_performance)] <- 0
+
+rownames(complex_hdp_topic_word_performance) <- rownames(ground_truth_topic_words_freq)
+colnames(complex_hdp_topic_word_performance) <- rownames(ct3_mx50_sigGenes.hdp_topic_words)
+
+heatmap(complex_hdp_topic_word_performance, Rowv=NA, Colv=NA, scale='row', main="topic-word orig mtx")
+
+## ------------------------------------------
+# hungarian sorting
+
+complex_hdp_topic_word_order <- clue::solve_LSAP(complex_hdp_topic_word_performance-min(complex_hdp_topic_word_performance),
+                                                maximum = TRUE)
+
+complex_hdp_topic_word_hg_pairs <- complex_hdp_topic_word_performance[seq_along(complex_hdp_topic_word_order), complex_hdp_topic_word_order]
+
+heatmap(complex_hdp_topic_word_hg_pairs, Rowv=NA, Colv=NA, scale='row', main="topic-word hg sorted mtx")
 
 ```
 
 ## LDA versus HDP
 
+```{r}
+
+library(RColorBrewer)
+palr <- colorRampPalette(rev(brewer.pal(11, "RdBu")))(100)
+pal <- colorRampPalette(brewer.pal(11, "RdBu"))(100)
+
+heatmap(complex_lda_doc_topics_hg_pairs, main="lda hg dN", Rowv=NA, Colv=NA, scale='none', col=palr)
+heatmap(complex_lda_doc_topic_performance, main="lda dN", Rowv=NA, Colv=NA, scale='none', col=palr)
+
+heatmap(complex_notDn_lda_doc_topics_hg_pairs, main="lda hg", Rowv=NA, Colv=NA, scale='none', col=palr)
+heatmap(complex_notDn_lda_doc_topic_performance, main="lda", Rowv=NA, Colv=NA, scale='none', col=palr)
+
+heatmap(complex_dN_hdp_doc_topics_hg_pairs, main="hdp hg dN", Rowv=NA, Colv=NA, scale='none', col=palr)
+heatmap(complex_dN_hdp_doc_topic_performance, main="hdp dN", Rowv=NA, Colv=NA, scale='none', col=palr)
+
+heatmap(complex_hdp_doc_topics_hg_pairs, main="hdp hg", Rowv=NA, Colv=NA, scale='none', col=palr)
+heatmap(complex_hdp_doc_topic_performance, main="hdp", Rowv=NA, Colv=NA, scale='none', col=palr)
+
+```
+
+### lda
+
+Idea:
+Find the top 2 ground truth cell types that each predicted topic correlates most with.
+Set all other correlations to zero.
+
+#### not DepthNorm
+
+```{r}
+
+# complex_notDn_lda_doc_topic_performance
+
+filt_mtx <- apply(complex_notDn_lda_doc_topic_performance, 2, function(x) {
+  
+  # for each column (predicted topic) replace all but the top two correlations with 0's
+  sorted_cors <- sort(x, index.return=TRUE, decreasing=TRUE)
+  new <- replace(x, sorted_cors$ix[-(1:2)], 0)
+  new
+  
+})
+
+complex_notDn_lda_filt_mtx <- filt_mtx
+complex_notDn_lda_filt_mtx
+
+# pal1 <- seecol(pal = usecol(c(Karpfenblau, "white", "gold"), n = 10))
+
+heatmap(complex_notDn_lda_filt_mtx, Rowv=NA, Colv=NA, scale='none', col = palr, main = "complex notDn lda filt")
+
+complex_notDn_lda_filt_mtx_order <- clue::solve_LSAP(complex_notDn_lda_filt_mtx-min(complex_notDn_lda_filt_mtx), maximum = TRUE)
+complex_notDn_lda_filt_mtx_hg <- complex_notDn_lda_filt_mtx[seq_along(complex_notDn_lda_filt_mtx_order), complex_notDn_lda_filt_mtx_order]
+
+heatmap(complex_notDn_lda_filt_mtx_hg, Rowv=NA, Colv=NA, scale='none', col = palr, main = "complex notDn lda filt hg")
+
+```
+
+Idea:
+Get difference between top 2 correlations, wrt each predicted topic to each of the ground truths, and each of the ground truths wrt each of the predicted topics.
+
+```{r}
+
+cor_mtx <- complex_notDn_lda_doc_topics_hg_pairs
+cor_mtx
+
+corr_diff_cols <- c()
+# each topic == prediction
+for (topic in seq(1:length(colnames(cor_mtx)))) {
+  
+  top_corr <- sort(cor_mtx[,topic], decreasing = TRUE)[1]
+  next_corr <- sort(cor_mtx[,topic], decreasing = TRUE)[2]
+  dist <- as.vector(top_corr) - as.vector(next_corr)
+  corr_diff_cols <- append(corr_diff_cols, dist)
+}
+corr_diff_cols
+
+corr_diff_rows <- c()
+# each topic == prediction
+for (ct in seq(1:length(rownames(cor_mtx)))) {
+  
+  top_corr <- sort(cor_mtx[ct,], decreasing = TRUE)[1]
+  next_corr <- sort(cor_mtx[ct,], decreasing = TRUE)[2]
+  dist <- as.vector(top_corr) - as.vector(next_corr)
+  corr_diff_rows <- append(corr_diff_rows, dist)
+}
+corr_diff_rows
+
+```
+
+#### DepthNormalized
+
+```{r}
+
+# complex_notDn_lda_doc_topic_performance
+
+filt_mtx <- apply(complex_lda_doc_topic_performance, 2, function(x) {
+  
+  # for each column (predicted topic) replace all but the top two correlations with 0's
+  sorted_cors <- sort(x, index.return=TRUE, decreasing=TRUE)
+  new <- replace(x, sorted_cors$ix[-(1:2)], 0)
+  new
+  
+})
+
+complex_lda_filt_mtx <- filt_mtx
+complex_lda_filt_mtx
+
+# pal1 <- seecol(pal = usecol(c(Karpfenblau, "white", "gold"), n = 10))
+
+heatmap(complex_lda_filt_mtx, Rowv=NA, Colv=NA, scale='none', col = palr, main = "complex lda filt")
+
+complex_lda_filt_mtx_order <- clue::solve_LSAP(complex_lda_filt_mtx-min(complex_lda_filt_mtx), maximum = TRUE)
+complex_lda_filt_mtx_hg <- complex_notDn_lda_filt_mtx[seq_along(complex_lda_filt_mtx_order), complex_lda_filt_mtx_order]
+
+heatmap(complex_lda_filt_mtx_hg, Rowv=NA, Colv=NA, scale='none', col = palr, main = "complex lda filt hg")
+
+```
+
+Idea:
+Get difference between top 2 correlations, wrt each predicted topic to each of the ground truths, and each of the ground truths wrt each of the predicted topics.
+
+```{r}
+
+cor_mtx <- complex_lda_doc_topics_hg_pairs
+cor_mtx
+
+corr_diff_cols <- c()
+# each topic == prediction
+for (topic in seq(1:length(colnames(cor_mtx)))) {
+  
+  top_corr <- sort(cor_mtx[,topic], decreasing = TRUE)[1]
+  next_corr <- sort(cor_mtx[,topic], decreasing = TRUE)[2]
+  dist <- as.vector(top_corr) - as.vector(next_corr)
+  corr_diff_cols <- append(corr_diff_cols, dist)
+}
+corr_diff_cols
+
+corr_diff_rows <- c()
+# each topic == prediction
+for (ct in seq(1:length(rownames(cor_mtx)))) {
+  
+  top_corr <- sort(cor_mtx[ct,], decreasing = TRUE)[1]
+  next_corr <- sort(cor_mtx[ct,], decreasing = TRUE)[2]
+  dist <- as.vector(top_corr) - as.vector(next_corr)
+  corr_diff_rows <- append(corr_diff_rows, dist)
+}
+corr_diff_rows
+
+```
+
+### hdp
+
+#### not DepthNormalized
+
+Idea:
+Find the top 2 ground truth cell types that each predicted topic correlates most with.
+Set all other correlations to zero.
+
+```{r}
+
+complex_hdp_doc_topic_performance
+
+filt_mtx <- apply(complex_hdp_doc_topic_performance, 2, function(x) {
+  
+  # for each column (predicted topic) replace all but the top two correlations with 0's
+  sorted_cors <- sort(x, index.return=TRUE, decreasing=TRUE)
+  new <- replace(x, sorted_cors$ix[-(1:2)], 0)
+  new
+  
+})
+
+complex_hdp_filt_mtx <- filt_mtx
+complex_hdp_filt_mtx
+
+# pal1 <- seecol(pal = usecol(c(Karpfenblau, "white", "gold"), n = 10))
+
+heatmap(complex_hdp_filt_mtx, Rowv=NA, Colv=NA, scale='none', col = palr, main = "complex hdp filt")
+
+complex_hdp_filt_mtx_order <- clue::solve_LSAP(complex_hdp_filt_mtx-min(complex_hdp_filt_mtx), maximum = TRUE)
+complex_hdp_filt_mtx_hg <- complex_hdp_filt_mtx[seq_along(complex_hdp_filt_mtx_order), complex_hdp_filt_mtx_order]
+
+heatmap(complex_hdp_filt_mtx_hg, Rowv=NA, Colv=NA, scale='none', col = palr, main = "complex hdp filt hg")
+
+```
+
+Idea:
+Get difference between top 2 correlations, wrt each predicted topic to each of the ground truths, and each of the ground truths wrt each of the predicted topics.
+
+```{r}
+
+cor_mtx <- complex_hdp_doc_topics_hg_pairs
+cor_mtx
+
+corr_diff_cols <- c()
+# each topic == prediction
+for (topic in seq(1:length(colnames(cor_mtx)))) {
+  
+  top_corr <- sort(cor_mtx[,topic], decreasing = TRUE)[1]
+  next_corr <- sort(cor_mtx[,topic], decreasing = TRUE)[2]
+  dist <- as.vector(top_corr) - as.vector(next_corr)
+  corr_diff_cols <- append(corr_diff_cols, dist)
+}
+corr_diff_cols
+
+corr_diff_rows <- c()
+# each topic == prediction
+for (ct in seq(1:length(rownames(cor_mtx)))) {
+  
+  top_corr <- sort(cor_mtx[ct,], decreasing = TRUE)[1]
+  next_corr <- sort(cor_mtx[ct,], decreasing = TRUE)[2]
+  dist <- as.vector(top_corr) - as.vector(next_corr)
+  corr_diff_rows <- append(corr_diff_rows, dist)
+}
+corr_diff_rows
+
+```
+
+#### DepthNormalized
+
+```{r}
+
+# complex_dN_hdp_doc_topic_performance
+
+filt_mtx <- apply(complex_dN_hdp_doc_topic_performance, 2, function(x) {
+  
+  # for each column (predicted topic) replace all but the top two correlations with 0's
+  sorted_cors <- sort(x, index.return=TRUE, decreasing=TRUE)
+  new <- replace(x, sorted_cors$ix[-(1:2)], 0)
+  new
+  
+})
+
+complex_dN_hdp_filt_mtx <- filt_mtx
+complex_dN_hdp_filt_mtx
+
+# pal1 <- seecol(pal = usecol(c(Karpfenblau, "white", "gold"), n = 10))
+
+heatmap(complex_dN_hdp_filt_mtx, Rowv=NA, Colv=NA, scale='none', col = palr, main = "complex dN hdp filt")
+
+complex_dN_hdp_filt_mtx_order <- clue::solve_LSAP(complex_dN_hdp_filt_mtx-min(complex_dN_hdp_filt_mtx), maximum = TRUE)
+complex_dN_hdp_filt_mtx_hg <- complex_dN_hdp_filt_mtx[seq_along(complex_dN_hdp_filt_mtx_order), complex_dN_hdp_filt_mtx_order]
+
+heatmap(complex_dN_hdp_filt_mtx_hg, Rowv=NA, Colv=NA, scale='none', col = palr, main = "complex dN hdp filt hg")
+
+```
+
+Idea:
+Get difference between top 2 correlations, wrt each predicted topic to each of the ground truths, and each of the ground truths wrt each of the predicted topics.
+
+```{r}
+
+cor_mtx <- complex_dN_hdp_doc_topics_hg_pairs
+cor_mtx
+
+corr_diff_cols <- c()
+# each topic == prediction
+for (topic in seq(1:length(colnames(cor_mtx)))) {
+  
+  top_corr <- sort(cor_mtx[,topic], decreasing = TRUE)[1]
+  next_corr <- sort(cor_mtx[,topic], decreasing = TRUE)[2]
+  dist <- as.vector(top_corr) - as.vector(next_corr)
+  corr_diff_cols <- append(corr_diff_cols, dist)
+}
+corr_diff_cols
+
+corr_diff_rows <- c()
+# each topic == prediction
+for (ct in seq(1:length(rownames(cor_mtx)))) {
+  
+  top_corr <- sort(cor_mtx[ct,], decreasing = TRUE)[1]
+  next_corr <- sort(cor_mtx[ct,], decreasing = TRUE)[2]
+  dist <- as.vector(top_corr) - as.vector(next_corr)
+  corr_diff_rows <- append(corr_diff_rows, dist)
+}
+corr_diff_rows
+
+```
 
 
+Next:
+1. MERFISH mOA analysis into this comparison
 
+2. Cross check results to see if you can get a quantitative consensus or decision
+  - LDA or HDP
+  - depth normalized or not (for complex)
+
+3. Start assessing MERFISH for:
+  - number cells in spot
+  - number of cell types in spot
+
+4. What is the appropriate K?
+  - This would be if using a different hdp than this R implementation, or if going to use LDA
+
+5. hierarchical LDA versus HDP?
+Correlated topic models?
+
+Remember, once 2 and 3 are answered for the most part, can start designing the "optimal" scenario and assess that. 
+  
 
 
 
