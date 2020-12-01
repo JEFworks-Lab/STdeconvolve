@@ -1,0 +1,162 @@
+---
+title: "Untitled"
+author: "Brendan F. Miller"
+date: "12/1/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(MUDAN)
+library(Matrix)
+library(MERINGUE)
+# note that cleanCounts, getDifferentialGenes, normalizeCounts, plotEmbedding change to those in MERINGUE
+# And interestingly, this does change the clustering. I get the 9 clusters for pmbcA when it's MERIGNUE but 10 when it's MUDAN
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mpoa_merfish_clean.RData")
+
+```
+
+
+```{r}
+
+# select cells that are part of given dataset:
+selected_cells <- rownames(features)[features$dataset_name %in% c('171021_FN7_2_M22_M26')]
+
+spatial_position_and_class <- annot.table[selected_cells, c('Centroid_X', 'Centroid_Y', 'Bregma', "Cell_class", "Neuron_cluster_ID")]
+spatial_position_and_class <- na.omit(spatial_position_and_class) # remove rows with NA
+
+dim(spatial_position_and_class)
+# [1] 36329     5
+
+```
+
+```{r}
+
+par(mfrow=c(1,1))
+
+# plot(spatial_position[,c("Centroid_X", "Bregma")], col=spatial_position_and_class$Cell_class, pch=16, cex=0.5)
+# plot(spatial_position[,c("Centroid_Y", "Bregma")], pch=16, cex=0.5)
+# plot(spatial_position[,c("Centroid_X", "Centroid_Y")], pch=16, cex=0.5)
+
+ggplot(spatial_position_and_class, aes(x=Centroid_X, y=Bregma, color=Cell_class)) +
+  geom_point()
+
+ggplot(spatial_position_and_class, aes(x=Centroid_Y, y=Bregma, color=Cell_class)) +
+  geom_point()
+
+ggplot(spatial_position_and_class, aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  geom_point()
+
+ggplot(spatial_position_and_class, aes(x=Centroid_X, y=Centroid_Y, color=Bregma)) +
+  geom_point()
+
+ggplot(spatial_position_and_class, aes(x=Centroid_X, y=Centroid_Y, color=Bregma)) +
+  geom_point()
+
+
+```
+
+For each region, or "Bregma position", get counts of cells in each 100um x 100um square and also count number of cell types in each square
+
+```{r}
+
+# First bregma
+# > unique(spatial_position_and_class$Bregma)
+# [1] -0.24 -0.14 -0.04 -0.09 -0.19 -0.29
+
+selected_bregma <- spatial_position_and_class[which(spatial_position_and_class$Bregma == -0.24),]
+
+par(mfrow=c(1,1))
+
+ggplot(selected_bregma, aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  geom_point()
+
+
+```
+
+```{r}
+
+# Sequence of X-coord positions for left edge of each patch:
+x_edges <- seq(min(selected_bregma$Centroid_X), max(selected_bregma$Centroid_X), 100)
+# drop first and last to avoid any issues with the edges of the whole region
+inner_x_edges <- x_edges[2:(length(x_edges)-1)]
+
+# Sequence of Y-coord positions for bottom edge of each patch:
+y_edges <- seq(min(selected_bregma$Centroid_Y), max(selected_bregma$Centroid_Y), 100)
+inner_y_edges <- y_edges[2:(length(y_edges)-1)]
+
+
+```
+
+```{r}
+
+selected_bregma$patch_id <- character(length(rownames(selected_bregma)))
+
+for (x in inner_x_edges) {
+  for (y in inner_y_edges) {
+    
+    patch_id <- paste0(as.character(x), "_", as.character(y))
+    
+    patch <- selected_bregma[which( (selected_bregma$Centroid_X > x) & (selected_bregma$Centroid_X < x+100) & (selected_bregma$Centroid_Y > y) & (selected_bregma$Centroid_Y < y+100) ),]
+    
+    g <- ggplot(patch, aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+      geom_point()
+    print(g)
+    
+    selected_bregma[rownames(patch),]$patch_id <- patch_id
+    
+  }
+}
+
+```
+
+```{r}
+
+par(mfrow=c(1,1))
+
+ggplot(selected_bregma[1:1200,], aes(x=Centroid_X, y=Centroid_Y, color=patch_id)) +
+  geom_point() +
+  theme(legend.position="none")
+
+```
+
+```{r}
+
+selected_bregma_patches <- selected_bregma[which(selected_bregma$patch_id != ""),c("patch_id", "Cell_class")]
+
+selected_bregma_patch_cells <- table(selected_bregma_patches[])
+selected_bregma_patch_cells
+
+```
+
+```{r}
+
+hist(rowSums(selected_bregma_patch_cells), breaks = 20)
+
+```
+
+```{r}
+
+unique_types_per_patch <- c()
+
+for (i in seq_len(length(rownames(selected_bregma_patch_cells)))) {
+  
+  cell_type_count <- length(which(selected_bregma_patch_cells[i,] != 0))
+  unique_types_per_patch <- append(unique_types_per_patch, cell_type_count)
+  
+}
+
+``` 
+
+```{r}
+
+hist(unique_types_per_patch, breaks=10)
+
+```
+
+
