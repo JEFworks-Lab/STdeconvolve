@@ -1,0 +1,3233 @@
+---
+title: "Generate Topic Model Simulations"
+author: "Brendan F. Miller"
+date: "11/17/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load libraries and data
+
+```{r}
+
+library(MUDAN)
+library(Matrix)
+library(MERINGUE)
+library(reticulate) # make calls to python
+use_condaenv("topic_models")
+
+data(pbmcA)
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mpoa_merfish_clean.RData")
+
+```
+
+# scRNA-seq data and assign clusters
+
+## `pmbcA`
+
+```{r}
+
+plot.new()
+
+## filter out poor genes and cells
+geneCountsClean <- cleanCounts(pbmcA,
+                  min.reads = 10,
+                  min.detected = 10,
+                  verbose=FALSE)
+
+## CPM normalization
+geneCountsClean_CPM <- MERINGUE::normalizeCounts(geneCountsClean,
+                                                 depthScale = 1e+06,
+                                                 log = FALSE,
+                                                 verbose=FALSE)
+
+## variance normalize, identify overdispersed genes
+CPM_OD <- normalizeVariance(geneCountsClean_CPM,
+                                  details=TRUE,
+                                  verbose=FALSE)
+
+## variance normalized counts 
+CPM_varAdj_genes <- CPM_OD$mat
+
+## log transformed
+CPM_varAdj_genes_lg = log10(CPM_varAdj_genes + 1)
+
+# the OD genes:
+# dim(CPM_ODgenes[CPM_OD$ods,])
+
+```
+
+```{r}
+
+set.seed(0)
+
+## 30 PCs on overdispersed genes (var adjusted and log transformed)
+pcs <- getPcs(CPM_varAdj_genes_lg[CPM_OD$ods,],
+              nGenes=length(CPM_OD$ods),
+              nPcs=30,
+              verbose=FALSE)
+
+## get tSNE embedding on PCs
+emb <- Rtsne::Rtsne(pcs,
+                    is_distance=FALSE,
+                    perplexity=30,
+                    num_threads=parallel::detectCores(),
+                    verbose=FALSE)$Y
+
+rownames(emb) <- rownames(pcs)
+
+## get clusters
+com <- getComMembership(pcs, k=15, method=igraph::cluster_louvain)
+
+par(mfrow=c(1,1), mar=c(0.5,0.5,2,0.5))
+plotEmbedding(emb, groups=com, mark.clusters = TRUE)
+
+```
+
+Annotate the clusters as known cell types (previously determined for pbmcA)
+
+``` {r}
+
+pbmc_annot <- as.character(com)
+names(pbmc_annot) <- names(com)
+
+pbmc_annot[com == 5] <- 'Nonclassical Monocytes'
+pbmc_annot[com == 10] <- 'Classical Monocytes'
+pbmc_annot[com == 4] <- 'B Cells'
+pbmc_annot[com == 3] <- 'NK Cells'
+
+# pbmc_annot[com %in% c(1,2,6,7,8,9)] <- 'T Cells'
+pbmc_annot[com == 7] <- 'CD8+ Effector T Cells'
+pbmc_annot[com == 9] <- 'CD8+ Memory T Cells'
+pbmc_annot[com == 8] <- 'CD8+ Naive T Cells'
+pbmc_annot[com == 6] <- 'CD4+ Memory T Cells 1'
+pbmc_annot[com == 1] <- 'CD4+ Memory T Cells 2'
+pbmc_annot[com == 2] <- 'CD4+ Memory T Cells 3'
+
+# pbmc_annot[com %in% c(1,2,6,8,9,5,10,7)] <- NA
+
+pbmc_annot <- factor(pbmc_annot)
+
+par(mfrow=c(1,1))
+plotEmbedding(emb, groups=pbmc_annot, mark.clusters = TRUE, mark.cluster.cex = 1)
+
+```
+
+# -----------------------------------------------------------
+
+# 1. Simple Simulation
+
+- 3 cell types
+  - 2 distinct, 1 correlated
+- 10 genes
+- 50 spots
+
+```{r}
+
+set.seed(0)
+
+# sample base gene counts from normal distribution with mean. convert to positive integers
+base = abs(round(rnorm(10, 10)))
+names(base) <- paste0('gene', 1:10)
+base
+
+```
+
+```{r}
+
+## cell-type A upregulates genes 1 to 4
+x1 = base
+x1[1:4] = base[1:4] + 10
+
+## cell-type B upregulates genes 7 to 10
+x2 = base
+x2[7:10] = base[7:10] + 10
+
+## cell-type C upregulates genes 5 to 10 
+x3 = base
+x3[5:10] = base[5:10] + 10
+
+## visualize transcriptional distinctness
+mat <- rbind(x1, x2, x3)
+heatmap(mat, scale='none')
+## some cell-types are more correlated than others
+cor(t(mat))
+
+mat
+
+```
+
+##`train.data` and  `train.data.sub`
+
+```{r}
+
+## training data is differing proportions of
+## cell-type A and cell-type B with random cell-type C
+
+set.seed(0)
+
+# 80 cells plus up to 20 ctC cells
+# proportions of ctA and ctB adjusted in increments of 5 (6.25%)
+train.data <- do.call(rbind, lapply(seq(1,80, by=5), function(i) {
+  rand = round(runif(1)*20) # random int from 0 - 20 (ctC counts)
+  ground.truth <- c(i, 80-i, rand) # counts of ctA, ctB, and ctC
+  names(ground.truth) <- c('ctA', 'ctB', 'ctC')
+  # number of cells in spot can be between 80 and 100
+  y = ground.truth[1]*x1 + ground.truth[2]*x2 + rand*x3 # multiply and add gene counts by all cells
+  c(y, ground.truth/sum(ground.truth)) # convert cell counts to proportions
+}))
+
+rownames(train.data) <- paste0('sim', 1:nrow(train.data))
+head(train.data)
+
+## remove ct label columns
+train.data.sub <- as.data.frame(train.data[, names(x1)])
+head(train.data.sub)
+dim(train.data.sub)
+
+# new gene counts
+heatmap(as.matrix(train.data.sub), scale='none', Rowv = NA, Colv = NA)
+
+# train.data -> gene counts and ct proportions
+# trian.data.sub -> just gene counts and a data.frame
+
+```
+
+# -----------------------------------------------------------
+# 2. Complex Simulation
+
+## A. simulate cell counts
+
+1. pick some number of cell types to be in a spot
+2. Some total number of cells in a spot, variable
+3. Proportion of the selected cells types, variable
+
+Thoughts:
+Perhaps the total number of cells in a spot should model the distribution of nuclei counts I see after the cell segmentation
+
+What about number of cell types?
+Look at mousebrain and maybe way to infer this based on the distances of single cells sequenced?
+Then, set a limit of cell types in a spot, but also randomly sample from the total pool of cell types.
+Better yet, a way to know which cell types are probabilistically more likely to be associated with each other
+
+```{r}
+
+simulate_cell_counts <- function (cell_type_labels, number_spots, max_cells, seed,
+                                  merfish_counts = FALSE, merfish_types = FALSE) {
+  
+  set.seed(seed)
+  # tot_types <- tot_types # total cell types to mix
+  number_spots <- number_spots # total number of spots to simulate
+  max_cells <- max_cells # upper limit of cells in a spot
+  cell_type_labels <- cell_type_labels # vector of cell types (the levels in `com` or equivalent factor
+  # cell_type_labels <- seq(1:tot_types)
+  
+  if (merfish_types != FALSE) {
+    # should be `FN7_2_M22_M26_cell_type_dist`
+    merfish_cell_type_probs <- as.vector(merfish_types) # the probabilities for each count
+    merfish_cell_type_dist <- as.integer(names(merfish_types)) # the counts themselves
+    if (length(cell_type_labels) != length(merfish_cell_type_dist)) {
+      stop()
+      geterrmessage("If `merfish_types` used, `cell_type_labels` should be equal length")
+    }
+  }
+  
+  if (merfish_counts != FALSE) {
+    # should be FN7_2_M22_M26_cell_count_dist
+    merfish_cell_count_probs <- as.vector(merfish_counts)
+    merfish_cell_count_dist <- as.integer(names(merfish_counts))
+  }
+  
+  # matrix of counts of simulated cell types (columns) for each simulated spot (row)
+  counts <- do.call(rbind, lapply(1:number_spots, function(n) {
+    
+    # -------------------------------------------
+    # 1. choose number of cell types in a spot from cell_type_labels
+    
+    if ( merfish_types == FALSE) {
+      
+      num_types <- sample(seq(1, length(cell_type_labels)), 1)
+      
+    } else {
+      
+      num_types <- sample(merfish_cell_type_dist, size = 1, prob = merfish_cell_type_probs)
+      
+    }
+    
+    # num_types <- sample(seq(1,tot_types), 1)
+    
+    # -------------------------------------------
+    # 2. Which cell types?
+    # 1's = cell types in spot
+    cell_type_vector <- c(sample(c(1), num_types, replace = TRUE),
+                           sample(c(0), length(cell_type_labels)-num_types, replace = TRUE))
+    # cell_type_vector <- c(sample(c(1), num_types, replace = TRUE),
+    #                       sample(c(0), tot_types-num_types, replace = TRUE))
+    
+    # order randomly. The positions with 1's will be the cell types selected
+    # vector of 1 and 0 randomly ordered, vector length = tot_types, sum = selected types in spot
+    cell_type_vector <- sample(cell_type_vector) 
+    
+    # get labels of cell types based on positions of 1's in `cell_type_vector`
+    # spot_cell_types <- cell_type_labels[as.logical(cell_type_vector)]
+    
+    # print(cell_types)
+    
+    # -------------------------------------------
+    # 3. Proportions of each
+    
+    # uniform distribution to choose proportions of each cell type
+    p <- runif(num_types, 0, 1)
+    cell_type_proportions <- p/sum(p) # should sum to 1
+    
+    # -------------------------------------------
+    # 4. Total cells in spot, and absolute number of each cell type
+    
+    if (merfish_counts == FALSE) {
+      
+      # pick a number between the number of cell types and max_cells
+      tot_cells <- sample(seq(num_types, max_cells), 1)
+      
+    } else {
+      
+      tot_cells <- sample(merfish_cell_count_dist, size = 1, prob = merfish_cell_count_probs)
+      
+    }
+    
+    
+    
+    # print(tot_cells)
+    
+    # get number of cells of each cell type based on proportions and desired total cells
+    # Note that depending on proportions and total cells, could be values less than one
+    # So just round up to nearest whole integer
+    cell_type_counts <- ceiling(cell_type_proportions * tot_cells) # round up to whole integers
+    
+    # print(sum(cell_type_counts)) # the actual total number of cells after rounding
+    
+    # -------------------------------------------
+    # 5. Append total counts of each cell type to `cell_type_vector`
+    
+    # vector of 0's length equal to list of `cell_type_labels` input
+    spot_cell_type_counts <- integer(length(cell_type_labels))
+    # update positions of the 0's with cell counts that correspond to the selected cell types for the spot
+    spot_cell_type_counts[which(cell_type_vector == 1)] <- cell_type_counts
+    
+    spot_cell_type_counts
+    
+    
+    # append cell counts for each cell type present in spot to cell_type_vector at the correct position
+    # based on the ID of each value in cell_types
+    
+    # cell_type_vector needs to be same length as total cell types, but only the 1's need to be replaced.
+    # the cell types are essentially labeled as "1", "2", "3", etc based on cluster
+    # Use these as the indices to select the position
+    # in `cell_type_vector` and the cell_type count to be appended in `cell_type_counts`
+    
+    # for (i in seq(length(cell_types))) {
+    #   cell_type_vector[as.integer(cell_types[i])] <- cell_type_counts[i]
+    # }
+    # # the new row of cell counts for each cell type in a simulated spot
+    # # do.call(rbind adds this as row to `spot_cell_type_counts`
+    # cell_type_vector 
+    
+  }))
+  
+  colnames(counts) <- cell_type_labels
+  
+  return(counts)
+  
+}
+
+```
+
+### `spot_counts_ct3_mx50_s1000`
+
+```{r}
+
+spot_counts_ct3_mx50_s1000 <- simulate_cell_counts(tot_types = c(1,2,3),
+                                              number_spots = 1000,
+                                              max_cells = 50,
+                                              seed = 0)
+
+head(spot_counts_ct3_mx50_s1000)
+spot_proportions_ct3_mx50_s1000 <- spot_counts_ct3_mx50_s1000 / rowSums(spot_counts_ct3_mx50_s1000)
+head(spot_proportions_ct3_mx50_s1000)
+
+```
+
+## B. simulate gene counts
+
+With the simulate spots, need to generate a corresponding gene count matrix
+
+Option A:
+  Sample from single cell count matrix, where Each cell is assigned to a cell type
+  
+  For each simulated spot:
+    sample single cells that belong to each cell type in spot
+    combine the gene counts for the sampled cells
+    
+  Resulting matrix: each spot a columns, rows are genes, values are summed counts for the spot
+
+Option B:
+  Use simulated gene counts
+  Similar to the "Simple Simulation", each cell type has a base expression profile
+  
+  For each simulated spot:
+    multiply the base expression profiles by the number of cells of each cell type
+
+
+Option A:
+
+```{r}
+
+simulate_gene_counts <- function (simulated_ct_counts, gene_counts, communities, spots, seed) {
+  
+  # # simulated spot cell type counts
+  # simulated_ct_counts
+  
+  # # gene x single_cell matrix
+  # gene_counts
+  
+  # # factor with names() the single cell ids and levels() the assigned clusters
+  # # levels need to be characters "1" through K, that correspond to the K cell-types
+  # communities
+  
+  # # same as total cell types used to generate simulated spot counts
+  # total_cts
+  
+  # # number of spots to compute gene counts for. Equal to or less than length of `simulated_ct_counts`
+  # spots
+  
+  set.seed(seed)
+  
+  # return matrix where rows are genes and columns are spots, cells are summed gene counts for samples cells in spot
+  
+  cell_types <- colnames(simulated_ct_counts)
+  
+  simulated_gene_counts <- do.call(cbind, lapply(1:spots, function(n) {
+    
+    # simulated cell type counts for a spot (a row)
+    cell_type_counts <- simulated_ct_counts[n, ] 
+    
+    # for each cell type (column), sample single cell ids equal to number of cells
+    # append all sampled single cell IDs for the given spot to a vector
+    cell_list <- c()
+    for (i in seq(1:length(cell_types))) {
+      # goes through all cell type counts in spot, some cell types could be 0, ignore these.
+      # Just sample ids for cell types with values in row
+      if (cell_type_counts[i] > 0){
+        # sample cells with cell_type[i], number of samples = cell_type_counts[i]
+        sampled_cells <- sample(names(communities[which(communities == cell_types[i])]),
+                                cell_type_counts[i],
+                                replace = TRUE)
+      cell_list <- append(cell_list, sampled_cells)
+      }
+    }
+    
+    # get total counts of each gene across the samples cells
+    if (length(cell_list) > 1) {
+      rowSums(as.matrix(gene_counts[ ,cell_list]))
+    } else {
+      as.matrix(gene_counts[ ,cell_list])
+    }
+    
+  }))
+  
+  return(simulated_gene_counts)
+
+}
+
+```
+
+### `spot_genes_ct3_mx50_s1000`
+
+```{r}
+
+# note that `com` is the clustering for pmbcA.
+# `spot_genes_ct3_mx50_s1000` would sample from first 3 clusters ("1", "2", "3")
+
+spot_genes_ct3_mx50_s1000 <- simulate_gene_counts(simulated_ct_counts = spot_counts_ct3_mx50_s1000,
+                                                  gene_counts = geneCountsClean,
+                                                  communities = com,
+                                                  spots = 1000,
+                                                  seed = 0)
+
+dim(spot_genes_ct3_mx50_s1000)
+spot_genes_ct3_mx50_s1000[1:20,1:20]
+
+```
+
+## Select cell_type descriptive genes
+
+```{r}
+
+# Identify significantly differentially unregulated genes
+# in each identified cluster by Wilcox test
+
+# variance adjusted, log transformed values of the OD genes
+OD_genes <- as.matrix(CPM_varAdj_genes_lg[CPM_OD$ods,])
+
+# diffGenes <- getDifferentialGenes(OD_genes, com)
+
+selected_cts <- com[which(com %in% c("1", "2", "3"))]
+diffGenes <- getDifferentialGenes(OD_genes, selected_cts)
+
+signDiffGenes <- lapply(diffGenes, function(x) {
+  x <- x[x$p.adj < 0.05,]
+  x <- na.omit(x)
+  x <- x[x$highest,]
+  rownames(x)
+})
+
+# print(lapply(signDiffGenes, length))
+
+sigClusterGenes_ct3 <- as.vector(unlist(signDiffGenes))
+length(sigClusterGenes_ct3)
+
+```
+
+### `clusters 1, 2, 3`
+
+```{r}
+
+spot_genes_ct3_mx50_s1000[sigClusterGenes_ct3,][1:10,1:10]
+
+```
+
+These are raw counts. But shouldn't they be adjusted or normalized in some way between spots?
+
+The gene counts are coming from sampled single cells. Shouldn't each cell be normalized wrt to the others based on sequencing depth?
+
+If I CPM normalize, I no longer have integers.
+
+One thing to consider is that the higher the gene counts, the higher the words, and it seems the slower HDP
+
+```{r}
+
+## CPM depth normalization
+spot_genes_ct3_mx50_sigGenes_depthNorm <- MERINGUE::normalizeCounts(spot_genes_ct3_mx50_s1000[sigClusterGenes_ct3,],
+                                                              depthScale = 1e+04,
+                                                              log = FALSE,
+                                                              verbose=FALSE)
+
+spot_genes_ct3_mx50_sigGenes_depthNorm <- round(spot_genes_ct3_mx50_sigGenes_depthNorm)
+
+spot_genes_ct3_mx50_sigGenes_depthNorm[1:10,1:10]
+
+```
+
+```{r}
+
+# new gene counts
+heatmap(as.matrix(log10(spot_genes_ct3_mx50_sigGenes_depthNorm + 1)), scale='none')
+
+```
+
+## Ground Truth
+
+```{r}
+
+ground_truth <- spot_proportions_ct3_mx50_s1000
+colnames(ground_truth) <- paste0('ct', seq_len(dim(ground_truth)[2]))
+
+```
+
+From example of "MERFISH mOA:
+
+125 genes x 36K cells = cd
+36K cells x 9 cell types = mm
+
+cd x mm = summed counts of each gene for each cell type. (9 cell types x 125 genes)
+
+Divide by row sums (cell types) and get the fraction of each gene that contributes to the overall cell type expression
+
+For all cells of a given cell type, sum up the gene counts.
+
+Equivalent to the "topic words", i.e. proportion each word is associated with a topic
+
+For "Complex Simulation", we have:
+
+```{r}
+
+mm <- model.matrix(~ 0 + com) # com is the factor with single cell IDs and the clusters they belong to
+colnames(mm) <- levels(com)
+ct.gexp <- t(geneCountsClean %*% mm)
+
+# now select the cell types sampled and the significant genes:
+ground_truth_topic_words <- ct.gexp[1:3, sigClusterGenes_ct3]
+rownames(ground_truth_topic_words) <- paste0('gt', seq_len(3))
+
+ground_truth_topic_words_freq <- ground_truth_topic_words / rowSums(ground_truth_topic_words)
+ground_truth_topic_words_freq
+
+```
+
+# -----------------------------------------------------------
+# 4. Complex: NK, B, Monocytes
+
+pbmc_annot[com == 4] <- 'B Cells'
+pbmc_annot[com == 3] <- 'NK Cells'
+pbmc_annot[com == 10] <- 'Classical Monocytes'
+
+```{r}
+
+spot_counts_3_4_10 <- simulate_cell_counts(cell_type_labels = c("NK Cells",
+                                                                "B Cells",
+                                                                "Classical Monocytes"),
+                                                  number_spots = 1000,
+                                                  max_cells = 50,
+                                                  seed = 0)
+
+head(spot_counts_3_4_10)
+spot_proportions_3_4_10 <- spot_counts_3_4_10 / rowSums(spot_counts_3_4_10)
+head(spot_proportions_3_4_10)
+
+```
+
+```{r}
+
+# note that `com` is the clustering for pmbcA.
+# `spot_genes_ct3_mx50_s1000` would sample from first 3 clusters ("1", "2", "3")
+
+spot_genes_3_4_10 <- simulate_gene_counts(simulated_ct_counts = spot_counts_3_4_10,
+                                                  gene_counts = geneCountsClean,
+                                                  communities = pbmc_annot,
+                                                  spots = 1000,
+                                                  seed = 0)
+
+dim(spot_genes_3_4_10)
+spot_genes_3_4_10[1:20,1:20]
+
+```
+
+## Select cell_type descriptive genes
+
+```{r}
+
+# Identify significantly differentially unregulated genes
+# in each identified cluster by Wilcox test
+
+# Using the original pbmcA `geneCountsClean`
+
+# variance adjusted, log transformed values of the OD genes
+OD_genes <- as.matrix(CPM_varAdj_genes_lg[CPM_OD$ods,])
+
+# diffGenes <- getDifferentialGenes(OD_genes, com)
+
+selected_3_4_10 <- pbmc_annot[which(pbmc_annot %in% c("NK Cells", "B Cells","Classical Monocytes"))]
+
+diffGenes_3_4_10 <- getDifferentialGenes(OD_genes, selected_3_4_10)
+
+signDiffGenes_3_4_10 <- lapply(diffGenes_3_4_10, function(x) {
+  x <- x[x$p.adj < 0.05,]
+  x <- na.omit(x)
+  x <- x[x$highest,]
+  rownames(x)
+})
+
+# print(lapply(signDiffGenes, length))
+
+sigClusterGenes_3_4_10 <- as.vector(unlist(signDiffGenes_3_4_10))
+length(sigClusterGenes_3_4_10)
+
+```
+
+## Ground Truth
+
+cd x mm = summed counts of each gene for each cell type. (9 cell types x 125 genes)
+
+Divide by row sums (cell types) and get the fraction of each gene that contributes to the overall cell type expression
+
+For all cells of a given cell type, sum up the gene counts.
+
+Equivalent to the "topic words", i.e. proportion each word is associated with a topic
+
+For "Complex Simulation", we have:
+
+```{r}
+
+mm <- model.matrix(~ 0 + pbmc_annot) # com is the factor with single cell IDs and the clusters they belong to
+colnames(mm) <- levels(pbmc_annot)
+ct.gexp.pbmc_annot <- t(as.matrix(geneCountsClean) %*% mm)
+
+# now select the cell types sampled and the significant genes:
+ground_truth_topic_words_3_4_10 <- ct.gexp.pbmc_annot[c("NK Cells", "B Cells","Classical Monocytes"), sigClusterGenes_3_4_10]
+
+ground_truth_topic_words_freq_3_4_10 <- ground_truth_topic_words_3_4_10 / rowSums(ground_truth_topic_words_3_4_10)
+
+ground_truth_topic_words_freq_3_4_10
+
+```
+
+# Marker Genes Heatmap
+
+```{r}
+
+heatmap(log10(ground_truth_topic_words_3_4_10 + 1), scale='none')
+
+heatmap(log10(ground_truth_topic_words + 1), scale='none')
+
+```
+
+What about genes that are sparse, and only see them in  a particular cell type versus the others? The differentially expressed genes that are "specific" to one cell type can be expressed in others. So topics  are not necessarily "monochromatic" wrt these words.
+
+Also keep in mind that the clustering on the pmbcA single cells still groups them into clusters. I suppose I am considering this a ground truth to compare LDA and HDP though. So this is ok I think.
+
+# -----------------------------------------------------------
+# Stereoscope Simulation
+
+Also consider simulated data from `stereoscope`
+
+```{r}
+
+# hippocampus mouse simulated ST spots from hippocampus mousebrain single cell data
+
+repo_dir_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/stereoscope/"
+counts_path <- paste0(repo_dir_path, "data/comp/comp-data/synthetic/counts.st-hippo-comp.tsv")
+members_path <- paste0(repo_dir_path, "data/comp/comp-data/synthetic/members.st-hippo-comp.tsv")
+proportions_path <- paste0(repo_dir_path, "data/comp/comp-data/synthetic/proportions.st-hippo-comp.tsv")
+
+# gene counts for spots (1000 spots x 500 genes)
+synth_hippo_counts <- read.table(file = counts_path, sep = '\t', header = TRUE, row.names = 1)
+# counts of cell types (10)
+synth_hippo_members <- read.table(file = members_path, sep = '\t', header = TRUE, row.names = 1)
+# proportions of cell types (10)
+synth_hippo_proportions <- read.table(file = proportions_path, sep = '\t', header = TRUE, row.names = 1)
+
+
+```
+
+```{r}
+
+synth_hippo_counts[1:10,1:10]
+dim(synth_hippo_counts)
+
+synth_hippo_members[1:10,1:10]
+dim(synth_hippo_members)
+
+synth_hippo_proportions[1:10,1:10]
+dim(synth_hippo_proportions)
+
+
+```
+
+```{r}
+
+# new gene counts
+heatmap(as.matrix(t(log10(synth_hippo_counts + 1))), scale='none')
+
+```
+
+
+# -----------------------------------------------------------
+# 3. MERFISH mPOA Data
+
+## - HDP
+
+```{r}
+
+# load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mpoa_merfish_10K_iters_hdp_obj.RData")
+# loads `quick_chain`, `quick_hdp`, `results`
+
+# results -> hdp doc-topic prediction
+# code:
+# quick_hdp <- hdp_quick_init(as.matrix(spots))
+# quick_chain <- hdp_posterior(quick_hdp, burnin=100, n=2000, space=5, seed=1234)
+# quick_chain <- hdp_extract_components(quick_chain)
+# results <- comp_dp_distn(quick_chain)$mean
+# results <- results[-1,] ## bug it seems
+
+merfish_hdp_doc_topic_preds <- results
+colnames(merfish_hdp_doc_topic_preds) <- seq(1:ncol(results))
+
+```
+
+## - Ground Truth
+
+```{r}
+
+library(MUDAN)
+library(Matrix)
+library(MERINGUE)
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mpoa_merfish_clean.RData")
+
+vi <- features$dataset_name %in% c('171021_FN7_2_M22_M26')
+cells.good <- rownames(features)[vi]
+
+spatial_position <- annot.table[cells.good,c('Centroid_X', 'Centroid_Y', 'Bregma')]
+annot <- paste0(annot.table[cells.good, 'Cell_class'], ':', annot.table[cells.good, 'Neuron_cluster_ID'])
+annot.main <- as.character(annot.table[cells.good, 'Cell_class'])
+annot.main[grepl('OD', annot.main)] <- 'OD'
+annot.main[grepl('Endothelia', annot.main)] <- 'Endothelia'
+
+names(annot.main) <- names(annot) <- cells.good
+annot <- factor(annot)
+annot.main <- factor(annot.main)
+
+par(mfrow=c(1,1))
+plot(spatial_position[,1:2], col=MERINGUE:::fac2col(annot, v=0.8, s=0.8), pch=16, cex=0.5)
+
+```
+
+```{r}
+
+cells.have <- intersect(cells.good, rownames(counts))
+
+annot <- annot[cells.have]
+annot.main <- annot.main[cells.have]
+pos = spatial_position[cells.have, 1:2]
+ct = annot[cells.have]
+plot(pos, col=MERINGUE:::fac2col(ct, v=0.8, s=0.8), pch=16, cex=0.5)
+
+```
+
+```{r}
+
+fov = paste0(features[cells.have,]$dataset_name, '-', features[cells.have,]$primary_fovID)
+names(fov) <- cells.have
+fov <- as.factor(fov)
+
+good.genes <- colnames(counts)[!grepl('Blank', colnames(counts))]
+cd <- counts[cells.have, good.genes]
+
+plotEmbedding(pos, groups=fov, shuffle.colors = TRUE, cex=0.5)
+
+```
+
+```{r}
+
+mm <- model.matrix(~ 0 + fov)
+colnames(mm) <- levels(fov)
+spots <-  t(t(cd) %*% mm)
+
+mm <- model.matrix(~ 0 + fov)
+colnames(mm) <- levels(fov)
+spots.pos <- t(t(pos) %*% mm)/colSums(mm)
+
+```
+
+```{r}
+
+ground.truth <- table(fov,annot.main[names(fov)]) ## count
+ground.truth <- ground.truth/rowSums(ground.truth) ## proportion
+merfish_truth_doc_props <- ground.truth
+
+```
+
+## - LDA
+
+```{r}
+
+library(topicmodels)
+library(slam)
+library(tidytext)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+K=9
+
+# > dim(spots)
+# [1] 486 125
+
+# generate model
+merfish_lda <- topicmodels::LDA(slam::as.simple_triplet_matrix(as.matrix(spots)),
+                                    k=K,
+                                    control = list(seed = 0))
+
+
+# matrix of prob of each document associated with topic
+merfish_doc_topics <- tidy(merfish_lda, matrix = "gamma")
+# train.data.doc_topics
+
+# matrix proportions of topics (columns) in each document (rows)
+merfish_topic_proportions <- cast_sparse(merfish_doc_topics, document, topic, gamma) # row, columns, cells
+head(merfish_topic_proportions)
+
+```
+
+```{r}
+
+# matrix of prob of each word associated with topic
+merfish_lda_topic_words <- tidy(merfish_lda, matrix = "beta")
+
+merfish_lda_topic_words <- as.matrix(cast_sparse(merfish_lda_topic_words, topic, term, beta)) # row, columns, cells
+merfish_lda_topic_words[1:9,1:10]
+
+```
+
+# Cell types and Cell Density in Spots
+
+```{r}
+
+# `counts` -> gene count matrix (1027848 x 130)
+
+# `features` -> 
+
+# `annot.table` -> 
+
+# colnames(annot.table)
+# [1] "Cell_ID"           "Animal_ID"         "Animal_sex"        "Behavior"          "Bregma"           
+# [6] "Centroid_X"        "Centroid_Y"        "Cell_class"        "Neuron_cluster_ID"
+
+# colnames(features)
+#  [1] "feature_uID"          "feature_ID"           "primary_fovID"        "abs_volume"          
+#  [5] "centroid_1"           "centroid_2"           "centroid_3"           "boundaryX"           
+#  [9] "boundaryY"            "dataset_name"         "sliceID"              "replicate_name"      
+# [13] "keep_feature"         "cluster_id_1"         "cluster_id_2"         "cluster_name_1"      
+# [17] "cluster_name_2"       "cluster_1_tSNE_x"     "cluster_1_tSNE_y"     "cluster_2_tSNE_x"    
+# [21] "cluster_2_tSNE_y"     "brain_pos"            "rotate_slice"         "median_total_density"
+# [25] "backgroundScore650"   "backgroundScore750"  
+
+
+# “Centroid X” is the x coordinate of the centroid position for the cell in µm.
+# “Centroid Y” is the y coordinate of the centroid position for the cell in µm. “Cell class” lists the
+# major cell class to which a cell was assigned. A value of “Ambiguous” represents cells that were
+# identified as putative doublets and were not further analyzed. “Neuron cluster_ID” represents the
+# neuronal cluster to which a cell was assigned.
+
+```
+
+Idea: function to return dictionary of lists.
+Dictionary is for a given experiment or MERFISH run
+(for dict, use library(hash))
+
+Keys: Each Bregma section
+Values: lists, that contain:
+ - data.frame of the cells in the bregma, their patch id, coords, cell_class, neuron_cluster_id
+ - table: each patch and counts of each cell type
+ - vector of total cells in each patch
+ - vector of number of cell types in each patch
+ 
+```{r}
+
+library(hash)
+
+get_merfish_cell_type_counts <- function (data, patch_size) {
+  
+  # data -> `annot.table` from `mpoa_merfish_clean.RData` that has been filtered for cells of a given
+  # merfish experiment and has: c('Centroid_X', 'Centroid_Y', 'Bregma', "Cell_class", "Neuron_cluster_ID")
+  # patch_size -> size of patch in um. Centroid coords are already in um
+  
+  # dictionary hash table
+  h <- hash()
+  
+  for (bregma in unique(spatial_position_and_class$Bregma)) {
+    
+    bregma_key <- as.character(bregma)
+    print(bregma_key)
+    
+    selected_bregma <- data[which(data$Bregma == bregma),]
+    
+    
+    # 1. Get patch edge coordinates:
+    
+    # Sequence of X-coord positions for left edge of each patch:
+    x_edges <- seq(min(selected_bregma$Centroid_X), max(selected_bregma$Centroid_X), patch_size)
+    # drop first and last to avoid any issues with the edges of the whole region
+    inner_x_edges <- x_edges[2:(length(x_edges)-1)]
+    # Sequence of Y-coord positions for bottom edge of each patch:
+    y_edges <- seq(min(selected_bregma$Centroid_Y), max(selected_bregma$Centroid_Y), patch_size)
+    inner_y_edges <- y_edges[2:(length(y_edges)-1)]
+    
+    selected_bregma$patch_id <- character(length(rownames(selected_bregma)))
+    
+    # 2. add patch IDs to bregma cells, for the patch they belong to:
+    
+    for (x in inner_x_edges) {
+      for (y in inner_y_edges) {
+        patch_id <- paste0(as.character(x), "_", as.character(y))
+        patch <- selected_bregma[which( (selected_bregma$Centroid_X > x) &
+                                          (selected_bregma$Centroid_X < x+patch_size) &
+                                          (selected_bregma$Centroid_Y > y) &
+                                          (selected_bregma$Centroid_Y < y+patch_size) ),]
+        
+        if (length(rownames(patch)) > 0) {
+          selected_bregma[rownames(patch),]$patch_id <- patch_id
+        }
+      }
+    }
+    
+    # 3. get table of counts of cell types for each patch in bregma
+    selected_bregma_patches <- selected_bregma[which(selected_bregma$patch_id != ""),
+                                               c("patch_id", "Cell_class")]
+    selected_bregma_patch_cells <- table(selected_bregma_patches[])
+    
+    # 4. total cell counts in each patch
+    bregma_cell_counts <- rowSums(selected_bregma_patch_cells)
+    
+    # 5. counts of unique cell types in each patch
+    unique_types_per_patch <- c()
+    for (i in seq_len(length(rownames(selected_bregma_patch_cells)))) {
+      patch_num_cell_types <- length(which(selected_bregma_patch_cells[i,] != 0))
+      unique_types_per_patch <- append(unique_types_per_patch, patch_num_cell_types)
+    }
+    
+    # 6. combine data objects and append to hash table
+    h[[bregma_key]] <- list(bregmaFullDf = selected_bregma,
+                            cellTypeTable = selected_bregma_patch_cells,
+                            totalCells = bregma_cell_counts,
+                            cellTypeCount = unique_types_per_patch)
+  }
+  
+  return(h)
+  
+}
+
+```
+
+## -- dataset: '171021_FN7_2_M22_M26'
+
+```{r}
+
+# select cells that are part of given dataset:
+selected_cells <- rownames(features)[features$dataset_name %in% c('171021_FN7_2_M22_M26')]
+
+spatial_position_and_class <- annot.table[selected_cells, c('Centroid_X', 'Centroid_Y', 'Bregma', "Cell_class", "Neuron_cluster_ID")]
+spatial_position_and_class <- na.omit(spatial_position_and_class) # remove rows with NA
+
+dim(spatial_position_and_class)
+# [1] 36329     5
+
+```
+
+```{r}
+
+FN7_2_M22_M26_hash <- get_merfish_cell_type_counts(spatial_position_and_class, 100)
+
+```
+
+```{r}
+
+keys(FN7_2_M22_M26_hash)
+
+```
+
+Check by comparing to result in "mpoa_merfish_check_spot_counts_and_types.Rmd"
+
+```{r}
+
+FN7_2_M22_M26_hash$`-0.24`$bregmaFullDf
+
+```
+
+```{r}
+
+FN7_2_M22_M26_hash$`-0.24`$cellTypeTable
+
+```
+
+
+```{r}
+
+hist(FN7_2_M22_M26_hash$`-0.24`$totalCells, breaks = 20)
+hist(FN7_2_M22_M26_hash$`-0.24`$cellTypeCount, breaks = 10)
+
+```
+
+All Looks good!
+
+Plot histograms of total cells and cell type counts for each bregma:
+
+```{r}
+
+for (bregma in keys(FN7_2_M22_M26_hash)) {
+  
+  hist(FN7_2_M22_M26_hash[[bregma]][["totalCells"]], breaks = 20)
+  hist(FN7_2_M22_M26_hash[[bregma]][["cellTypeCount"]], breaks = 10)
+  
+}
+
+```
+
+### discrete dist for simulations
+
+Collect information to have discrete distributions for which to sample from when making complex simulations:
+
+```{r}
+
+FN7_2_M22_M26_patch_tot_cell_counts <- c()
+FN7_2_M22_M26_patch_cell_type_counts <- c()
+
+for (bregma in keys(FN7_2_M22_M26_hash)) {
+  
+  bregma_patch_counts <- FN7_2_M22_M26_hash[[bregma]][["totalCells"]]
+  FN7_2_M22_M26_patch_tot_cell_counts <- append(FN7_2_M22_M26_patch_tot_cell_counts,
+                                                bregma_patch_counts)
+  
+  bregma_patch_cellType_counts <- FN7_2_M22_M26_hash[[bregma]][["cellTypeCount"]]
+  FN7_2_M22_M26_patch_cell_type_counts <- append(FN7_2_M22_M26_patch_cell_type_counts,
+                                                bregma_patch_cellType_counts)
+  
+}
+
+# dist for total cells in a spot
+FN7_2_M22_M26_cell_count_dist <- table(FN7_2_M22_M26_patch_tot_cell_counts) / sum(table(FN7_2_M22_M26_patch_tot_cell_counts))
+
+merfish_cell_count_probs <- as.vector(FN7_2_M22_M26_cell_count_dist)
+merfish_cell_count_dist <- as.double(names(FN7_2_M22_M26_cell_count_dist))
+
+
+# dist for total cell types in a spot
+FN7_2_M22_M26_cell_type_dist <- table(FN7_2_M22_M26_patch_cell_type_counts) / sum(table(FN7_2_M22_M26_patch_cell_type_counts))
+
+merfish_cell_type_probs <- as.vector(FN7_2_M22_M26_cell_type_dist)
+merfish_cell_type_dist <- as.double(names(FN7_2_M22_M26_cell_type_dist))
+
+```
+
+Check the relative proportions of cells types for each spot
+
+```{r}
+
+test_cell_type_table <- FN7_2_M22_M26_hash$`-0.24`$cellTypeTable
+
+```
+
+```{r}
+
+# which(FN7_2_M22_M26_hash$`-0.24`$cellTypeCount < 6)
+# 
+# sort(unique(FN7_2_M22_M26_hash$`-0.24`$cellTypeCount))
+# 
+# test_cell_type_table / rowSums(test_cell_type_table)
+
+for (i in sort(unique(FN7_2_M22_M26_hash$`-0.24`$cellTypeCount))) {
+  
+  patches <- test_cell_type_table[which(FN7_2_M22_M26_hash$`-0.24`$cellTypeCount == i),]
+  
+  label <- paste0("num cell types: ", as.character(i), "; num patches: ", as.character(length(rownames(patches))))
+  
+  if (length(rownames(patches)) > 1) {
+    
+    hist(c(patches/rowSums(patches)), breaks = 20, main = label)
+    
+  } else {
+    
+    hist(c(patches/sum(patches)), breaks = 20, main = label)
+    
+  }
+}
+
+
+```
+
+
+## -- dataset: '171216_BD11_1_M22_M26'
+
+```{r}
+
+# select cells that are part of given dataset:
+selected_cells <- rownames(features)[features$dataset_name %in% c('171216_BD11_1_M22_M26')]
+
+spatial_position_and_class <- annot.table[selected_cells, c('Centroid_X', 'Centroid_Y', 'Bregma', "Cell_class", "Neuron_cluster_ID")]
+spatial_position_and_class <- na.omit(spatial_position_and_class) # remove rows with NA
+
+dim(spatial_position_and_class)
+# [1] 332425     5
+
+```
+
+```{r}
+
+BD11_1_M22_M26_hash <- get_merfish_cell_type_counts(spatial_position_and_class, 100)
+
+```
+
+```{r}
+
+keys(BD11_1_M22_M26_hash)
+
+```
+
+```{r}
+
+for (bregma in keys(BD11_1_M22_M26_hash)) {
+  
+  hist(BD11_1_M22_M26_hash[[bregma]][["totalCells"]], breaks = 20)
+  hist(BD11_1_M22_M26_hash[[bregma]][["cellTypeCount"]], breaks = 10)
+  
+}
+
+```
+
+# =================================
+# PREDICTIONS
+# -----------------------------------------------------------
+
+Compare LDA and HDP wrt simple and complex datasets
+
+Compare wrt correlation between predicted and true proportions
+Compare wrt gene expression ? check notes
+
+HDP in terms of tomotopy or gensim
+Figure out how to get topic proportions. Also must be a way to filter for topics like R hdp does (the posterior has some sort of cosine > 0.9 filter to choose topics)
+
+Way to "use biology" to help inform if the cluster choice in LDA is appropriate
+
+then there is the hungarian sort algorithm to get optimal matching
+library(clue)
+
+matching predicted topics to actual cell types. 
+
+Some way to simulate cells that are correlated strongly?
+
+Well, clusters in pmbcA 1,2,3 based on the tSNE, 1 and 2 are "similar" and 3 is distinct. But should be careful about interpreting the tSNE clustering. Distance between clusters may not mean anything
+
+# LDA - R library(topicmodels)
+
+## 1. Simple Simulation
+
+```{r}
+
+library(topicmodels)
+library(slam)
+library(tidytext)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+K=3
+
+# generate model
+train.data.lda <- topicmodels::LDA(slam::as.simple_triplet_matrix(as.matrix(train.data.sub)),
+                                    k=K,
+                                    control = list(seed = 0))
+
+# ----------------------------------------------------------------------------
+
+# # matrix of prob of each word associated with topic
+# train.data.topic_words <- tidy(train.data.lda, matrix = "beta")
+# train.data.topic_words
+# 
+# # visualize top words in each topic
+# train.data.topic.top_words <- train.data.topic_words %>%
+#   group_by(topic) %>%
+#   top_n(10, beta) %>%
+#   ungroup() %>%
+#   arrange(topic, -beta)
+# 
+# train.data.topic.top_words %>%
+#   mutate(term = reorder_within(term, beta, topic)) %>%
+#   ggplot(aes(term, beta, fill = factor(topic))) +
+#   geom_col(show.legend = FALSE) +
+#   facet_wrap(~topic, scales = "free") +
+#   coord_flip() +
+#   scale_x_reordered()
+# 
+# # matrix of log-likelihood of word being associated with topic 1 or 2
+# train.data.beta_spread <- train.data.topic_words %>%
+#   mutate(topic = paste0("topic", topic)) %>%
+#   spread(topic, beta) %>%
+#   filter(topic1 > .001 | topic2 > .001) %>%
+#   mutate(log_ratio = log2(topic2 / topic1))
+
+# ----------------------------------------------------------------------------
+
+# matrix of prob of each document associated with topic
+train.data.doc_topics <- tidy(train.data.lda, matrix = "gamma")
+# train.data.doc_topics
+
+# matrix proportions of topics (columns) in each document (rows)
+train.data.topic_proportions <- cast_sparse(train.data.doc_topics, document, topic, gamma) # row, columns, cells
+train.data.topic_proportions
+
+```
+
+```{r}
+
+train.data.ground_truth <- train.data[,c("ctA", "ctB", "ctC")]
+train.data.ground_truth
+
+```
+
+```{r}
+
+# matrix of prob of each word associated with topic
+train.data.lda_topic_words <- tidy(train.data.lda, matrix = "beta")
+
+train.data.lda_topic_words <- as.matrix(cast_sparse(train.data.lda_topic_words, topic, term, beta)) # row, columns, cells
+train.data.lda_topic_words
+
+```
+
+From example of "MERFISH mOA:
+
+125 genes x 36K cells = cd
+36K cells x 9 cell types = mm
+
+cd x mm = summed counts of each gene for each cell type. (9 cell types x 125 genes)
+
+Divide by row sums (cell types) and get the fraction of each gene that contributes to the overall cell type expression
+
+For all cells of a given cell type, sum up the gene counts.
+
+Equivalent to the "topic words", i.e. proportion each word is associated with a topic
+
+For "Simple Simulation", we have:
+```{r}
+
+mat
+# a matrix where each row is ctA, B, C, and the gene base counts for that cell type.
+# So this is probably the appropriate matrix to use to get the contribution of each gene to each cell type.
+train.data.gt_gene_freq <- mat / rowSums(mat)
+train.data.gt_gene_freq
+
+# When making train.data, each vector (row in mat) was multiplied by number of cells of given type
+# and then summed together to get total gene expression for that simulated spot.
+# Multipling these total gene counts for each spot by the proportion of each cell type
+# should give the total counts of each gene for each cell type across all the spots
+# Then dividing by rowSums (cell type) should also give fraction of each gene that contributes to each type
+train.data.ct_tot_gene_counts <- t(t(as.matrix(train.data.sub)) %*% train.data.ground_truth)
+train.data.ct_gene_freq <- train.data.ct_tot_gene_counts / rowSums(train.data.ct_tot_gene_counts)
+train.data.ct_gene_freq
+
+# they're different...why??
+
+```
+
+## 2. Complex Simulation
+
+### - Raw Depth
+
+```{r}
+
+library(topicmodels)
+library(slam)
+library(tidytext)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/ct3_mx50_sigGenes_not_depthNorm_objects.Rdata")
+
+# simulated_spots_not_depthNorm
+
+K=3
+
+# generate model
+lda_notDn <- topicmodels::LDA(slam::as.simple_triplet_matrix(simulated_spots_not_depthNorm),
+                                    k=K,
+                                    control = list(seed = 0))
+
+# ----------------------------------------------------------------------------
+
+# # matrix of prob of each word associated with topic
+# train.data.topic_words <- tidy(train.data.lda, matrix = "beta")
+# train.data.topic_words
+# 
+# # visualize top words in each topic
+# train.data.topic.top_words <- train.data.topic_words %>%
+#   group_by(topic) %>%
+#   top_n(10, beta) %>%
+#   ungroup() %>%
+#   arrange(topic, -beta)
+# 
+# train.data.topic.top_words %>%
+#   mutate(term = reorder_within(term, beta, topic)) %>%
+#   ggplot(aes(term, beta, fill = factor(topic))) +
+#   geom_col(show.legend = FALSE) +
+#   facet_wrap(~topic, scales = "free") +
+#   coord_flip() +
+#   scale_x_reordered()
+# 
+# # matrix of log-likelihood of word being associated with topic 1 or 2
+# train.data.beta_spread <- train.data.topic_words %>%
+#   mutate(topic = paste0("topic", topic)) %>%
+#   spread(topic, beta) %>%
+#   filter(topic1 > .001 | topic2 > .001) %>%
+#   mutate(log_ratio = log2(topic2 / topic1))
+
+# ----------------------------------------------------------------------------
+
+# matrix of prob of each document associated with topic
+doc_topics_notDn <- tidy(lda_notDn, matrix = "gamma")
+# train.data.doc_topics
+
+# matrix proportions of topics (columns) in each document (rows)
+topic_proportions_notDn <- cast_sparse(doc_topics_notDn, document, topic, gamma) # row, columns, cells
+topic_proportions_notDn
+
+```
+
+```{r}
+
+# matrix of prob of each word associated with topic
+lda_topic_words_notDn <- tidy(lda_notDn, matrix = "beta")
+
+lda_topic_words_notDn <- as.matrix(cast_sparse(lda_topic_words_notDn, topic, term, beta)) # row, columns, cells
+lda_topic_words_notDn
+
+```
+
+### - Depth Normalized
+
+```{r}
+
+library(topicmodels)
+library(slam)
+library(tidytext)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+simulated_spots <- t(as.matrix(spot_genes_ct3_mx50_sigGenes_depthNorm))
+
+K=3
+
+# generate model
+lda <- topicmodels::LDA(slam::as.simple_triplet_matrix(simulated_spots),
+                                    k=K,
+                                    control = list(seed = 0))
+
+# ----------------------------------------------------------------------------
+
+# # matrix of prob of each word associated with topic
+# train.data.topic_words <- tidy(train.data.lda, matrix = "beta")
+# train.data.topic_words
+# 
+# # visualize top words in each topic
+# train.data.topic.top_words <- train.data.topic_words %>%
+#   group_by(topic) %>%
+#   top_n(10, beta) %>%
+#   ungroup() %>%
+#   arrange(topic, -beta)
+# 
+# train.data.topic.top_words %>%
+#   mutate(term = reorder_within(term, beta, topic)) %>%
+#   ggplot(aes(term, beta, fill = factor(topic))) +
+#   geom_col(show.legend = FALSE) +
+#   facet_wrap(~topic, scales = "free") +
+#   coord_flip() +
+#   scale_x_reordered()
+# 
+# # matrix of log-likelihood of word being associated with topic 1 or 2
+# train.data.beta_spread <- train.data.topic_words %>%
+#   mutate(topic = paste0("topic", topic)) %>%
+#   spread(topic, beta) %>%
+#   filter(topic1 > .001 | topic2 > .001) %>%
+#   mutate(log_ratio = log2(topic2 / topic1))
+
+# ----------------------------------------------------------------------------
+
+# matrix of prob of each document associated with topic
+doc_topics <- tidy(lda, matrix = "gamma")
+# train.data.doc_topics
+
+# matrix proportions of topics (columns) in each document (rows)
+topic_proportions <- cast_sparse(doc_topics, document, topic, gamma) # row, columns, cells
+topic_proportions
+
+```
+
+```{r}
+
+# matrix of prob of each word associated with topic
+lda_topic_words <- tidy(lda, matrix = "beta")
+
+lda_topic_words <- as.matrix(cast_sparse(lda_topic_words, topic, term, beta)) # row, columns, cells
+lda_topic_words
+
+```
+
+## 4. Complex: NK, B, Monocytes
+
+```{r}
+
+library(topicmodels)
+library(slam)
+library(tidytext)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+simulated_spots_3_4_10 <- t(as.matrix(spot_genes_3_4_10[sigClusterGenes_3_4_10,]))
+
+K=3
+
+# generate model
+lda_3_4_10 <- topicmodels::LDA(slam::as.simple_triplet_matrix(simulated_spots_3_4_10),
+                                    k=K,
+                                    control = list(seed = 0))
+
+# ----------------------------------------------------------------------------
+
+# # matrix of prob of each word associated with topic
+# train.data.topic_words <- tidy(train.data.lda, matrix = "beta")
+# train.data.topic_words
+# 
+# # visualize top words in each topic
+# train.data.topic.top_words <- train.data.topic_words %>%
+#   group_by(topic) %>%
+#   top_n(10, beta) %>%
+#   ungroup() %>%
+#   arrange(topic, -beta)
+# 
+# train.data.topic.top_words %>%
+#   mutate(term = reorder_within(term, beta, topic)) %>%
+#   ggplot(aes(term, beta, fill = factor(topic))) +
+#   geom_col(show.legend = FALSE) +
+#   facet_wrap(~topic, scales = "free") +
+#   coord_flip() +
+#   scale_x_reordered()
+# 
+# # matrix of log-likelihood of word being associated with topic 1 or 2
+# train.data.beta_spread <- train.data.topic_words %>%
+#   mutate(topic = paste0("topic", topic)) %>%
+#   spread(topic, beta) %>%
+#   filter(topic1 > .001 | topic2 > .001) %>%
+#   mutate(log_ratio = log2(topic2 / topic1))
+
+# ----------------------------------------------------------------------------
+
+# matrix of prob of each document associated with topic
+doc_topics_3_4_10 <- tidy(lda_3_4_10, matrix = "gamma")
+# train.data.doc_topics
+
+# matrix proportions of topics (columns) in each document (rows)
+topic_proportions_3_4_10 <- cast_sparse(doc_topics_3_4_10, document, topic, gamma) # row, columns, cells
+topic_proportions_3_4_10
+
+```
+
+```{r}
+
+# matrix of prob of each word associated with topic
+lda_topic_words_3_4_10 <- tidy(lda_3_4_10, matrix = "beta")
+
+lda_topic_words_3_4_10 <- as.matrix(cast_sparse(lda_topic_words_3_4_10, topic, term, beta)) # row, columns, cells
+lda_topic_words_3_4_10
+
+```
+
+# HDP - R library(hdp)
+
+## 1. Simple Simulation
+
+```{r}
+
+library(hdp)
+
+train.data.sub.quick_hdp <- hdp_quick_init(as.matrix(train.data.sub))
+train.data.sub.quick_chain <- hdp_posterior(train.data.sub.quick_hdp, burnin=100, n=100, space=5, seed=1234)
+
+# Note: 5000 total iterations seems to reduce performance?
+# The likelihood increased up to approx 500 then started decreasing. 
+# Try lowering iterations?
+
+# It actually improved
+
+```
+
+```{r}
+
+## check chain convergence
+par(mfrow=c(1,3))
+plot_lik(train.data.sub.quick_chain, bty="L")
+plot_numcluster(train.data.sub.quick_chain, bty="L")
+plot_data_assigned(train.data.sub.quick_chain, bty="L")
+
+```
+
+```{r}
+
+#################### Evaluate performance
+## extract results for cell-type proportions
+train.data.sub.quick_chain <- hdp_extract_components(train.data.sub.quick_chain)
+train.data.sub.hdp_results <- comp_dp_distn(train.data.sub.quick_chain)$mean
+dim(train.data.sub.hdp_results)
+
+train.data.sub.hdp_results <- train.data.sub.hdp_results[-1,] ## bug it seems
+
+rownames(train.data.sub.hdp_results) <- rownames(train.data.sub)
+colnames(train.data.sub.hdp_results) <- paste0('ct', 1:ncol(train.data.sub.hdp_results))
+head(train.data.sub.hdp_results)
+dim(train.data.sub.hdp_results)
+
+```
+
+```{r}
+
+train.data.hdp_topic_words <- comp_categ_distn(train.data.sub.quick_chain)$mean
+dim(train.data.hdp_topic_words)
+rownames(train.data.hdp_topic_words) <- paste0('ct', 1:nrow(train.data.hdp_topic_words))
+colnames(train.data.hdp_topic_words) <- colnames(train.data.sub)
+head(train.data.hdp_topic_words)
+
+```
+
+## 2. Complex Simulation
+
+### - Raw Depth
+
+```{r}
+
+simulated_spots_not_depthNorm <- t(as.matrix(spot_genes_ct3_mx50_s1000[sigClusterGenes_ct3,]))
+
+ct3_mx50_sigGenes.quick_hdp <- hdp_quick_init(as.matrix(simulated_spots_not_depthNorm))
+ct3_mx50_sigGenes.quick_chain <- hdp_posterior(ct3_mx50_sigGenes.quick_hdp,
+                                                         burnin=100, n=2000, space=1, seed=1234)
+
+
+# This took only 15 minutes. Turns our depth normalizing has about 5 mil words and deothNorm by 10K has 10 mil words. So double number of words does slow it down  a lot.
+
+```
+
+```{r}
+
+## check chain convergence
+par(mfrow=c(1,3))
+plot_lik(ct3_mx50_sigGenes.quick_chain, bty="L")
+plot_numcluster(ct3_mx50_sigGenes.quick_chain, bty="L")
+plot_data_assigned(ct3_mx50_sigGenes.quick_chain, bty="L")
+
+```
+
+```{r}
+
+#################### Evaluate performance
+## extract results for cell-type proportions
+ct3_mx50_sigGenes.quick_chain <- hdp_extract_components(ct3_mx50_sigGenes.quick_chain)
+ct3_mx50_sigGenes.hdp_results <- comp_dp_distn(ct3_mx50_sigGenes.quick_chain)$mean
+dim(ct3_mx50_sigGenes.hdp_results)
+
+ct3_mx50_sigGenes.hdp_results <- ct3_mx50_sigGenes.hdp_results[-1,] ## bug it seems
+
+rownames(ct3_mx50_sigGenes.hdp_results) <- rownames(simulated_spots)
+colnames(ct3_mx50_sigGenes.hdp_results) <- paste0(1:ncol(ct3_mx50_sigGenes.hdp_results))
+head(ct3_mx50_sigGenes.hdp_results)
+dim(ct3_mx50_sigGenes.hdp_results)
+
+```
+
+```{r}
+
+ct3_mx50_sigGenes.hdp_topic_words <- comp_categ_distn(ct3_mx50_sigGenes.quick_chain)$mean
+dim(ct3_mx50_sigGenes.hdp_topic_words)
+rownames(ct3_mx50_sigGenes.hdp_topic_words) <- paste0(1:nrow(ct3_mx50_sigGenes.hdp_topic_words))
+colnames(ct3_mx50_sigGenes.hdp_topic_words) <- colnames(simulated_spots)
+head(ct3_mx50_sigGenes.hdp_topic_words)
+
+```
+
+### - Depth Normalized
+
+```{r}
+
+library(hdp)
+
+ct3_mx50_sigGenes_depthNorm.quick_hdp <- hdp_quick_init(as.matrix(simulated_spots))
+ct3_mx50_sigGenes_depthNorm.quick_chain <- hdp_posterior(ct3_mx50_sigGenes_depthNorm.quick_hdp,
+                                                         burnin=100, n=2000, space=1, seed=1234)
+
+# 1000 iterations pretty good, but 5 predicted ct's. However, hungarian sort on gene expression actually reduces to 3
+# Also only took about 18 minutes. Maybe b/c reduced number of total words in spots to 10K
+# Try uping the iterations and see if improves?
+
+```
+
+```{r}
+
+## check chain convergence
+par(mfrow=c(1,3))
+plot_lik(ct3_mx50_sigGenes_depthNorm.quick_chain, bty="L")
+plot_numcluster(ct3_mx50_sigGenes_depthNorm.quick_chain, bty="L")
+plot_data_assigned(ct3_mx50_sigGenes_depthNorm.quick_chain, bty="L")
+
+```
+
+```{r}
+
+#################### Evaluate performance
+## extract results for cell-type proportions
+ct3_mx50_sigGenes_depthNorm.quick_chain <- hdp_extract_components(ct3_mx50_sigGenes_depthNorm.quick_chain)
+ct3_mx50_sigGenes_depthNorm.hdp_results <- comp_dp_distn(ct3_mx50_sigGenes_depthNorm.quick_chain)$mean
+dim(ct3_mx50_sigGenes_depthNorm.hdp_results)
+
+ct3_mx50_sigGenes_depthNorm.hdp_results <- ct3_mx50_sigGenes_depthNorm.hdp_results[-1,] ## bug it seems
+
+rownames(ct3_mx50_sigGenes_depthNorm.hdp_results) <- rownames(simulated_spots)
+colnames(ct3_mx50_sigGenes_depthNorm.hdp_results) <- paste0('ct', 1:ncol(ct3_mx50_sigGenes_depthNorm.hdp_results))
+head(ct3_mx50_sigGenes_depthNorm.hdp_results)
+dim(ct3_mx50_sigGenes_depthNorm.hdp_results)
+
+```
+
+```{r}
+
+ct3_mx50_sigGenes_depthNorm.hdp_topic_words <- comp_categ_distn(ct3_mx50_sigGenes_depthNorm.quick_chain)$mean
+dim(ct3_mx50_sigGenes_depthNorm.hdp_topic_words)
+rownames(ct3_mx50_sigGenes_depthNorm.hdp_topic_words) <- paste0('ct', 1:nrow(ct3_mx50_sigGenes_depthNorm.hdp_topic_words))
+colnames(ct3_mx50_sigGenes_depthNorm.hdp_topic_words) <- colnames(simulated_spots)
+head(ct3_mx50_sigGenes_depthNorm.hdp_topic_words)
+
+```
+
+## 4. Complex NK, B, Monocyte
+
+```{r}
+
+simulated_spots_3_4_10 <- t(as.matrix(spot_genes_3_4_10[sigClusterGenes_3_4_10,]))
+
+simulated_spots_3_4_10.quick_hdp <- hdp_quick_init(as.matrix(simulated_spots_3_4_10))
+simulated_spots_3_4_10.quick_chain <- hdp_posterior(simulated_spots_3_4_10.quick_hdp,
+                                                         burnin=100, n=2000, space=1, seed=1234)
+
+
+# This took only 15 minutes. Turns our depth normalizing has about 5 mil words and deothNorm by 10K has 10 mil words. So double number of words does slow it down  a lot.
+
+```
+
+```{r}
+
+## check chain convergence
+par(mfrow=c(1,3))
+plot_lik(simulated_spots_3_4_10.quick_chain, bty="L")
+plot_numcluster(simulated_spots_3_4_10.quick_chain, bty="L")
+plot_data_assigned(simulated_spots_3_4_10.quick_chain, bty="L")
+
+```
+
+```{r}
+
+#################### Evaluate performance
+## extract results for cell-type proportions
+simulated_spots_3_4_10.quick_chain <- hdp_extract_components(simulated_spots_3_4_10.quick_chain)
+simulated_spots_3_4_10.hdp_results <- comp_dp_distn(simulated_spots_3_4_10.quick_chain)$mean
+dim(simulated_spots_3_4_10.hdp_results)
+
+simulated_spots_3_4_10.hdp_results <- simulated_spots_3_4_10.hdp_results[-1,] ## bug it seems
+
+rownames(simulated_spots_3_4_10.hdp_results) <- rownames(simulated_spots_3_4_10)
+colnames(simulated_spots_3_4_10.hdp_results) <- paste0(1:ncol(simulated_spots_3_4_10.hdp_results))
+head(simulated_spots_3_4_10.hdp_results)
+dim(simulated_spots_3_4_10.hdp_results)
+
+```
+
+```{r}
+
+simulated_spots_3_4_10.hdp_topic_words <- comp_categ_distn(simulated_spots_3_4_10.quick_chain)$mean
+dim(simulated_spots_3_4_10.hdp_topic_words)
+rownames(simulated_spots_3_4_10.hdp_topic_words) <- paste0(1:nrow(simulated_spots_3_4_10.hdp_topic_words))
+colnames(simulated_spots_3_4_10.hdp_topic_words) <- colnames(simulated_spots_3_4_10)
+head(simulated_spots_3_4_10.hdp_topic_words)
+
+```
+
+# -----------------------------------------------------------
+
+# Save input and ground truth to pickle
+
+library(hdp) is just really slow. Shift to using other libraries like tomotopy or gensim.
+
+Load simulated datasets into pickle objects to be transferred into jupyter notebook for use with other hdp libraries
+
+```{r}
+
+train_data_sub <- train.data.sub
+
+train_data_ground_truth <- train.data.ground_truth
+train_data_ground_truth_rows <- rownames(train_data_ground_truth)
+train_data_ground_truth_cols <- colnames(train_data_ground_truth)
+
+train_data_gt_gene_freq <- train.data.gt_gene_freq
+train_data_gt_gene_freq_rows <- rownames(train_data_gt_gene_freq)
+train_data_gt_gene_freq_cols <- colnames(train_data_gt_gene_freq)
+
+train_data_ct_gene_freq <- train.data.ct_gene_freq
+train_data_ct_gene_freq_rows <- rownames(train_data_ct_gene_freq)
+train_data_ct_gene_freq_cols <- colnames(train_data_ct_gene_freq)
+
+simulated_spots_rows <- rownames(simulated_spots)
+simulated_spots_cols <- colnames(simulated_spots)
+
+ground_truth_rows <- rownames(ground_truth)
+ground_truth_cols <- colnames(ground_truth)
+
+ground_truth_topic_words <- as.matrix(ground_truth_topic_words)
+ground_truth_topic_words_rows <- rownames(ground_truth_topic_words)
+ground_truth_topic_words_cols <- colnames(ground_truth_topic_words)
+
+ground_truth_topic_words_freq <- as.matrix(ground_truth_topic_words_freq)
+ground_truth_topic_words_freq_rows <- rownames(ground_truth_topic_words_freq)
+ground_truth_topic_words_freq_cols <- colnames(ground_truth_topic_words_freq)
+
+```
+
+```{python}
+
+import pickle
+import pandas as pd
+import numpy as np
+
+# Simple Simulation:
+
+train_data_sub = pd.DataFrame(r.train_data_sub)
+train_data_ground_truth = pd.DataFrame(r.train_data_ground_truth,
+                                        index=r.train_data_ground_truth_rows,
+                                        columns=r.train_data_ground_truth_cols)
+train_data_gt_gene_freq = pd.DataFrame(r.train_data_gt_gene_freq,
+                                        index=r.train_data_gt_gene_freq_rows,
+                                        columns=r.train_data_gt_gene_freq_cols)
+train_data_ct_gene_freq = pd.DataFrame(r.train_data_ct_gene_freq,
+                                        index=r.train_data_ct_gene_freq_rows,
+                                        columns=r.train_data_ct_gene_freq_cols)
+
+# Complex Simulation:
+
+# simulated_spots <- t(as.matrix(spot_genes_ct3_mx50_sigGenes_depthNorm))
+simulated_spots = pd.DataFrame(r.simulated_spots,
+                                index=r.simulated_spots_rows,
+                                columns=r.simulated_spots_cols)
+
+# ground_truth <- spot_proportions_ct3_mx50_s1000
+ground_truth = pd.DataFrame(r.ground_truth,
+                            index=r.ground_truth_rows,
+                            columns=r.ground_truth_cols)
+
+# ground_truth_topic_words <- ct.gexp[1:3, sigClusterGenes_ct3]
+# rownames(ground_truth_topic_words) <- paste0('gt', seq_len(3))
+ground_truth_topic_words = pd.DataFrame(r.ground_truth_topic_words,
+                                        index=r.ground_truth_topic_words_rows,
+                                        columns=r.ground_truth_topic_words_cols)
+
+# ground_truth_topic_words_freq <- ground_truth_topic_words / rowSums(ground_truth_topic_words)
+ground_truth_topic_words_freq = pd.DataFrame(r.ground_truth_topic_words_freq,
+                                              index=r.ground_truth_topic_words_freq_rows,
+                                              columns=r.ground_truth_topic_words_freq_cols)
+
+
+
+```
+
+```{python}
+
+st_image_array_saved_data = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/Generate_simulations_ct3_mx50_s1000.pickle"
+
+with open(st_image_array_saved_data, 'wb') as f:
+    pickle.dump([train_data_sub,
+                train_data_ground_truth,
+                train_data_gt_gene_freq,
+                train_data_ct_gene_freq,
+                simulated_spots,
+                ground_truth,
+                ground_truth_topic_words,
+                ground_truth_topic_words_freq], f)
+
+```
+
+# =================================
+# COMPARISONS
+# -----------------------------------------------------------
+
+# Functions
+
+```{r}
+
+library(clue)
+
+# NOTES about lsap
+
+# If nr and nc are the numbers of rows and columns of x, solve_LSAP finds an optimal assignment of rows to columns
+# so rows will always be 1->nr. These again are the ground truth topics.
+# If want to see the matrix after sorting but with all predicted topics as well,
+# then should get the setdiff between all columns and those that were matched via lsap
+
+# > order
+# Optimal assignment:
+# 1 => 2, 2 => 3, 3 => 1
+
+# Row 1 paired with column 2, etc..
+
+# the first number in each pair. The rows (ground truth topics)
+# > seq_along(order)
+# [1] 1 2 3
+
+# the second number in each pair. The columns (predicted topics)
+# > as.numeric(order)
+# [1] 2 3 1
+
+# find any predicted topics that were not paired with a ground truth via hg sort:
+# no.pairs <-setdiff(1:length(colnames(train.data.ground_truth)), as.numeric(order))
+
+# all rows (ground truth's) and columns in order of paired, then any unpaired topics
+# heatmap(compare[, c(order, no.pairs)], Rowv=NA, Colv=NA, scale='row')
+
+
+compare_to_ground_truth <- function(prediction, truth, label, colorscale) {
+  
+  # columns must be topics and rows are either documents or words
+  
+  # correlation matrix between topics of truth (rows) and predictions (columns)
+  # topic correlations wrt document proportions or associated word proportions
+  corr_mtx <- do.call(rbind, lapply(1:ncol(truth), function(i) {
+    sapply(1:ncol(prediction), function(j) {
+      cor(truth[,i], prediction[,j])
+    })
+  }))
+  
+  # table(is.na(corr_mtx))
+  # corr_mtx[is.na(corr_mtx)] <- 0
+  
+  rownames(corr_mtx) <- colnames(truth)
+  colnames(corr_mtx) <- colnames(prediction)
+  
+  # adjust correlations to 0-1 range
+  corr_mtx_adj <- (corr_mtx - min(corr_mtx)) / diff(range(corr_mtx))
+  
+  
+  # lsat doesn't work if more rows than columns
+  
+  if (dim(corr_mtx_adj)[1] > dim(corr_mtx_adj)[2]) {
+    
+    print("number ground truth topics > num predicted topics")
+    corr_mtx_adj_reorder <- corr_mtx_adj
+    
+    paired <- colnames(corr_mtx_adj_reorder) # stays the same for now
+    
+  } else {
+    
+    # `If nr and nc are the numbers of rows and columns of x`
+    # `solve_LSAP finds an optimal assignment of rows to columns`
+    # assign an optimal prediction (column) to each ground truth (row)
+    paired <- clue::solve_LSAP(corr_mtx_adj, maximum = TRUE)
+    
+    # prediction topics that were not paired to a truth topic:
+    not_paired <- setdiff(1:length(colnames(corr_mtx_adj)), as.numeric(paired))
+    
+    # corr matrix 0-1 adjusted, rows (prediction topics) ordered by pairing then not paired
+    corr_mtx_adj_reorder <- corr_mtx_adj[, c(paired, not_paired)]
+    
+  }
+  
+  
+  return(list(mtx = corr_mtx, adjmtx = corr_mtx_adj_reorder, lsap = paired))
+  
+}
+
+
+library(RColorBrewer)
+library('unikn')
+
+# custom color scale for neg -> pos
+teal_bordeaux <- seecol(pal = c(rev(pal_petrol), "white", pal_bordeaux), n = 100)
+
+# custom color scale for pos only
+bordeaux <- seecol(pal = c("white", pal_bordeaux), n = 100)
+
+```
+
+```{r}
+
+documents_topic_correlations <- function (truths, predicts, pairs) {
+  
+  # truths and predicts are the doc-topic proportions
+  # each must be same length and same row order of documents
+  # pairs are the lsap determined paired ground truth -> predicted topics
+  # pairs -> `as.numeric(simple_lda_doc_topics$lsap)`; a vector of integer indices
+  
+  # Reorder the predicted doc-topic proportions and use only paired topics
+  
+  # returns correlations between truth and predicted paired topic proportions for each spot
+  
+ predict_mtx <- as.matrix(predicts[,pairs])
+ 
+ doc_corrs <- do.call(rbind, lapply(1:nrow(truths), function(i) {
+      cor(truths[i,], predict_mtx[i,])
+  }))
+ 
+ rownames(doc_corrs) <- rownames(truths)
+ colnames(doc_corrs) <- c("truth-predict-corr")
+ 
+ return(doc_corrs)
+  
+}
+
+```
+
+# -----------------------------------------------------------
+# 1. Simple Simulation
+
+## Ground Truth Refs
+
+```{r}
+
+head(train.data.ground_truth)
+rownames(train.data.gt_gene_freq) <- colnames(train.data.ground_truth)
+head(train.data.gt_gene_freq)
+
+```
+
+## -- LDA
+
+### Predictions
+
+```{r}
+
+head(train.data.topic_proportions)
+head(train.data.lda_topic_words)
+
+```
+
+### Analysis
+
+```{r}
+
+simple_lda_doc_topics <- compare_to_ground_truth(train.data.topic_proportions, train.data.ground_truth)
+simple_lda_doc_topics
+
+heatmap(simple_lda_doc_topics$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "simple lda doc-topic corr_mtx")
+
+heatmap(simple_lda_doc_topics$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "simple lda doc-topic corr_mtx_adj")
+
+
+simple_lda_topic_words <- compare_to_ground_truth(t(train.data.lda_topic_words), t(train.data.gt_gene_freq))
+simple_lda_topic_words
+
+heatmap(simple_lda_topic_words$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "simple lda topic_words corr_mtx")
+
+heatmap(simple_lda_topic_words$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "simple lda topic-words corr_mtx_adj")
+
+```
+
+## -- HDP
+
+### Predictions
+
+```{r}
+
+colnames(train.data.sub.hdp_results) <- seq(1:ncol(train.data.sub.hdp_results))
+head(train.data.sub.hdp_results)
+rownames(train.data.hdp_topic_words) <- seq(1:ncol(train.data.sub.hdp_results))
+head(train.data.hdp_topic_words)
+
+```
+
+### Analysis
+
+```{r}
+
+simple_hdp_doc_topics <- compare_to_ground_truth(train.data.sub.hdp_results, train.data.ground_truth)
+simple_hdp_doc_topics
+
+heatmap(simple_hdp_doc_topics$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "simple hdp doc-topic corr_mtx")
+
+heatmap(simple_hdp_doc_topics$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "simple hdp doc-topic corr_mtx_adj")
+
+
+simple_hdp_topic_words <- compare_to_ground_truth(t(train.data.hdp_topic_words), t(train.data.gt_gene_freq))
+simple_hdp_topic_words
+
+heatmap(simple_hdp_topic_words$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "simple hdp topic_words corr_mtx")
+
+heatmap(simple_hdp_topic_words$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "simple hdp topic-words corr_mtx_adj")
+
+```
+
+## -- LDA versus HDP
+
+Once the paired topics are found, see how well each individual document (spot) correlates between the ground truth topic proportions and the predicted proportions for the assigned predicted topics.
+
+```{r}
+
+# LDA
+
+# the paired topics determined from doc-topic proportions
+simple_LDA_doc_topic_doccorrs <- documents_topic_correlations(train.data.ground_truth,
+                             train.data.topic_proportions,
+                             as.numeric(simple_lda_doc_topics$lsap))
+
+# same doc-topic predictions as above, but the paired topics differs
+# the paired topics determined from topic-word correlations
+simple_LDA_topic_word_doccorrs <- documents_topic_correlations(train.data.ground_truth,
+                             train.data.topic_proportions,
+                             as.numeric(simple_lda_topic_words$lsap))
+
+# HDP
+
+# the paired topics determined from doc-topic proportions
+simple_HDP_doc_topic_doccorrs <- documents_topic_correlations(train.data.ground_truth,
+                             train.data.sub.hdp_results,
+                             as.numeric(simple_hdp_doc_topics$lsap))
+
+# same doc-topic predictions as above, but the paired topics differs
+# the paired topics determined from topic-word correlations
+simple_HDP_topic_word_doccorrs <- documents_topic_correlations(train.data.ground_truth,
+                             train.data.sub.hdp_results,
+                             as.numeric(simple_hdp_topic_words$lsap))
+
+```
+
+```{r}
+
+simple_lda_vs_hdp <- data.frame(lda_doc_top = simple_LDA_doc_topic_doccorrs[,1],
+                                hdp_doc_top = simple_HDP_doc_topic_doccorrs[,1],
+                                lda_topic_wd = simple_LDA_topic_word_doccorrs[,1],
+                                hdp_topic_wd = simple_HDP_topic_word_doccorrs[,1],
+                                ctA = train.data.ground_truth[,"ctA"],
+                                ctB = train.data.ground_truth[,"ctB"],
+                                ctC = train.data.ground_truth[,"ctC"])
+
+
+ggplot(simple_lda_vs_hdp, aes(x=lda_doc_top, y=hdp_doc_top, color=ctA, size=ctC)) +
+  geom_point() +
+  xlim(0,1) +
+  ylim(0,1)
+
+boxplot(simple_lda_vs_hdp$lda_doc_top,
+        simple_lda_vs_hdp$hdp_doc_top,
+        simple_lda_vs_hdp$lda_topic_wd,
+        simple_lda_vs_hdp$hdp_topic_wd,
+        names = c("lda_doc_top", "hdp_doc_top", "lda_topic_wd", "hdp_topic_wd"))
+
+```
+
+# -------------------------------------------------------------
+# 2. Complex Simulation
+
+## Ground Truth Refs
+
+```{r}
+
+head(ground_truth)
+ground_truth_topic_words_freq[,1:10]
+
+```
+
+## -- LDA 
+
+### Predictions
+
+```{r}
+
+head(topic_proportions)
+head(topic_proportions_notDn)
+
+lda_topic_words[,1:10]
+lda_topic_words_notDn[,1:10]
+
+```
+
+### Analysis - Depth Norm
+
+```{r}
+
+complex_dN_lda_doc_topics <- compare_to_ground_truth(topic_proportions, ground_truth)
+complex_dN_lda_doc_topics
+
+heatmap(complex_dN_lda_doc_topics$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "complex, depthNorm lda doc-topic corr_mtx")
+
+heatmap(complex_dN_lda_doc_topics$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "complex, depthNorm lda doc-topic corr_mtx_adj")
+
+
+complex_dN_lda_topic_words <- compare_to_ground_truth(t(lda_topic_words), t(ground_truth_topic_words_freq))
+complex_dN_lda_topic_words
+
+heatmap(complex_dN_lda_topic_words$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "complex, depthNorm lda topic_words corr_mtx")
+
+heatmap(complex_dN_lda_topic_words$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "complex, depthNorm lda topic-words corr_mtx_adj")
+
+```
+
+### Analysis - Raw Depth
+
+```{r}
+
+complex_lda_doc_topics <- compare_to_ground_truth(topic_proportions_notDn, ground_truth)
+complex_lda_doc_topics
+
+heatmap(complex_lda_doc_topics$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "complex lda doc-topic corr_mtx")
+
+heatmap(complex_lda_doc_topics$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "complex lda doc-topic corr_mtx_adj")
+
+
+complex_lda_topic_words <- compare_to_ground_truth(t(lda_topic_words_notDn), t(ground_truth_topic_words_freq))
+complex_lda_topic_words
+
+heatmap(complex_lda_topic_words$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "complex lda topic_words corr_mtx")
+
+heatmap(complex_lda_topic_words$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "complex lda topic-words corr_mtx_adj")
+
+```
+
+## -- HDP
+
+### Predictions
+
+```{r}
+
+ct3_mx50_sigGenes_depthNorm.hdp_results[1:10,]
+ct3_mx50_sigGenes.hdp_results[1:10,]
+
+ct3_mx50_sigGenes_depthNorm.hdp_topic_words[,1:10]
+ct3_mx50_sigGenes.hdp_topic_words[,1:10]
+
+```
+
+### Analysis - Depth Norm
+
+```{r}
+
+complex_dN_hdp_doc_topics <- compare_to_ground_truth(ct3_mx50_sigGenes_depthNorm.hdp_results, ground_truth)
+complex_dN_hdp_doc_topics
+
+heatmap(complex_dN_hdp_doc_topics$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "complex, depthNorm hdp doc-topic corr_mtx")
+
+heatmap(complex_dN_hdp_doc_topics$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "complex, depthNorm hdp doc-topic corr_mtx_adj")
+
+
+complex_dN_hdp_topic_words <- compare_to_ground_truth(t(ct3_mx50_sigGenes_depthNorm.hdp_topic_words),
+                                                      t(ground_truth_topic_words_freq))
+complex_dN_hdp_topic_words
+
+heatmap(complex_dN_hdp_topic_words$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "complex, depthNorm hdp topic_words corr_mtx")
+
+heatmap(complex_dN_hdp_topic_words$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "complex, depthNorm hdp topic-words corr_mtx_adj")
+
+```
+
+### Analysis - Raw Depth
+
+```{r}
+
+complex_hdp_doc_topics <- compare_to_ground_truth(ct3_mx50_sigGenes.hdp_results, ground_truth)
+complex_hdp_doc_topics
+
+heatmap(complex_hdp_doc_topics$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "complex hdp doc-topic corr_mtx")
+
+heatmap(complex_hdp_doc_topics$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "complex hdp doc-topic corr_mtx_adj")
+
+
+complex_hdp_topic_words <- compare_to_ground_truth(t(ct3_mx50_sigGenes.hdp_topic_words),
+                                                      t(ground_truth_topic_words_freq))
+complex_hdp_topic_words
+
+heatmap(complex_hdp_topic_words$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "complex hdp topic_words corr_mtx")
+
+heatmap(complex_hdp_topic_words$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "complex hdp topic-words corr_mtx_adj")
+
+```
+
+## -- LDA versus HDP
+
+Once the paired topics are found, see how well each individual document (spot) correlates between the ground truth topic proportions and the predicted proportions for the assigned predicted topics.
+
+documents_topic_correlations <- function (truths, predicts, pairs) {
+  
+  # truths and predicts are the doc-topic proportions
+  # each must be same length and same row order of documents
+  # pairs are the lsap determined paired ground truth -> predicted topics
+  # pairs -> `as.numeric(simple_lda_doc_topics$lsap)`; a vector of integer indices
+  
+  # Reorder the predicted doc-topic proportions and use only paired topics
+  
+  # returns correlations between truth and predicted paired topic proportions for each spot
+  
+ predict_mtx <- as.matrix(predicts[,pairs])
+ 
+ doc_corrs <- do.call(rbind, lapply(1:nrow(truths), function(i) {
+      cor(truths[i,], predict_mtx[i,])
+  }))
+ 
+ rownames(doc_corrs) <- rownames(truths)
+ colnames(doc_corrs) <- c("truth-predict-corr")
+ 
+ return(doc_corrs)
+  
+}
+
+```{r}
+
+# LDA
+
+# Depth Norm
+
+# the paired topics determined from doc-topic proportions
+complex_dN_LDA_doc_topic_doccorrs <- documents_topic_correlations(ground_truth,
+                                                                 topic_proportions,
+                                                                 as.numeric(complex_dN_lda_doc_topics$lsap))
+
+# same doc-topic predictions as above, but the paired topics differs
+# the paired topics determined from topic-word correlations
+complex_dN_LDA_topic_word_doccorrs <- documents_topic_correlations(ground_truth,
+                                                               topic_proportions,
+                                                               as.numeric(complex_dN_lda_topic_words$lsap))
+
+# Raw Depth
+
+# the paired topics determined from doc-topic proportions
+complex_LDA_doc_topic_doccorrs <- documents_topic_correlations(ground_truth,
+                                                                 topic_proportions_notDn,
+                                                                 as.numeric(complex_lda_doc_topics$lsap))
+
+# same doc-topic predictions as above, but the paired topics differs
+# the paired topics determined from topic-word correlations
+complex_LDA_topic_word_doccorrs <- documents_topic_correlations(ground_truth,
+                                                               topic_proportions_notDn,
+                                                               as.numeric(complex_lda_topic_words$lsap))
+
+# HDP
+
+# Depth Norm
+
+# the paired topics determined from doc-topic proportions
+complex_dN_HDP_doc_topic_doccorrs <- documents_topic_correlations(ground_truth,
+                                                                 ct3_mx50_sigGenes_depthNorm.hdp_results,
+                                                                 as.numeric(complex_dN_hdp_doc_topics$lsap))
+
+# same doc-topic predictions as above, but the paired topics differs
+# the paired topics determined from topic-word correlations
+complex_dN_HDP_topic_word_doccorrs <- documents_topic_correlations(ground_truth,
+                                                               ct3_mx50_sigGenes_depthNorm.hdp_results,
+                                                               as.numeric(complex_dN_hdp_topic_words$lsap))
+
+# Raw Depth
+
+# the paired topics determined from doc-topic proportions
+complex_HDP_doc_topic_doccorrs <- documents_topic_correlations(ground_truth,
+                                                                 ct3_mx50_sigGenes.hdp_results,
+                                                                 as.numeric(complex_hdp_doc_topics$lsap))
+
+# same doc-topic predictions as above, but the paired topics differs
+# the paired topics determined from topic-word correlations
+complex_HDP_topic_word_doccorrs <- documents_topic_correlations(ground_truth,
+                                                               ct3_mx50_sigGenes.hdp_results,
+                                                               as.numeric(complex_hdp_topic_words$lsap))
+
+
+# Note: some errors with the correlation: the std dev is zero and return of a NA value for instances where the proportion of all 3 cell types in the ground truth is the same. Like for ground_truth[84,]: 0.333333, 0.3333333, 0.3333333
+# ground_truth[665,] is the same thing as another example.
+
+```
+
+```{r}
+
+complex_lda_vs_hdp <- data.frame(lda_doc_top_dN = complex_dN_LDA_doc_topic_doccorrs[,1],
+                                hdp_doc_top_dN = complex_dN_HDP_doc_topic_doccorrs[,1],
+                                lda_topic_wd_dN = complex_dN_LDA_topic_word_doccorrs[,1],
+                                hdp_topic_wd_dN = complex_dN_HDP_topic_word_doccorrs[,1],
+                                lda_doc_top = complex_LDA_doc_topic_doccorrs[,1],
+                                hdp_doc_top = complex_HDP_doc_topic_doccorrs[,1],
+                                lda_topic_wd = complex_LDA_topic_word_doccorrs[,1],
+                                hdp_topic_wd = complex_HDP_topic_word_doccorrs[,1],
+                                ctA = ground_truth[,"ct1"],
+                                ctB = ground_truth[,"ct2"],
+                                ctC = ground_truth[,"ct3"])
+
+# remove the rows with NAs
+complex_lda_vs_hdp_clean <- na.omit(complex_lda_vs_hdp)
+
+par(mar=c(8,3,1,1))
+boxplot(complex_lda_vs_hdp_clean[,1:8], las=2, cex.names=0.2)
+
+
+
+ggplot(complex_lda_vs_hdp_clean, aes(x=lda_doc_top_dN, y=hdp_doc_top_dN, color=ctA)) +
+  ggtitle("LDA vs HDP doc-top, norm depth") +
+  geom_point() 
+
+ggplot(complex_lda_vs_hdp_clean, aes(x=lda_doc_top_dN, y=hdp_doc_top_dN, color=ctB)) +
+  ggtitle("LDA vs HDP doc-top, norm depth") +
+  geom_point() 
+
+ggplot(complex_lda_vs_hdp_clean, aes(x=lda_doc_top_dN, y=hdp_doc_top_dN, color=ctC)) +
+  ggtitle("LDA vs HDP doc-top, norm depth") +
+  geom_point() 
+
+
+
+ggplot(complex_lda_vs_hdp_clean, aes(x=lda_doc_top, y=hdp_doc_top, color=ctA)) +
+  ggtitle("LDA vs HDP doc-top, raw depth") +
+  geom_point()
+
+ggplot(complex_lda_vs_hdp_clean, aes(x=lda_doc_top, y=hdp_doc_top, color=ctB)) +
+  ggtitle("LDA vs HDP doc-top, raw depth") +
+  geom_point()
+
+ggplot(complex_lda_vs_hdp_clean, aes(x=lda_doc_top, y=hdp_doc_top, color=ctC)) +
+  ggtitle("LDA vs HDP doc-top, raw depth") +
+  geom_point() 
+
+
+# +
+#   xlim(0,1) +
+#   ylim(0,1)
+
+# The doc-top versus topic-wd doesn't seem to make much difference, I think because the pairing of topics is the same
+
+# also the depth normalization doesn't seem to matter either.
+
+# Both LDA and HDP do well with ctC - makes sense because this is the "distinct" cell type.
+# LDA struggles with ctA and HDP struggles with ctB.
+
+
+
+# I wonder if setting the LDA model to the same number of topics that HDP predicted will make it perform the same as HDP?
+# End of the day I still make pairs, but will better pairs be selected?
+
+```
+
+# -------------------------------------------------------------
+# 3. MERFISH mPOA
+
+## Ground Truth Refs
+
+```{r}
+
+head(merfish_truth_doc_props)
+
+```
+
+## -- LDA
+
+### Predictions
+
+```{r}
+
+head(merfish_topic_proportions)
+
+```
+
+### Analysis
+
+```{r}
+
+merfish_lda_doc_topics <- compare_to_ground_truth(merfish_topic_proportions, merfish_truth_doc_props)
+merfish_lda_doc_topics
+
+heatmap(merfish_lda_doc_topics$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "merfish lda doc-topic corr_mtx")
+
+heatmap(merfish_lda_doc_topics$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "merfish lda doc-topic corr_mtx_adj")
+
+```
+
+## -- HDP
+
+### Predictions
+
+```{r}
+
+head(merfish_hdp_doc_topic_preds)
+
+```
+
+### Analysis
+
+```{r}
+
+merfish_hdp_doc_topics <- compare_to_ground_truth(merfish_hdp_doc_topic_preds, merfish_truth_doc_props)
+merfish_hdp_doc_topics
+
+heatmap(merfish_hdp_doc_topics$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "merfish hdp doc-topic corr_mtx")
+
+heatmap(merfish_hdp_doc_topics$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "merfish hdp doc-topic corr_mtx_adj")
+
+```
+
+Predicted topics assigned to the truth topic based on the predicted topic that each truth topic correlates most strongly with (horizontal rows)
+
+For the predicted topics, compare to the other truth topics (vertical columns). How? difference between second choice?
+
+It reminds me of some sort of pairwise sequence alignment almost. Trying to move along diagonal and penalize if not?
+
+
+## -- LDA versus HDP
+
+Once the paired topics are found, see how well each individual document (spot) correlates between the ground truth topic proportions and the predicted proportions for the assigned predicted topics.
+
+```{r}
+
+# LDA
+
+# the paired topics determined from doc-topic proportions
+merfish_LDA_doc_topic_doccorrs <- documents_topic_correlations(merfish_truth_doc_props,
+                             merfish_topic_proportions,
+                             as.numeric(merfish_lda_doc_topics$lsap))
+
+# HDP
+
+# the paired topics determined from doc-topic proportions
+merfish_HDP_doc_topic_doccorrs <- documents_topic_correlations(merfish_truth_doc_props,
+                             merfish_hdp_doc_topic_preds,
+                             as.numeric(merfish_hdp_doc_topics$lsap))
+
+```
+
+```{r}
+
+merfish_lda_vs_hdp <- data.frame(lda_doc_top = merfish_LDA_doc_topic_doccorrs[,1],
+                                hdp_doc_top = merfish_HDP_doc_topic_doccorrs[,1])
+
+
+ggplot(merfish_lda_vs_hdp, aes(x=lda_doc_top, y=hdp_doc_top)) +
+  geom_point()
+
+boxplot(merfish_lda_vs_hdp$lda_doc_top,
+        merfish_lda_vs_hdp$hdp_doc_top,
+        names = c("lda_doc_top", "hdp_doc_top"))
+
+```
+
+# -------------------------------------------------------------
+# 4. Complex NK, B, Monocyte
+
+## Ground Truth Refs
+
+```{r}
+
+head(spot_proportions_3_4_10)
+ground_truth_topic_words_freq_3_4_10[,1:10]
+
+```
+
+## -- LDA 
+
+### Predictions
+
+```{r}
+
+head(topic_proportions_3_4_10)
+
+lda_topic_words_3_4_10[,1:10]
+
+```
+
+### Analysis
+
+```{r}
+
+complex_3_4_10_lda_doc_topics <- compare_to_ground_truth(topic_proportions_3_4_10, spot_proportions_3_4_10)
+complex_3_4_10_lda_doc_topics
+
+heatmap(complex_3_4_10_lda_doc_topics$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "complex, 3_4_10 lda doc-topic corr_mtx")
+
+heatmap(complex_3_4_10_lda_doc_topics$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "complex, 3_4_10 lda doc-topic corr_mtx_adj")
+
+
+complex_3_4_10_lda_topic_words <- compare_to_ground_truth(t(lda_topic_words_3_4_10), t(ground_truth_topic_words_freq_3_4_10))
+
+complex_3_4_10_lda_topic_words
+
+heatmap(complex_3_4_10_lda_topic_words$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "complex, 3_4_10 lda topic_words corr_mtx")
+
+heatmap(complex_3_4_10_lda_topic_words$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "complex, 3_4_10 lda topic-words corr_mtx_adj")
+
+```
+
+## -- HDP
+
+### Predictions
+
+```{r}
+
+simulated_spots_3_4_10.hdp_results[1:10,]
+simulated_spots_3_4_10.hdp_topic_words[,1:10]
+
+```
+
+### Analysis
+
+```{r}
+
+complex_3_4_10_hdp_doc_topics <- compare_to_ground_truth(simulated_spots_3_4_10.hdp_results,
+                                                         spot_proportions_3_4_10)
+
+complex_3_4_10_hdp_doc_topics
+
+heatmap(complex_3_4_10_hdp_doc_topics$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "complex, 3_4_10 hdp doc-topic corr_mtx")
+
+heatmap(complex_3_4_10_hdp_doc_topics$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "complex, 3_4_10 hdp doc-topic corr_mtx_adj")
+
+
+complex_3_4_10_hdp_topic_words <- compare_to_ground_truth(t(simulated_spots_3_4_10.hdp_topic_words),
+                                                      t(ground_truth_topic_words_freq_3_4_10))
+complex_3_4_10_hdp_topic_words
+
+heatmap(complex_3_4_10_hdp_topic_words$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "complex, 3_4_10 hdp topic_words corr_mtx")
+
+heatmap(complex_3_4_10_hdp_topic_words$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "complex, 3_4_10 hdp topic-words corr_mtx_adj")
+
+```
+
+## -- LDA versus HDP
+
+Once the paired topics are found, see how well each individual document (spot) correlates between the ground truth topic proportions and the predicted proportions for the assigned predicted topics.
+
+documents_topic_correlations <- function (truths, predicts, pairs) {
+  
+  # truths and predicts are the doc-topic proportions
+  # each must be same length and same row order of documents
+  # pairs are the lsap determined paired ground truth -> predicted topics
+  # pairs -> `as.numeric(simple_lda_doc_topics$lsap)`; a vector of integer indices
+  
+  # Reorder the predicted doc-topic proportions and use only paired topics
+  
+  # returns correlations between truth and predicted paired topic proportions for each spot
+  
+ predict_mtx <- as.matrix(predicts[,pairs])
+ 
+ doc_corrs <- do.call(rbind, lapply(1:nrow(truths), function(i) {
+      cor(truths[i,], predict_mtx[i,])
+  }))
+ 
+ rownames(doc_corrs) <- rownames(truths)
+ colnames(doc_corrs) <- c("truth-predict-corr")
+ 
+ return(doc_corrs)
+  
+}
+
+```{r}
+
+# LDA
+
+# the paired topics determined from doc-topic proportions
+complex_3_4_10_LDA_doc_topic_doccorrs <- documents_topic_correlations(spot_proportions_3_4_10,
+                                                                 topic_proportions_3_4_10, 
+                                                            as.numeric(complex_3_4_10_lda_doc_topics$lsap))
+
+# same doc-topic predictions as above, but the paired topics differs
+# the paired topics determined from topic-word correlations
+complex_3_4_10_LDA_topic_word_doccorrs <- documents_topic_correlations(spot_proportions_3_4_10,
+                                                               topic_proportions_3_4_10,
+                                                            as.numeric(complex_3_4_10_lda_topic_words$lsap))
+
+# HDP
+
+# the paired topics determined from doc-topic proportions
+complex_3_4_10_HDP_doc_topic_doccorrs <- documents_topic_correlations(spot_proportions_3_4_10,
+                                                                 simulated_spots_3_4_10.hdp_results,
+                                                            as.numeric(complex_3_4_10_hdp_doc_topics$lsap))
+
+# same doc-topic predictions as above, but the paired topics differs
+# the paired topics determined from topic-word correlations
+complex_3_4_10_HDP_topic_word_doccorrs <- documents_topic_correlations(spot_proportions_3_4_10,
+                                                               simulated_spots_3_4_10.hdp_results,
+                                                           as.numeric(complex_3_4_10_hdp_topic_words$lsap))
+
+
+```
+
+```{r}
+
+complex_3_4_10_lda_vs_hdp <- data.frame(lda_doc_top = complex_3_4_10_LDA_doc_topic_doccorrs[,1],
+                                hdp_doc_top = complex_3_4_10_HDP_doc_topic_doccorrs[,1],
+                                lda_topic_wd = complex_3_4_10_LDA_topic_word_doccorrs[,1],
+                                hdp_topic_wd = complex_3_4_10_HDP_topic_word_doccorrs[,1],
+                                ctA = spot_proportions_3_4_10[,"NK Cells"],
+                                ctB = spot_proportions_3_4_10[,"B Cells"],
+                                ctC = spot_proportions_3_4_10[,"Classical Monocytes"])
+
+# remove the rows with NAs
+complex_3_4_10_lda_vs_hdp_clean <- na.omit(complex_3_4_10_lda_vs_hdp)
+
+par(mar=c(4,3,1,1))
+boxplot(complex_3_4_10_lda_vs_hdp_clean[,1:4], las=2, cex.names=0.2)
+
+
+
+ggplot(complex_3_4_10_lda_vs_hdp_clean, aes(x=lda_doc_top, y=hdp_doc_top, color=ctA)) +
+  ggtitle("LDA vs HDP doc-top") +
+  geom_point() 
+
+ggplot(complex_3_4_10_lda_vs_hdp_clean, aes(x=lda_doc_top, y=hdp_doc_top, color=ctB)) +
+  ggtitle("LDA vs HDP doc-top") +
+  geom_point() 
+
+ggplot(complex_3_4_10_lda_vs_hdp_clean, aes(x=lda_doc_top, y=hdp_doc_top, color=ctC)) +
+  ggtitle("LDA vs HDP doc-top") +
+  geom_point() 
+
+
+# +
+#   xlim(0,1) +
+#   ylim(0,1)
+
+# The doc-top versus topic-wd doesn't seem to make much difference, I think because the pairing of topics is the same
+
+# also the depth normalization doesn't seem to matter either.
+
+# Both LDA and HDP do well with ctC - makes sense because this is the "distinct" cell type.
+# LDA struggles with ctA and HDP struggles with ctB.
+
+
+
+# I wonder if setting the LDA model to the same number of topics that HDP predicted will make it perform the same as HDP?
+# End of the day I still make pairs, but will better or worse pairs be selected?
+
+```
+
+What are the shared spots with low correlation between HDP and LDA?
+
+```{r}
+
+neg_corr_spots <- complex_3_4_10_lda_vs_hdp_clean[which(complex_3_4_10_lda_vs_hdp_clean[,c("lda_doc_top")] < 0.0 & complex_3_4_10_lda_vs_hdp_clean[,c("hdp_doc_top")] < 0.0),]
+
+pos_corr_spots <- complex_3_4_10_lda_vs_hdp_clean[which(complex_3_4_10_lda_vs_hdp_clean[,c("lda_doc_top")] > 0.5 & complex_3_4_10_lda_vs_hdp_clean[,c("hdp_doc_top")] > 0.5),]
+
+# neg_corr_spots
+
+par(mar=c(4,3,1,1))
+boxplot(neg_corr_spots[,c("ctA", "ctB", "ctC")], las=2, cex.names=0.2)
+boxplot(pos_corr_spots[,c("ctA", "ctB", "ctC")], las=2, cex.names=0.2)
+
+# range between highest and lowest cell type proportions.
+# Maybe the good spots have disproportionate distribution of cell types whereas bad spots have cell types at similar proportions. Thus the document is less monochromatic and maybe the model struggles with this
+
+neg_corr_ranges <- apply(neg_corr_spots[,c("ctA", "ctB", "ctC")],1,FUN=max) - apply(neg_corr_spots[,c("ctA", "ctB", "ctC")],1,FUN=min)
+
+pos_corr_ranges <- apply(pos_corr_spots[,c("ctA", "ctB", "ctC")],1,FUN=max) - apply(pos_corr_spots[,c("ctA", "ctB", "ctC")],1,FUN=min)
+
+boxplot(neg_corr_ranges, pos_corr_ranges, las=2, cex.names=0.2)
+
+```
+
+```{r}
+
+# Ground truth predictions
+spot_proportions_3_4_10[as.numeric(rownames(neg_corr_spots)),]
+
+# LDA predictions
+topic_proportions_3_4_10[as.numeric(rownames(neg_corr_spots)),as.numeric(complex_3_4_10_lda_doc_topics$lsap)]
+
+complex_3_4_10_LDA_doc_topic_doccorrs[as.numeric(rownames(neg_corr_spots)),]
+
+# HDP predictions
+simulated_spots_3_4_10.hdp_results[as.numeric(rownames(neg_corr_spots)),as.numeric(complex_3_4_10_hdp_doc_topics$lsap)]
+
+complex_3_4_10_HDP_doc_topic_doccorrs[as.numeric(rownames(neg_corr_spots)),]
+
+```
+
+# -------------------------------------------------------------
+# 5. MERFISH Parameters
+
+Use the MERFISH distribution of number of cell types and total cells in each spot for simulation
+
+## Generate ground truth
+
+```{r}
+
+FN7_2_M22_M26_cell_count_dist
+
+FN7_2_M22_M26_cell_type_dist
+
+levels(pbmc_annot)
+
+# note that there are 11 pmbC cell types, so remove the 11th cell type from the `cell_type_dist` so that they are the same length.
+
+merfish_cell_type_distr <- FN7_2_M22_M26_cell_type_dist[-length(FN7_2_M22_M26_cell_type_dist)]
+
+merfish_cell_count_distr <- FN7_2_M22_M26_cell_count_dist
+
+```
+
+```{r}
+
+merfish_params_pmbcA_sim_spots <- simulate_cell_counts(cell_type_labels = levels(pbmc_annot),
+                                            number_spots = 1000,
+                                            max_cells = max(as.integer(names(merfish_cell_count_distr))),
+                                            seed = 0,
+                                            merfish_counts = merfish_cell_count_distr,
+                                            merfish_types = merfish_cell_type_distr)
+
+head(merfish_params_pmbcA_sim_spots)
+
+merfish_params_pmbcA_sim_spot_proportions <- merfish_params_pmbcA_sim_spots / rowSums(merfish_params_pmbcA_sim_spots)
+
+head(merfish_params_pmbcA_sim_spot_proportions)
+
+```
+
+```{r}
+
+# note that `com` is the clustering for pmbcA.
+# `spot_genes_ct3_mx50_s1000` would sample from first 3 clusters ("1", "2", "3")
+
+merfish_params_pmbcA_sim_spot_genes <- simulate_gene_counts(
+                                                  simulated_ct_counts = merfish_params_pmbcA_sim_spots,
+                                                  gene_counts = geneCountsClean,
+                                                  communities = pbmc_annot,
+                                                  spots = 1000,
+                                                  seed = 0)
+
+dim(merfish_params_pmbcA_sim_spot_genes)
+merfish_params_pmbcA_sim_spot_genes[1:20,1:20]
+
+```
+
+```{r}
+
+# Identify significantly differentially unregulated genes
+# in each identified cluster by Wilcox test
+
+# Using the original pbmcA `geneCountsClean`
+
+# variance adjusted, log transformed values of the OD genes
+OD_genes <- as.matrix(CPM_varAdj_genes_lg[CPM_OD$ods,])
+
+# diffGenes <- getDifferentialGenes(OD_genes, com)
+
+merfish_param_pmbcA_selected <- pbmc_annot[which(pbmc_annot %in% levels(pbmc_annot))]
+
+merfish_param_pmbcA_diffGenes <- getDifferentialGenes(OD_genes, merfish_param_pmbcA_selected)
+
+merfish_param_pmbcA_SigdiffGenes <- lapply(merfish_param_pmbcA_diffGenes, function(x) {
+  x <- x[x$p.adj < 0.05,]
+  x <- na.omit(x)
+  x <- x[x$highest,]
+  rownames(x)
+})
+
+# print(lapply(signDiffGenes, length))
+
+merfish_param_pmbcA_SigdiffGenes <- as.vector(unlist(merfish_param_pmbcA_SigdiffGenes))
+length(merfish_param_pmbcA_SigdiffGenes)
+
+```
+
+```{r}
+
+mm <- model.matrix(~ 0 + pbmc_annot) # com is the factor with single cell IDs and the clusters they belong to
+colnames(mm) <- levels(pbmc_annot)
+ct.gexp.pbmc_annot <- t(as.matrix(geneCountsClean) %*% mm)
+
+# now select the cell types sampled and the significant genes:
+merfish_params_pmbCA_ground_truth_topic_words <- ct.gexp.pbmc_annot[levels(pbmc_annot), merfish_param_pmbcA_SigdiffGenes]
+
+merfish_params_pmbCA_ground_truth_topic_words_freq <- merfish_params_pmbCA_ground_truth_topic_words / rowSums(merfish_params_pmbCA_ground_truth_topic_words)
+
+merfish_params_pmbCA_ground_truth_topic_words_freq
+
+```
+
+```{r}
+
+dim(merfish_params_pmbCA_ground_truth_topic_words_freq)
+
+```
+
+```{r}
+
+heatmap(log10(merfish_params_pmbCA_ground_truth_topic_words + 1), scale='none')
+
+```
+
+## Predictions
+
+### LDA
+
+```{r}
+
+library(topicmodels)
+library(slam)
+library(tidytext)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+merfish_params_pmbcA_sim_spot_genes_sig <- t(as.matrix(merfish_params_pmbcA_sim_spot_genes[merfish_param_pmbcA_SigdiffGenes,]))
+
+K=10
+
+# generate model
+merfish_param_pmbca_lda <- topicmodels::LDA(slam::as.simple_triplet_matrix(merfish_params_pmbcA_sim_spot_genes_sig),
+                                    k=K,
+                                    control = list(seed = 0))
+
+# ----------------------------------------------------------------------------
+
+# # matrix of prob of each word associated with topic
+# train.data.topic_words <- tidy(train.data.lda, matrix = "beta")
+# train.data.topic_words
+# 
+# # visualize top words in each topic
+# train.data.topic.top_words <- train.data.topic_words %>%
+#   group_by(topic) %>%
+#   top_n(10, beta) %>%
+#   ungroup() %>%
+#   arrange(topic, -beta)
+# 
+# train.data.topic.top_words %>%
+#   mutate(term = reorder_within(term, beta, topic)) %>%
+#   ggplot(aes(term, beta, fill = factor(topic))) +
+#   geom_col(show.legend = FALSE) +
+#   facet_wrap(~topic, scales = "free") +
+#   coord_flip() +
+#   scale_x_reordered()
+# 
+# # matrix of log-likelihood of word being associated with topic 1 or 2
+# train.data.beta_spread <- train.data.topic_words %>%
+#   mutate(topic = paste0("topic", topic)) %>%
+#   spread(topic, beta) %>%
+#   filter(topic1 > .001 | topic2 > .001) %>%
+#   mutate(log_ratio = log2(topic2 / topic1))
+
+# ----------------------------------------------------------------------------
+
+# matrix of prob of each document associated with topic
+merfish_param_pmbca_doc_topics <- tidy(merfish_param_pmbca_lda, matrix = "gamma")
+# train.data.doc_topics
+
+# matrix proportions of topics (columns) in each document (rows)
+merfish_param_pmbca_topic_proportions <- cast_sparse(merfish_param_pmbca_doc_topics, document, topic, gamma) # row, columns, cells
+merfish_param_pmbca_topic_proportions
+
+```
+
+```{r}
+
+# matrix of prob of each word associated with topic
+merfish_param_pmbca_topic_words <- tidy(merfish_param_pmbca_lda, matrix = "beta")
+
+merfish_param_pmbca_topic_words <- as.matrix(cast_sparse(merfish_param_pmbca_topic_words, topic, term, beta)) # row, columns, cells
+merfish_param_pmbca_topic_words
+
+```
+
+### HDP
+
+```{r}
+
+merfish_params_pmbcA.quick_hdp <- hdp_quick_init(as.matrix(merfish_params_pmbcA_sim_spot_genes_sig))
+merfish_params_pmbcA.quick_chain <- hdp_posterior(merfish_params_pmbcA.quick_hdp,
+                                                         burnin=100, n=2000, space=1, seed=1234)
+
+
+# This took only 15 minutes. Turns our depth normalizing has about 5 mil words and deothNorm by 10K has 10 mil words. So double number of words does slow it down  a lot.
+
+```
+
+```{r}
+
+## check chain convergence
+par(mfrow=c(1,3))
+plot_lik(merfish_params_pmbcA.quick_chain, bty="L")
+plot_numcluster(merfish_params_pmbcA.quick_chain, bty="L")
+plot_data_assigned(merfish_params_pmbcA.quick_chain, bty="L")
+
+```
+
+```{r}
+
+#################### Evaluate performance
+## extract results for cell-type proportions
+merfish_params_pmbcA.quick_chain <- hdp_extract_components(merfish_params_pmbcA.quick_chain)
+merfish_params_pmbcA.hdp_results <- comp_dp_distn(merfish_params_pmbcA.quick_chain)$mean
+dim(merfish_params_pmbcA.hdp_results)
+
+merfish_params_pmbcA.hdp_results <- merfish_params_pmbcA.hdp_results[-1,] ## bug it seems
+
+rownames(merfish_params_pmbcA.hdp_results) <- rownames(merfish_params_pmbcA_sim_spot_genes_sig)
+colnames(merfish_params_pmbcA.hdp_results) <- paste0(1:ncol(merfish_params_pmbcA.hdp_results))
+head(merfish_params_pmbcA.hdp_results)
+dim(merfish_params_pmbcA.hdp_results)
+
+```
+
+```{r}
+
+merfish_params_pmbcA.hdp_topic_words <- comp_categ_distn(merfish_params_pmbcA.quick_chain)$mean
+dim(merfish_params_pmbcA.hdp_topic_words)
+rownames(merfish_params_pmbcA.hdp_topic_words) <- paste0(1:nrow(merfish_params_pmbcA.hdp_topic_words))
+colnames(merfish_params_pmbcA.hdp_topic_words) <- colnames(merfish_params_pmbcA_sim_spot_genes_sig)
+head(merfish_params_pmbcA.hdp_topic_words)
+
+```
+
+## Comparions
+
+## Ground Truth Refs
+
+```{r}
+
+head(merfish_params_pmbcA_sim_spot_proportions)
+merfish_params_pmbCA_ground_truth_topic_words_freq[,1:10]
+
+```
+
+## LDA
+
+## -- Predictions
+
+```{r}
+
+head(merfish_param_pmbca_topic_proportions)
+
+merfish_param_pmbca_topic_words[,1:10]
+
+```
+
+## -- Analysis
+
+```{r}
+
+merfish_param_pmbca_lda_doc_topics <- compare_to_ground_truth(
+                                            merfish_param_pmbca_topic_proportions,
+                                            merfish_params_pmbcA_sim_spot_proportions)
+merfish_param_pmbca_lda_doc_topics
+
+heatmap(merfish_param_pmbca_lda_doc_topics$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "merfish pmbca, lda doc-topic corr_mtx")
+
+heatmap(merfish_param_pmbca_lda_doc_topics$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "merfish pmbca, lda doc-topic corr_mtx_adj")
+
+
+merfish_param_lda_topic_words <- compare_to_ground_truth(
+                                        t(merfish_param_pmbca_topic_words),
+                                        t(merfish_params_pmbCA_ground_truth_topic_words_freq))
+
+merfish_param_lda_topic_words
+
+heatmap(merfish_param_lda_topic_words$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "merfish pmbca, lda topic_words corr_mtx")
+
+heatmap(merfish_param_lda_topic_words$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "merfish pmbca, lda topic-words corr_mtx_adj")
+
+```
+
+If you look at the ground truth labels here that have a strong correlation, they are also pretty distinct if you look at the pmbcA tsne. The others seem to be pretty similar in terms of expression and lo and behold the model also struggles with these.
+
+
+Because the HDP returned less topics than ground truth, didnt get lsat and so can't compare yet wrt topic proportions in each document. I could do it by hand by reordering the predicted topics that did match.
+
+```{r}
+
+# LDA
+
+# the paired topics determined from doc-topic proportions
+merfish_params_pmbcA_LDA_doc_topic_doccorrs <- documents_topic_correlations(
+                                                      merfish_params_pmbcA_sim_spot_proportions,
+                                                      merfish_param_pmbca_topic_proportions, 
+                                                      as.numeric(merfish_param_pmbca_lda_doc_topics$lsap))
+
+# same doc-topic predictions as above, but the paired topics differs
+# the paired topics determined from topic-word correlations
+cmerfish_params_pmbcA_LDA_topic_word_doccorrs <- documents_topic_correlations(
+                                                            merfish_params_pmbcA_sim_spot_proportions,
+                                                            merfish_param_pmbca_topic_proportions,
+                                                            as.numeric(merfish_param_lda_topic_words$lsap))
+
+boxplot(merfish_params_pmbcA_LDA_doc_topic_doccorrs)
+
+```
+
+Check to see what the bad spots are. Are they the ones that have a lot of cell types in the spot or do they equal proportions? Also, what spots are the best?
+
+
+```{r}
+
+# which(merfish_params_pmbcA_LDA_doc_topic_doccorrs < 0.0)
+# which(merfish_params_pmbcA_LDA_doc_topic_doccorrs > 0.6)
+
+merfish_params_pmbcA_neg_corr_spots <- merfish_params_pmbcA_sim_spot_proportions[which(merfish_params_pmbcA_LDA_doc_topic_doccorrs < 0.0),]
+
+merfish_params_pmbcA_pos_corr_spots <- merfish_params_pmbcA_sim_spot_proportions[which(merfish_params_pmbcA_LDA_doc_topic_doccorrs > 0.8),]
+
+
+neg_corr_ranges <- apply(merfish_params_pmbcA_neg_corr_spots[,levels(pbmc_annot)],1,FUN=max) - apply(merfish_params_pmbcA_neg_corr_spots[,levels(pbmc_annot)],1,FUN=min)
+
+pos_corr_ranges <- apply(merfish_params_pmbcA_pos_corr_spots[,levels(pbmc_annot)],1,FUN=max) - apply(merfish_params_pmbcA_pos_corr_spots[,levels(pbmc_annot)],1,FUN=min)
+
+boxplot(neg_corr_ranges, pos_corr_ranges, las=2, cex.names=0.2)
+
+```
+
+Hard to tell but maybe b/c too many cell types to get a good range? Even the most highly correlated spots don't have a significant difference between highest and lowest proportion topics?
+
+Do the best correlated spots have less total topics than the poorly correlated spots?
+
+```{r}
+
+neg_corr_cell_type_counts <- c()
+
+for (i in seq_len(dim(merfish_params_pmbcA_neg_corr_spots)[1])) {
+      patch_num_cell_types <- length(which(merfish_params_pmbcA_neg_corr_spots[i,] != 0))
+      neg_corr_cell_type_counts <- append(neg_corr_cell_type_counts, patch_num_cell_types)
+      
+}
+neg_corr_cell_type_counts
+
+
+pos_corr_cell_type_counts <- c()
+
+for (i in seq_len(dim(merfish_params_pmbcA_pos_corr_spots)[1])) {
+      patch_num_cell_types <- length(which(merfish_params_pmbcA_pos_corr_spots[i,] != 0))
+      pos_corr_cell_type_counts <- append(pos_corr_cell_type_counts, patch_num_cell_types)
+      
+}
+pos_corr_cell_type_counts
+
+boxplot(neg_corr_cell_type_counts, pos_corr_cell_type_counts)
+
+```
+
+
+## HDP
+
+## -- Predictions
+
+```{r}
+
+merfish_params_pmbcA.hdp_results[1:10,]
+
+merfish_params_pmbcA.hdp_topic_words[,1:10]
+
+```
+
+## -- Analysis
+
+```{r}
+
+merfish_param_pmbcA_hdp_doc_topics <- compare_to_ground_truth(merfish_params_pmbcA.hdp_results,
+                                                         merfish_params_pmbcA_sim_spot_proportions)
+
+merfish_param_pmbcA_hdp_doc_topics
+
+heatmap(merfish_param_pmbcA_hdp_doc_topics$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "merfish pmbcA, hdp doc-topic corr_mtx")
+
+heatmap(merfish_param_pmbcA_hdp_doc_topics$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "merfish pmbcA, hdp doc-topic corr_mtx_adj")
+
+
+merfish_param_pmbcA_hdp_topic_words <- compare_to_ground_truth(t(merfish_params_pmbcA.hdp_topic_words),
+                                                      t(merfish_params_pmbCA_ground_truth_topic_words_freq))
+merfish_param_pmbcA_hdp_topic_words
+
+heatmap(merfish_param_pmbcA_hdp_topic_words$mtx, Rowv=NA, Colv=NA, scale='none',
+        col = teal_bordeaux,
+        main = "merfish pmbcA, hdp topic_words corr_mtx")
+
+heatmap(merfish_param_pmbcA_hdp_topic_words$adjmtx, Rowv=NA, Colv=NA, scale='none',
+        col = bordeaux,
+        main = "merfish pmbcA, hdp topic-words corr_mtx_adj")
+
+```
+
+# ==================================
+# Next Steps
+
+
+Play with the vocabulary/topic word dictionary. aka curate the significant genes more
+
+Adjust K with LDA and see if it affects the performance.
+
+
+
+
+Next:
+
+Consider not just number of docs with a given correlation but also the spread or variation in the correlations. And the range.
+
+4. What is the appropriate K?
+  - This would be if using a different hdp than this R implementation, or if going to use LDA
+  
+  what is perplexity
+  lowest point optimal K?
+  
+  visualize DIR()
+  
+5. hierarchical LDA versus HDP?
+Correlated topic models?
+
+
+Important to address:
+About 20 cells and 6 cell types per spot. 
+Another question: What is the proportion of each cell type in each spot?
+Remember that LDA and HDP seem to do ok if there is an imbalance but poor if the topics are represented equally. Probably gets even worse as more topics are also present.
+
+Then try making a new simulated set that reflects the MERFISH results better. Will also help show if more topics evenly dispersed in spots makes things worse.
+
+Then question is how to address this and overcome this?
+
+Could adjusting some of the parameters or choice of K help at all?
+
+
+
