@@ -1,0 +1,3655 @@
+---
+title: "Untitled"
+author: "Brendan F. Miller"
+date: "1/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/merfish_FN7_2_M22_M26_hash.RData")
+
+# bregmas: [1] "-0.04" "-0.09" "-0.14" "-0.19" "-0.24" "-0.29"
+# 
+# h[[bregma_key]] <- list(bregmaFullDf = selected_bregma, # use with cellGeneCounts to get topic-word proportions
+#                             cellTypeTable = selected_bregma_patch_cells, # gt document-topic proportions
+#                             totalCells = bregma_cell_counts,
+#                             cellTypeCount = unique_types_per_patch,
+#                             cellGeneCounts = cellGeneCounts, # use to get gt topic-word proportions
+#                             patchGeneCounts = patchGeneCounts) # the simulation
+# 
+# For each bregma, organized cells into patches of 100x100um.
+# Have cell types, and gene counts for each cell and summed for each patch. 
+# 
+# Can use to assess models. Check perplexity, but also compare to ground truth.
+# See if certain topics can be traced back to a cell type.
+#
+# Note that because only 130 genes, don't need to select features (these were already selected; but will need to figure this out for other data sets)
+
+```
+
+Corpus and ground truths:
+
+```{r}
+
+bregma04 <- extractBregmaCorpus(FN7_2_M22_M26_hash, "-0.04")
+
+```
+
+# Visualize corpus ground truth
+
+```{r}
+
+# keep cells that are in patches
+df <- FN7_2_M22_M26_hash[["-0.04"]][["bregmaFullDf"]]
+df <- df[which(df$patch_id != ""),]
+
+# -----------------------------------------------------------------------------
+# reformat `gtDocTopic` proportions into data frame with spot coordinates
+cellClassProportions <- bregma04$gtDocTopics
+tmp_positions <- do.call(rbind, lapply(rownames(cellClassProportions), function(x){
+  coords <- strsplit(x, "_")[[1]]
+  as.numeric(coords)
+}))
+colnames(tmp_positions) <- c("x", "y")
+rownames(tmp_positions) <- rownames(cellClassProportions)
+tmp_proportions <- lapply(colnames(cellClassProportions), function(i) {
+  cellClassProportions[,i]
+})
+names(tmp_proportions) <- colnames(cellClassProportions)
+cellClassProportions <- merge(tmp_positions, as.data.frame(tmp_proportions), by="row.names")
+
+# -----------------------------------------------------------------------------
+# colors for each cell class
+classColors <- gg_color_hue(length(unique(df$Cell_class)))
+names(classColors) <- names(tmp_proportions)
+
+# -----------------------------------------------------------------------------
+# number of total cells in each spot
+cell_counts <- FN7_2_M22_M26_hash[["-0.04"]]$totalCells
+count_df <- do.call(rbind, lapply(names(cell_counts), function(x){
+  coords <- strsplit(x, "_")[[1]]
+  as.numeric(coords)
+}))
+colnames(count_df) <- c("x", "y")
+rownames(count_df) <- names(cell_counts)
+count_df <- as.data.frame(count_df)
+count_df$counts <- cell_counts
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+# -----------------------------------------------------------------------------
+# individual cells:
+ggplot() +
+  geom_point(data = df,
+             aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  facet_wrap(~ Cell_class, nrow = 4) +
+  scale_fill_manual(values=classColors)
+
+ggplot() +
+  geom_point(data = df,
+             aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  scale_fill_manual(values=classColors)
+
+ggplot() +
+  geom_point(data = df, aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  scale_fill_manual(values=classColors) +
+  geom_rect(data = cellClassProportions,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black")
+
+ggplot() +
+  geom_point(data = count_df, size=7, aes(x=x+50, y=y+50, color=counts)) +
+  scale_color_viridis(option = "C") +
+  geom_rect(data = count_df,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100), 
+            fill = NA, color = "black")
+
+# not sure why fill is not working for `geom_rect`...
+# counts <- as.numeric(count_df$counts)
+# ggplot() +
+  # geom_rect(data = count_df,
+  #           aes(xmin = x - 0, xmax = x + 100,
+  #               ymin = y - 0, ymax = y + 100),
+  #           fill = counts) +
+#   scale_color_viridis(option = "C")
+
+
+# -----------------------------------------------------------------------------
+# ground truth proportions:
+ggplot() +
+  geom_scatterpie(aes(x=x, y=y, group=Row.names, r=40),
+                           data=cellClassProportions,
+                           cols = names(classColors)) +
+  coord_equal() +
+  scale_fill_manual(values=classColors)
+
+
+for (ct in names(classColors)) {
+  topic <- cellClassProportions[, ct]
+  other <- 1 - topic
+  topic <- as.data.frame(topic)
+  topic$other <- as.vector(other)
+  colnames(topic) <- c(ct, "other")
+  rownames(topic) <- rownames(tmp_positions)
+  
+  topic_pos <- merge(topic, tmp_positions, by = 0)
+  topic_pos$Row.names <- cellClassProportions$Row.names
+  topic_colors <- c(classColors[ct], "gray")
+  
+  p <- ggplot() +
+    geom_scatterpie(aes(x=x, y=y, group=Row.names, r=40),
+                             data=topic_pos,
+                             cols = c(ct, "other")) +
+    coord_equal() +
+    scale_fill_manual(values=topic_colors)
+  
+  print(p)
+  
+}
+
+```
+
+# ---------------------------------------------
+# LDA models
+
+```{r}
+
+k_ <- seq(from = 2, to = 10, by = 1)
+k_[1] <- 2
+k_ <- append(k_, seq(from = 15, to = 50, by = 5))
+# [1]  2  3  4  5  6  7  8  9 10 15 20 25 30 35 40 45 50
+
+```
+
+## optimal
+
+```{r}
+
+LDA.optimal <- fitLDA(bregma04$sim, k_, seed = 0)
+
+```
+
+```{r}
+
+controls <- list(seed = 0, verbose = 1, keep = 1, alpha = 1, estimate.alpha = TRUE)
+LDA.k50 <- topicmodels::LDA(bregma04$sim, k=50, control = controls)
+
+topicmodels::perplexity(LDA.k50, bregma04$sim)
+
+```
+
+beta and theta distributions:
+
+```{r}
+
+LDA.k50.tmResult<- posterior(LDA.k50)
+LDA.k50.theta <- LDA.k50.tmResult$topics
+LDA.k50.beta <- LDA.k50.tmResult$terms
+LDA.k50.topicFreqsOverall <- colSums(LDA.k50.theta) / nrow(bregma04$sim)
+
+```
+
+
+## excess topics
+
+```{r}
+
+controls <- list(seed = 0, verbose = 1, keep = 1, alpha = 1, estimate.alpha = TRUE)
+LDA.k200 <- topicmodels::LDA(bregma04$sim, k=200, control = controls)
+
+topicmodels::perplexity(LDA.k200, bregma04$sim)
+
+```
+
+beta and theta distributions:
+
+```{r}
+
+LDA.k200.tmResult<- posterior(LDA.k200)
+LDA.k200.theta <- LDA.k200.tmResult$topics
+LDA.k200.beta <- LDA.k200.tmResult$terms
+LDA.k200.topicFreqsOverall <- colSums(LDA.k200.theta) / nrow(bregma04$sim)
+
+```
+
+## dearth topics
+
+```{r}
+
+controls <- list(seed = 0, verbose = 1, keep = 1, alpha = 1, estimate.alpha = TRUE)
+LDA.k3 <- topicmodels::LDA(bregma04$sim, k=3, control = controls)
+
+topicmodels::perplexity(LDA.k3, bregma04$sim)
+
+```
+
+```{r}
+
+LDA.k3.tmResult<- posterior(LDA.k3)
+LDA.k3.theta <- LDA.k3.tmResult$topics
+LDA.k3.beta <- LDA.k3.tmResult$terms
+LDA.k3.topicFreqsOverall <- colSums(LDA.k3.theta) / nrow(bregma04$sim)
+
+```
+
+# ---------------------------------------------
+# IGNORE
+# Null shuffled gene count corpus
+
+try shuffling the gene counts across the documents for each gene
+
+```{r}
+
+Null.shuffledGeneCounts <- do.call(cbind, lapply(colnames(bregma04$sim), function(gene) {
+  
+  counts <- sample(as.numeric(as.matrix(bregma04$sim)[,gene]))
+  counts
+  
+}))
+
+rownames(Null.shuffledGeneCounts) <- rownames(bregma04$sim)
+colnames(Null.shuffledGeneCounts) <- colnames(bregma04$sim)
+
+```
+
+## null LDA models on shuffled genes corpus
+
+```{r}
+
+Null.shuffledGenes <- slam::as.simple_triplet_matrix(Null.shuffledGeneCounts)
+
+```
+
+
+## optimal
+
+```{r}
+
+controls <- list(seed = 0, verbose = 1, keep = 1, alpha = 1, estimate.alpha = TRUE)
+LDA.k50.null <- topicmodels::LDA(Null.shuffledGenes, k=50, control = controls)
+
+topicmodels::perplexity(LDA.k50.null, Null.shuffledGenes)
+
+```
+
+```{r}
+
+LDA.k50.null.tmResult<- posterior(LDA.k50.null)
+LDA.k50.null.theta <- LDA.k50.null.tmResult$topics
+LDA.k50.null.beta <- LDA.k50.null.tmResult$terms
+LDA.k50.null.topicFreqsOverall <- colSums(LDA.k50.null.theta) / nrow(Null.shuffledGenes)
+
+```
+
+## excess topic
+
+```{r}
+
+controls <- list(seed = 0, verbose = 1, keep = 1, alpha = 1, estimate.alpha = TRUE)
+LDA.k200.null <- topicmodels::LDA(Null.shuffledGenes, k=200, control = controls)
+
+topicmodels::perplexity(LDA.k200.null, Null.shuffledGenes)
+
+```
+
+```{r}
+
+LDA.k200.null.tmResult<- posterior(LDA.k200.null)
+LDA.k200.null.theta <- LDA.k200.null.tmResult$topics
+LDA.k200.null.beta <- LDA.k200.null.tmResult$terms
+LDA.k200.null.topicFreqsOverall <- colSums(LDA.k200.null.theta) / nrow(Null.shuffledGenes)
+
+```
+
+## dearth topics
+
+```{r}
+
+controls <- list(seed = 0, verbose = 1, keep = 1, alpha = 1, estimate.alpha = TRUE)
+LDA.k3.null <- topicmodels::LDA(Null.shuffledGenes, k=3, control = controls)
+
+topicmodels::perplexity(LDA.k3.null, Null.shuffledGenes)
+
+```
+
+```{r}
+
+LDA.k3.null.tmResult<- posterior(LDA.k3.null)
+LDA.k3.null.theta <- LDA.k3.null.tmResult$topics
+LDA.k3.null.beta <- LDA.k3.null.tmResult$terms
+LDA.k3.null.topicFreqsOverall <- colSums(LDA.k3.null.theta) / nrow(Null.shuffledGenes)
+
+```
+
+# ---------------------------------------------
+# Correlation Heatmaps
+
+```{r, fig.height=7, fig.width=8}
+
+# correlations between gene counts in corpus documents
+par(mfrow=c(1,1), mar=c(8,8,2,2))
+heatmap.2(cor(as.matrix(bregma04$sim), as.matrix(bregma04$sim)),
+          density.info = "none",
+          trace = "none",
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5, margins=c(3,3),
+          main = "corpus gene counts",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlation between gene counts in corpus docs and Null shuffled gene counts doc
+par(mfrow=c(1,1), mar=c(8,8,2,2))
+heatmap.2(cor(as.matrix(bregma04$sim), Null.shuffledGeneCounts),
+          density.info = "none",
+          trace = "none",
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5, margins=c(3,3),
+          main = "corpus vs shuffled gene counts",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlation between gene counts in Null shuffled gene counts doc
+par(mfrow=c(1,1), mar=c(8,8,2,2))
+heatmap.2(cor(Null.shuffledGeneCounts, Null.shuffledGeneCounts),
+          density.info = "none",
+          trace = "none",
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5, margins=c(3,3),
+          main = "shuffled gene counts docs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# ----------------------------------------------------------------------------
+# correlation wrt beta topic-term probabilities for LDA.k50 
+par(mfrow=c(1,1), mar=c(8,8,2,2))
+heatmap.2(cor(LDA.k50.beta),
+          density.info = "none",
+          trace = "none",
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5, margins=c(3,3),
+          main = "LDA.k50 beta",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlation wrt beta topic-term probabilities for LDA.k50.null
+par(mfrow=c(1,1), mar=c(8,8,2,2))
+heatmap.2(cor(LDA.k50.null.beta),
+          density.info = "none",
+          trace = "none",
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5, margins=c(3,3),
+          main = "LDA.k50.null beta",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlation wrt beta topic-term probabilities for LDA.k50 and LDA.k50.null
+par(mfrow=c(1,1), mar=c(8,8,2,2))
+heatmap.2(cor(LDA.k50.beta, LDA.k50.null.beta),
+          density.info = "none",
+          trace = "none",
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5, margins=c(3,3),
+          main = "LDA.k50 beta vs LDA.k50.null beta",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# ----------------------------------------------------------------------------
+# correlation wrt beta topic-term probabilities for LDA.k200 
+par(mfrow=c(1,1), mar=c(8,8,2,2))
+heatmap.2(cor(LDA.k200.beta),
+          density.info = "none",
+          trace = "none",
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5, margins=c(3,3),
+          main = "LDA.k200 beta",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlation wrt beta topic-term probabilities for LDA.k200.null
+par(mfrow=c(1,1), mar=c(8,8,2,2))
+heatmap.2(cor(LDA.k200.null.beta),
+          density.info = "none",
+          trace = "none",
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5, margins=c(3,3),
+          main = "LDA.k200.null beta",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlation wrt beta topic-term probabilities for LDA.k200 and LDA.k200.null
+par(mfrow=c(1,1), mar=c(8,8,2,2))
+heatmap.2(cor(LDA.k200.beta, LDA.k200.null.beta),
+          density.info = "none",
+          trace = "none",
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5, margins=c(3,3),
+          main = "LDA.k200 beta vs LDA.k200.null beta",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# ----------------------------------------------------------------------------
+# correlation wrt beta topic-term probabilities for LDA.k3 
+par(mfrow=c(1,1), mar=c(8,8,2,2))
+heatmap.2(cor(LDA.k3.beta),
+          density.info = "none",
+          trace = "none",
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5, margins=c(3,3),
+          main = "LDA.k3 beta",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlation wrt beta topic-term probabilities for LDA.k3.null
+par(mfrow=c(1,1), mar=c(8,8,2,2))
+heatmap.2(cor(LDA.k3.null.beta),
+          density.info = "none",
+          trace = "none",
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5, margins=c(3,3),
+          main = "LDA.k3.null beta",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlation wrt beta topic-term probabilities for LDA.k3 and LDA.k3.null
+par(mfrow=c(1,1), mar=c(8,8,2,2))
+heatmap.2(cor(LDA.k3.beta, LDA.k3.null.beta),
+          density.info = "none",
+          trace = "none",
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5, margins=c(3,3),
+          main = "LDA.k3 beta vs LDA.k3.null beta",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+A few interesting things:
+1. When looking at the corpus gene count correlations, there are some similarities in correlation wrt the LDA.k50 beta values. So genes that are associated across the topics at different probabilities (based on betas) also tend to correlation wrt the actual gene counts across documents. As in, genes that have similar probabilities across topics also have similar trends in gene counts across the documents. I wonder if these are genes with high or low counts?
+This would be expected.
+
+The LDA.k50.null beta also has some clusters of genes that correlate wrt their probability of being associated across the topics. Although the gene counts of the null corpus are not correlated. So the LDA model tries to find patterns in the data, or at least makes patterns. It models that some genes co-occur together or should not occur with other genes. This is an accurate assumption but would not be expected to happen in the null corpus.
+
+When looking at the LDA.k50 beta and null beta, there are also groups of genes that share similar probabilities across the topics but these clusters that correlate (between each beta) seem random. What would be the LDA modeling actual co-occurrences in the actual corpus would be random modeled co-occurrence based off modeling the null corpus.
+
+
+
+
+
+Second potential Null:
+instead of disrupting gene counts, generate a new set of spots (documents) that are random mixtures of single cells sampled from the data. So that latent topics should still be present but there are no cell layer patterns across documents. Number of total cells in a spot should follow a distribution and number of cell types in a spot should follow a distribution (or remain constant?). I believe I wrote a function that should do this in previous markdowns..`generate_simulations_3C.Rmd`?
+
+```{r}
+
+```
+
+
+# ---------------------------------------------
+# Topic Evaluation:
+
+Compute the correlation between topic terms and compare to null.
+
+Topic terms versus random sampled genes from the actual corpus (not shuffled gene count corpus)
+Compare the correlation wrt gene counts, not the topic-term beta values.
+
+## Generate Null
+
+randomly sampled genes from the actual corpus and took their cross correlation to form the null. By chance you will pick up genes that are in fact correlated with each other. So do the topics have terms that correlate together on average more than random chance?
+
+This null should also be applicable to any LDA model topics...
+
+Randomly sampling term sets and testing correlation wrt gene counts in actual documents:
+
+```{r}
+
+totalTerms <- 50
+
+
+termCorrNulls <- do.call(rbind, lapply((2:totalTerms), function(numTerms) {
+  
+  # get correlations 100 times for each amount of randomly sampled topic terms
+  corrs <- do.call(rbind, lapply(seq(1000), function(x) {
+    
+    random_genes <- sample(colnames(as.matrix(bregma04$sim)))[1:numTerms]
+    cor_mtx <- cor(as.matrix(bregma04$sim)[,random_genes], as.matrix(bregma04$sim)[,random_genes])
+    total_cor <- (sum(cor_mtx) - nrow(cor_mtx)) / (nrow(cor_mtx)**2 - nrow(cor_mtx))
+    total_cor
+    
+  }))
+  as.vector(corrs)
+}))
+
+termCorrNulls
+
+boxplot(termCorrNulls, use.cols = FALSE, xlab = "number of terms", ylab = "average correlation")
+
+```
+
+## Generate topic term correlations
+
+### LDA.k50 topic correlations wrt gene counts across documents
+
+```{r, fig.height=7, fig.width=8}
+
+topicTermCorrs <- topicTermCorrelationMats(beta = LDA.k50.beta,
+                                           corpus = as.matrix(bregma04$sim),
+                                           correlation = "corpus",
+                                           thresh = 0.01,
+                                           plots = TRUE)
+
+LDA.k50.termCor.geneCounts <- topicTermCorrelation(topicTermCorrs)
+
+```
+
+```{r}
+
+# matrix to df compatible with ggplot:
+dat <- data.frame(draw = factor(rep(1:dim(termCorrNulls)[2], dim(termCorrNulls)[1])),
+                  numTerms = factor(rep(2:(dim(termCorrNulls)[1]+1), each = dim(termCorrNulls)[2])),
+                  corrs = as.vector(t(termCorrNulls)))
+# dat
+
+ggplot() +
+  geom_boxplot(data = dat, aes(x = numTerms, y = corrs)) +
+  geom_point(data = LDA.k50.termCor.geneCounts, aes(x = numTerms-1, y = cor, color = "red")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+the points for some reason were being plotted on the x-axis shifted +1. So I shifted them to the left to their correct numTerms...this is odd though...why did this happen?
+
+I think ggplot is still using the numTerms from the boxplot. As the x-label is still this and not "numTerms-1". Still not sure how that would mess things up though...
+
+### LDA.k3 and LDA.k200
+
+```{r, fig.height=7, fig.width=8}
+
+topicTermCorrsK3 <- topicTermCorrelationMats(beta = LDA.k3.beta,
+                                           corpus = as.matrix(bregma04$sim),
+                                           correlation = "corpus",
+                                           thresh = 0.01,
+                                           plots = TRUE)
+
+LDA.k3.termCor.geneCounts <- topicTermCorrelation(topicTermCorrsK3)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+topicTermCorrsK200 <- topicTermCorrelationMats(beta = LDA.k200.beta,
+                                           corpus = as.matrix(bregma04$sim),
+                                           correlation = "corpus",
+                                           thresh = 0.01,
+                                           plots = FALSE)
+
+LDA.k200.termCor.geneCounts <- topicTermCorrelation(topicTermCorrsK200)
+
+```
+
+## ** Visualize with null **
+
+```{r}
+
+# matrix to df compatible with ggplot:
+# dat <- data.frame(draw = factor(rep(1:dim(termCorrNulls)[2], dim(termCorrNulls)[1])),
+#                   numTerms = factor(rep(2:(dim(termCorrNulls)[1]+1), each = dim(termCorrNulls)[2])),
+#                   corrs = as.vector(t(termCorrNulls)))
+# dat
+
+
+
+ggplot() +
+  geom_boxplot(data = dat,
+               aes(x = numTerms, y = corrs), alpha = 0.5) +
+  geom_point(data = LDA.k200.termCor.geneCounts,
+             aes(x = numTerms-1, y = cor, color="K200"), alpha = 0.8) +
+  geom_point(data = LDA.k50.termCor.geneCounts,
+             aes(x = numTerms-1, y = cor, color = "K50"), alpha = 0.8) +
+  geom_point(data = LDA.k3.termCor.geneCounts,
+             aes(x = numTerms-1, y = cor, color = "K3"), alpha = 1) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  
+
+```
+for some reason the x coords for the points were getting shifted +1 so had to adjust. Odd. Might have to do with the boxplot coords? Which seem to be used over the geom_points as numTerms+1 is not being used...Odd though. The boxplot numTerms should be on correct scale as it is plotting them 2-50 on x-axis labels
+
+there was another issue about plotting continuous scale for a discrete error Error: Discrete value supplied to continuous scale if the boxplot was last but goes away if it is first...
+
+
+## Topic significance
+
+Which topics are significant and which ones are not? Do they correlate with any of the ground truth cell types? Can they be tossed or combined?
+
+If combined, do the new "topic clusters" do better? Redo analysis with the topic clusters?
+
+### A. zscores
+
+```{r}
+
+LDA.k50.zscores <- lapply(1:50, function(x) {
+  point <- LDA.k50.termCor.geneCounts[x,]
+  null <- dat[dat$numTerms == point$numTerms,]$corrs
+  u <- mean(null)
+  s <- sd(null)
+  z <- (point$cor - u)/s
+  z
+})
+LDA.k50.termCor.geneCounts$zscore <- unlist(LDA.k50.zscores)
+LDA.k50.termCor.geneCounts$topic <- rownames(LDA.k50.termCor.geneCounts)
+
+LDA.k200.zscores <- lapply(1:200, function(x) {
+  point <- LDA.k200.termCor.geneCounts[x,]
+  null <- dat[dat$numTerms == point$numTerms,]$corrs
+  u <- mean(null)
+  s <- sd(null)
+  z <- (point$cor - u)/s
+  z
+})
+LDA.k200.termCor.geneCounts$zscore <- unlist(LDA.k200.zscores)
+LDA.k200.termCor.geneCounts$topic <- rownames(LDA.k200.termCor.geneCounts)
+
+LDA.k3.zscores <- lapply(1:3, function(x) {
+  point <- LDA.k3.termCor.geneCounts[x,]
+  null <- dat[dat$numTerms == point$numTerms,]$corrs
+  u <- mean(null)
+  s <- sd(null)
+  z <- (point$cor - u)/s
+  z
+})
+
+LDA.k3.termCor.geneCounts$zscore <- unlist(LDA.k3.zscores)
+LDA.k3.termCor.geneCounts$topic <- rownames(LDA.k3.termCor.geneCounts)
+
+
+
+
+```
+
+### B. ** pvalues and pdfs **
+
+```{r}
+
+computeCorrPval <- function(null, predictions, densityPlots = TRUE) {
+  # null <- `dat`
+  # predictions <- `LDA.k50.termCor.geneCounts`
+  
+  # zscores <- lapply((1:nrow(predictions)), function(i) {
+  #   nterms <- predictions[i,"numTerms"]
+  #   corr <- predictions[i,"cor"]
+  #   nullsVals <- null[null$numTerms == nterms,]$corrs
+  #   u <- mean(nullsVals)
+  #   s <- sd(nullsVals)
+  #   z <- (corr - u)/s
+  #   z
+  # })
+  
+  probs <- lapply((1:nrow(predictions)), function(i) {
+    nterms <- predictions[i,"numTerms"]
+    corr <- predictions[i,"cor"]
+    nullsVals <- null[null$numTerms == nterms,]$corrs
+    PDF <- approxfun(density(nullsVals), rule=2)
+    
+    if (densityPlots) {
+      plot(PDF)
+      points(corr, PDF(corr))
+    }
+    
+    p <- integrate(PDF, lower=corr, upper=1)
+    p$value
+  })
+  
+  return(unlist(probs))
+}
+
+```
+
+```{r}
+
+LDA.k50.termCor.geneCounts$pval <- computeCorrPval(null = dat,
+                                                   predictions = LDA.k50.termCor.geneCounts,
+                                                   densityPlots = TRUE)
+
+LDA.k50.termCor.geneCounts$p.adj.fdr <- p.adjust(LDA.k50.termCor.geneCounts$pval, method = "fdr")
+
+```
+
+```{r}
+
+LDA.k3.termCor.geneCounts$pval <- computeCorrPval(null = dat,
+                                                  predictions = LDA.k3.termCor.geneCounts,
+                                                  densityPlots = TRUE)
+
+LDA.k3.termCor.geneCounts$p.adj.fdr <- p.adjust(LDA.k3.termCor.geneCounts$pval, method = "fdr")
+
+```
+
+```{r}
+
+LDA.k200.termCor.geneCounts$pval <- computeCorrPval(null = dat,
+                                                   predictions = LDA.k200.termCor.geneCounts,
+                                                   densityPlots = FALSE)
+
+LDA.k200.termCor.geneCounts$p.adj.fdr <- p.adjust(LDA.k200.termCor.geneCounts$pval, method = "fdr")
+
+```
+
+# ---------------------------------------------
+# IGNORE
+## Generate topic term corrs, using shuffled corpus
+
+Above, randomly sampled genes from the actual corpus and took their cross correlation across docs to form the null. By chance you will pick up genes that are in fact correlated with each other. So do the topics have terms that correlate together on average more than random chance?
+
+Second idea, instead of randomly sampling gene sets, look at the genes that were assigned to topics by LDA based on a randomly mixed corpus. So now the genes should have very low correlation with each other across the documents, but LDA likely tries to find associations between the terms anyways. So can assess the term cross correlation for each topic wrt the predicted terms and their gene counts in the actual corpus versus the null topics and their gene counts in the null simulated corpus. Does this make sense?
+
+```{r, fig.height=7, fig.width=8}
+
+topicTermCorrsNull <- topicTermCorrelationMats(beta = LDA.k50.null.beta,
+                                           corpus = Null.shuffledGeneCounts,
+                                           correlation = "corpus",
+                                           thresh = 0.01,
+                                           plots = TRUE)
+
+LDA.k50.null.termCor.geneCounts <- topicTermCorrelation(topicTermCorrsNull)
+
+```
+
+```{r}
+
+ggplot() +
+  geom_point(data = LDA.k50.null.termCor.geneCounts, aes(x = numTerms, y = cor, color = "null")) +
+  geom_point(data = LDA.k50.termCor.geneCounts, aes(x = numTerms, y = cor, color = "pred")) +
+  scale_x_discrete(labels = as.character((2:50))) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+```
+
+well clearly, because in the null simulated corpus, the genes are not correlated, then looking at the correlation of these null topic terms would also have very low correlation.
+
+
+Is there a way to compare the betas only? The correlation mtx of the LDA.k50 beta versus LDA.k50.null beta shows some random clusters or correlation between different terms. Does this mean anything?
+
+# ---------------------------------------------
+# Cluster topics
+
+For each topic we now have the correlations as well as the corresponding statistics.
+
+Let's cluster the individual topics into clusters and assess their performance of the ground truth information
+
+
+```{r}
+
+LDA.k50.clust <- clusterTopics(beta = LDA.k50.beta,
+                               distance = "euclidean",
+                               clustering = "ward.D",
+                               dynamic = "hybrid",
+                               deepSplit = 4,
+                               plotDendro = TRUE)
+
+# LDA.k3.clust <- clusterTopics(beta = LDA.k3.beta,
+#                                distance = "euclidean",
+#                                clustering = "ward.D",
+#                                dynamic = "hybrid",
+#                                deepSplit = 4,
+#                                plotDendro = TRUE)
+
+LDA.k200.clust <- clusterTopics(beta = LDA.k200.beta,
+                               distance = "euclidean",
+                               clustering = "ward.D",
+                               dynamic = "hybrid",
+                               deepSplit = 4,
+                               plotDendro = TRUE)
+
+```
+
+## Correlation with Ground Truth
+
+Assess the topic-term beta distribution with the ground truth cell types.
+For the ground truth, also use the "proportions of each gene". 
+
+Note that "proportions of each gene" was done in: `extractBregmaCorpus`:
+gtTopicWords <- t(t(as.matrix(mat)) %*% mm)
+gtTopicWords <- gtTopicWords/rowSums(gtTopicWords)
+
+I have the gene counts for each cell and their cell class
+So I add up the counts of each gene for all cells of a given cell class
+and then divide by the total gene counts for all genes for the cells of 
+the given cell class.
+
+
+### betas (topic-term)
+
+predicted topic-terms with GT correlations:
+
+```{r}
+
+LDA.k50.betaGTcorMtx <- correlationBetweenBetas(beta1 = LDA.k50.beta,
+                                                beta2 = bregma04$gtTopicWords,
+                                                thresh = 0.01)
+
+# LDA.k3.betaGTcorMtx <- correlationBetweenBetas(beta1 = LDA.k3.beta,
+#                                                beta2 = bregma04$gtTopicWords,
+#                                                thresh = 0.01)
+
+LDA.k200.betaGTcorMtx <- correlationBetweenBetas(beta1 = LDA.k200.beta,
+                                                 beta2 = bregma04$gtTopicWords,
+                                                 thresh = 0.01)
+
+```
+
+colors for the topic clusters:
+
+```{r}
+
+# for k3, only 3 topics so no real need to use clusters for now
+# k3ClusterColors <- as.factor(labels(LDA.k3.clust$clusters))
+# names(k3ClusterColors) <- 1:3
+# levels(k3ClusterColors) <- rainbow(length(levels(k3ClusterColors)))
+
+k50ClusterColors <- LDA.k50.clust$clusters
+levels(k50ClusterColors) <- gg_color_hue(length(levels(k50ClusterColors)))
+
+k200ClusterColors <- LDA.k200.clust$clusters
+levels(k200ClusterColors) <- gg_color_hue(length(levels(k200ClusterColors)))
+
+```
+
+heat maps:
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.betaGTcorMtx,
+          Rowv = LDA.k50.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k50.betaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k3.betaGTcorMtx,
+          Rowv = LDA.k3.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k3ClusterColors),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k3.betaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.betaGTcorMtx,
+          Rowv = LDA.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k200ClusterColors),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k200.betaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+### betas all genes
+
+```{r}
+
+LDA.k50.betaGTcorMtxAll <- correlationBetweenBetas(beta1 = LDA.k50.beta,
+                                                beta2 = bregma04$gtTopicWords,
+                                                thresh = NULL)
+
+LDA.k3.betaGTcorMtxAll <- correlationBetweenBetas(beta1 = LDA.k3.beta,
+                                               beta2 = bregma04$gtTopicWords,
+                                               thresh = NULL)
+
+LDA.k200.betaGTcorMtxAll <- correlationBetweenBetas(beta1 = LDA.k200.beta,
+                                                 beta2 = bregma04$gtTopicWords,
+                                                 thresh = NULL)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.betaGTcorMtxAll,
+          Rowv = LDA.k50.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k50.betaGTcorMtx All genes",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k3.betaGTcorMtxAll,
+          Rowv = LDA.k3.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k3ClusterColors),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k3.betaGTcorMtx All genes",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.betaGTcorMtxAll,
+          Rowv = LDA.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k200ClusterColors),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k200.betaGTcorMtx All genes",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+### thetas (doc-topic proportions)
+
+```{r}
+
+LDA.k50.thetaGTcorMtx <- correlationBetweenThetas(theta1 = LDA.k50.theta,
+                                                theta2 = bregma04$gtDocTopics)
+
+LDA.k3.thetaGTcorMtx <- correlationBetweenThetas(theta1 = LDA.k3.theta,
+                                               theta2 = bregma04$gtDocTopics)
+
+LDA.k200.thetaGTcorMtx <- correlationBetweenThetas(theta1 = LDA.k200.theta,
+                                                 theta2 = bregma04$gtDocTopics)
+
+```
+
+heat maps:
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.thetaGTcorMtx,
+          Rowv = LDA.k50.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k50.thetaGTcorMtx")
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k3.thetaGTcorMtx,
+          Rowv = LDA.k3.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k3ClusterColors),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k3.thetaGTcorMtx")
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.thetaGTcorMtx,
+          Rowv = LDA.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k200ClusterColors),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k200.thetaGTcorMtx")
+
+```
+
+# Visualize topic proportions
+
+## K3
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = LDA.k3.theta,
+             pos = tmp_positions,
+             topicOrder = LDA.k3.clust$order,
+             cluster_cols = k3ClusterColors,
+             r = 40)
+
+vizTopicClusters(theta = LDA.k3.theta,
+                 pos = tmp_positions,
+                 topicOrder = LDA.k3.clust$order,
+                 clusters = k3ClusterColors,
+                 sharedCol = TRUE,
+                 r = 40)
+
+```
+
+For K50 and K200, too many topics to plot in pie charts, so remove topics at low probabilities in spots:
+
+```{r}
+
+LDA.k50.thetaFilt <- LDA.k50.theta
+LDA.k50.thetaFilt[LDA.k50.thetaFilt < 0.04] <- 0
+
+LDA.k200.thetaFilt <- LDA.k200.theta
+LDA.k200.thetaFilt[LDA.k200.thetaFilt < 0.04] <- 0
+
+```
+
+
+## K50
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = LDA.k50.thetaFilt,
+             pos = tmp_positions,
+             topicOrder = LDA.k50.clust$order,
+             cluster_cols = k50ClusterColors,
+             r = 40,
+             lwd = 0.1)
+
+vizTopicClusters(theta = LDA.k50.thetaFilt,
+                 pos = tmp_positions,
+                 topicOrder = LDA.k50.clust$order,
+                 clusters = k50ClusterColors,
+                 sharedCol = FALSE,
+                 r = 40,
+                 lwd = 0.1)
+
+```
+
+## K200
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = LDA.k200.thetaFilt,
+             pos = tmp_positions,
+             topicOrder = LDA.k200.clust$order,
+             cluster_cols = k200ClusterColors,
+             r = 40,
+             lwd = 0.1,
+             showLegend = FALSE)
+
+vizTopicClusters(theta = LDA.k200.thetaFilt,
+                 pos = tmp_positions,
+                 topicOrder = LDA.k200.clust$order,
+                 clusters = k200ClusterColors,
+                 sharedCol = TRUE,
+                 r = 40,
+                 lwd = 0.1)
+
+```
+
+
+# ---------------------------------------------
+# Clusters +/- trimming
+
+Trim first then form clusters.
+
+Compare clusters with or without trimming.
+To do so, combine topics into clusters and just assess the clusters.
+And question: Do the clusters do better than the individual topics? Start with the major cell classes. Do the clusters describe these better than the individual topics?
+
+Do I even need to trim away topics? Well, want some level of confidence in them.
+
+```{r}
+
+LDA.k50.sigTopics <- LDA.k50.termCor.geneCounts[LDA.k50.termCor.geneCounts$p.adj.fdr < 0.05,]$topic
+LDA.k200.sigTopics <- LDA.k200.termCor.geneCounts[LDA.k200.termCor.geneCounts$p.adj.fdr < 0.05,]$topic
+
+LDA.k50.betaSig <- LDA.k50.beta[LDA.k50.sigTopics,]
+LDA.k200.betaSig <- LDA.k200.beta[LDA.k200.sigTopics,]
+
+```
+
+```{r}
+
+# removed insignificant topics:
+LDA.k50.clustTrim <- clusterTopics(beta = LDA.k50.betaSig,
+                               distance = "euclidean",
+                               clustering = "ward.D",
+                               dynamic = "hybrid",
+                               deepSplit = 2,
+                               plotDendro = TRUE)
+
+LDA.k200.clustTrim <- clusterTopics(beta = LDA.k200.betaSig,
+                               distance = "euclidean",
+                               clustering = "ward.D",
+                               dynamic = "hybrid",
+                               deepSplit = 2,
+                               plotDendro = TRUE)
+
+# all topics
+LDA.k50.clust <- clusterTopics(beta = LDA.k50.beta,
+                               distance = "euclidean",
+                               clustering = "ward.D",
+                               dynamic = "hybrid",
+                               deepSplit = 2,
+                               plotDendro = TRUE)
+
+LDA.k200.clust <- clusterTopics(beta = LDA.k200.beta,
+                               distance = "euclidean",
+                               clustering = "ward.D",
+                               dynamic = "hybrid",
+                               deepSplit = 2,
+                               plotDendro = TRUE)
+
+```
+
+## betas (topic-term)
+
+### correlation mtx with GT
+
+```{r}
+
+# removed insignificant topics:
+LDA.k50.betaSigGTcorMtx <- correlationBetweenBetas(beta1 = LDA.k50.betaSig,
+                                                beta2 = bregma04$gtTopicWords,
+                                                thresh = 0.01)
+
+LDA.k200.betaSigGTcorMtx <- correlationBetweenBetas(beta1 = LDA.k200.betaSig,
+                                                 beta2 = bregma04$gtTopicWords,
+                                                 thresh = 0.01)
+
+# all topics
+LDA.k50.betaGTcorMtx <- correlationBetweenBetas(beta1 = LDA.k50.beta,
+                                                beta2 = bregma04$gtTopicWords,
+                                                thresh = 0.01)
+
+LDA.k200.betaGTcorMtx <- correlationBetweenBetas(beta1 = LDA.k200.beta,
+                                                 beta2 = bregma04$gtTopicWords,
+                                                 thresh = 0.01)
+
+```
+
+colors for the topic clusters:
+
+```{r}
+
+# removed insignificant topics
+k50ClusterColorsTrim <- LDA.k50.clustTrim$clusters
+levels(k50ClusterColorsTrim) <- gg_color_hue(length(levels(k50ClusterColorsTrim)))
+
+k200ClusterColorsTrim <- LDA.k200.clustTrim$clusters
+levels(k200ClusterColorsTrim) <- gg_color_hue(length(levels(k200ClusterColorsTrim)))
+
+# all topics
+k50ClusterColors <- LDA.k50.clust$clusters
+levels(k50ClusterColors) <- gg_color_hue(length(levels(k50ClusterColors)))
+
+k200ClusterColors <- LDA.k200.clust$clusters
+levels(k200ClusterColors) <- gg_color_hue(length(levels(k200ClusterColors)))
+
+
+```
+
+### viz topics 
+
+```{r, fig.height=7, fig.width=8}
+
+# insignificant topics removed. All topics plotted but colored by associated cluster
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.betaSigGTcorMtx,
+          Rowv = LDA.k50.clustTrim$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColorsTrim),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k50.betaSigGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.betaSigGTcorMtx,
+          Rowv = LDA.k200.clustTrim$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k200ClusterColorsTrim),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k200.betaSigGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# All topics plotted but colored by associated cluster
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.betaGTcorMtx,
+          Rowv = LDA.k50.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k50.betaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.betaGTcorMtx,
+          Rowv = LDA.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k200ClusterColors),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k200.betaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+### collapse topics
+
+```{r}
+
+# combine significant topics into their clusters
+LDA.k50.betaSigCombined <- combineTopics(mtx = LDA.k50.betaSig, clusters = k50ClusterColorsTrim)
+LDA.k50.betaSigCombinedGTcorMtx <- correlationBetweenBetas(beta1 = LDA.k50.betaSigCombined,
+                                                beta2 = bregma04$gtTopicWords,
+                                                thresh = 0.01)
+
+LDA.k200.betaSigCombined <- combineTopics(mtx = LDA.k200.betaSig, clusters = k200ClusterColorsTrim)
+LDA.k200.betaSigCombinedGTcorMtx <- correlationBetweenBetas(beta1 = LDA.k200.betaSigCombined,
+                                                beta2 = bregma04$gtTopicWords,
+                                                thresh = 0.01)
+
+# combine all topics into their clusters
+LDA.k50.betaCombined <- combineTopics(mtx = LDA.k50.beta, clusters = k50ClusterColors)
+LDA.k50.betaCombinedGTcorMtx <- correlationBetweenBetas(beta1 = LDA.k50.betaCombined,
+                                                beta2 = bregma04$gtTopicWords,
+                                                thresh = 0.01)
+
+LDA.k200.betaCombined <- combineTopics(mtx = LDA.k200.beta, clusters = k200ClusterColors)
+LDA.k200.betaCombinedGTcorMtx <- correlationBetweenBetas(beta1 = LDA.k200.betaCombined,
+                                                beta2 = bregma04$gtTopicWords,
+                                                thresh = 0.01)
+
+```
+
+### viz clusters
+
+```{r, fig.height=7, fig.width=8}
+
+
+# visualize significant topics combined into their clusters
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.betaSigCombinedGTcorMtx,
+          # Rowv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = rownames(LDA.k50.betaSigCombined),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "LDA.k50.betaSigCombinedGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.betaSigCombinedGTcorMtx,
+          # Rowv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = rownames(LDA.k200.betaSigCombined),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "LDA.k200.betaSigCombinedGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+# visualize all topics combined into their clusters
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.betaCombinedGTcorMtx,
+          # Rowv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = rownames(LDA.k50.betaCombined),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "LDA.k50.betaCombinedGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.betaCombinedGTcorMtx,
+          # Rowv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = rownames(LDA.k200.betaCombined),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "LDA.k200.betaCombinedGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+## thetas (doc-topic)
+
+```{r}
+
+LDA.k50.thetaSig <- LDA.k50.theta[,LDA.k50.sigTopics]
+LDA.k200.thetaSig <- LDA.k200.theta[,LDA.k200.sigTopics]
+
+```
+
+### correlation mtx with GT
+
+```{r}
+
+# removed insignificant topics:
+LDA.k50.thetaSigGTcorMtx <- correlationBetweenThetas(theta1 = LDA.k50.thetaSig,
+                                                theta2 = bregma04$gtDocTopics)
+
+LDA.k200.thetaSigGTcorMtx <- correlationBetweenThetas(theta1 = LDA.k200.thetaSig,
+                                                 theta2 = bregma04$gtDocTopics)
+
+# all topics
+LDA.k50.thetaGTcorMtx <- correlationBetweenThetas(theta1 = LDA.k50.theta,
+                                                theta2 = bregma04$gtDocTopics)
+
+LDA.k200.thetaGTcorMtx <- correlationBetweenThetas(theta1 = LDA.k200.theta,
+                                                 theta2 = bregma04$gtDocTopics)
+
+```
+
+### viz topics 
+
+```{r, fig.height=7, fig.width=8}
+
+# insignificant topics removed. All topics plotted but colored by associated cluster
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.thetaSigGTcorMtx,
+          Rowv = LDA.k50.clustTrim$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColorsTrim),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k50.thetaSigGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.thetaSigGTcorMtx,
+          Rowv = LDA.k200.clustTrim$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k200ClusterColorsTrim),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k200.thetaSigGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# All topics plotted but colored by associated cluster
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.thetaGTcorMtx,
+          Rowv = LDA.k50.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k50.thetaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.thetaGTcorMtx,
+          Rowv = LDA.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k200ClusterColors),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k200.thetaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+### collapse topics
+
+```{r}
+
+# combine significant topics into their clusters
+LDA.k50.thetaSigCombined <- t(combineTopics(mtx = t(LDA.k50.thetaSig), clusters = k50ClusterColorsTrim))
+LDA.k50.thetaSigCombinedGTcorMtx <- correlationBetweenThetas(theta1 = LDA.k50.thetaSigCombined,
+                                                theta2 = bregma04$gtDocTopics)
+
+LDA.k200.thetaSigCombined <- t(combineTopics(mtx = t(LDA.k200.thetaSig), clusters = k200ClusterColorsTrim))
+LDA.k200.thetaSigCombinedGTcorMtx <- correlationBetweenThetas(theta1 = LDA.k200.thetaSigCombined,
+                                                theta2 = bregma04$gtDocTopics)
+
+# combine all topics into their clusters
+LDA.k50.thetaCombined <- t(combineTopics(mtx = t(LDA.k50.theta), clusters = k50ClusterColors))
+LDA.k50.thetaCombinedGTcorMtx <- correlationBetweenThetas(theta1 = LDA.k50.thetaCombined,
+                                                theta2 = bregma04$gtDocTopics)
+
+LDA.k200.thetaCombined <- t(combineTopics(mtx = t(LDA.k200.theta), clusters = k200ClusterColors))
+LDA.k200.thetaCombinedGTcorMtx <- correlationBetweenThetas(theta1 = LDA.k200.thetaCombined,
+                                                theta2 = bregma04$gtDocTopics)
+
+```
+
+### viz clusters
+
+```{r, fig.height=7, fig.width=8}
+
+
+# visualize significant topics combined into their clusters
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.thetaSigCombinedGTcorMtx,
+          # Rowv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = colnames(LDA.k50.thetaSigCombined),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "LDA.k50.thetaSigCombinedGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.thetaSigCombinedGTcorMtx,
+          # Rowv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = colnames(LDA.k200.thetaSigCombined),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "LDA.k200.thetaSigCombinedGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+# visualize all topics combined into their clusters
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.thetaCombinedGTcorMtx,
+          # Rowv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = colnames(LDA.k50.thetaCombined),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "LDA.k50.thetaCombinedGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.thetaCombinedGTcorMtx,
+          # Rowv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = colnames(LDA.k200.thetaCombined),
+          ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "LDA.k200.thetaCombinedGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+# ---------------------------------------------
+# Txn subclusters and topics in clusters
+
+```{r}
+
+# gene counts of the single cells, cell id x gene id
+geneCountsBreg04 <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts
+
+```
+
+## Ependymal cells
+
+### txn sub clusters
+
+```{r}
+
+# get ependymal cells:
+df_ependy <- df[which(df$Cell_class == "Ependymal"),]
+# get gene counts:
+geneCountsEpendy <- geneCountsBreg04[rownames(df_ependy),]
+
+# Remove poor datasets and genes
+# geneCounts.Ependy <- MERINGUE::cleanCounts(counts = t(geneCounts.Ependy), 
+#                       min.reads = 1, 
+#                       min.lib.size = 1, 
+#                       plot=TRUE,
+#                       verbose=TRUE)
+
+# positions of ependymal cells:
+ependymalCellPositions <- df_ependy[,c("Centroid_X", "Centroid_Y")]
+
+```
+
+transcriptional clustering of the ependymal cells:
+
+```{r, fig.height=6, fig.width=8}
+
+# PCA of log10 + pseudo count 1 gene counts (cells x genes)
+# don't use CPM b/c the topic model clustering based on raw gene counts not CPM
+pcs.info <- prcomp(log10(as.matrix(geneCountsEpendy + 1)), center=TRUE)
+nPcs <- 5
+pcs <- pcs.info$x[,1:nPcs]
+
+# 2D embedding by tSNE
+emb <- Rtsne::Rtsne(pcs,
+             is_distance=FALSE,
+             perplexity=30,
+             num_threads=1,
+             verbose=FALSE)$Y
+rownames(emb) <- rownames(pcs)
+
+# Graph-based cluster detection
+k <- 30
+com <- getClusters(pcs, k, weight=TRUE)
+
+
+par(mfrow=c(1,1), mar=rep(1,4))
+plotEmbedding(emb, groups=com, 
+              show.legend=TRUE, xlab=NA, ylab=NA,
+              verbose=FALSE)
+
+par(mfrow=c(1,1), mar=rep(1,4))
+plotEmbedding(df[,c("Centroid_X", "Centroid_Y")], groups=com, 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+
+```
+
+### theta
+
+For each patch, get the number of cells belonging to each ependymal txn cluster. Add another column for "other cells". Then divide by the total cells in that patch to get proportions. This will be a "ground truth theta" for the ependymal cell txn clusters.
+
+```{r}
+
+# add the transcriptional cluster info to the df_ependy
+df_ependy$txn_clust <- as.vector(com)
+
+patches <- unique(df_ependy$patch_id)
+ependyTxnPatchCounts <- do.call(rbind, lapply(patches, function(patch) {
+  # vector with positions names after the txn clusters (5 of them for ependymal)
+  basecounts <- rep(0, 5)
+  names(basecounts) <- c("1", "2", "3", "4", "5")
+  # get counts of cells belonging to each txn cluster for a given patch
+  # table returns vector of counts for each named txn cluster
+  freqs <- table(df_ependy[df_ependy$patch_id == patch,]$txn_clust)
+  # add these counts to the appropriate named position in the "basecounts" vector
+  basecounts[names(freqs)] <- as.vector(freqs)
+  basecounts
+}))
+
+ependyTxnPatchCounts <- data.frame(ependyTxnPatchCounts)
+rownames(ependyTxnPatchCounts) <- patches
+colnames(ependyTxnPatchCounts) <- c("1", "2", "3", "4", "5")
+ependyTxnPatchCounts
+
+```
+
+Merge these patch txn counts with a data frame containing all the patches of the bregma.
+Goal is to have a data frame that has all the patches and the counts of cells of the ependymal txn clusters.
+
+```{r}
+
+ependyTxnTheta <- data.frame(matrix(0, nrow = dim(tmp_positions)[1], ncol = 5))
+rownames(ependyTxnTheta) <- rownames(tmp_positions)
+colnames(ependyTxnTheta) <- c("1", "2", "3", "4", "5")
+
+ependyTxnTheta <- merge(ependyTxnTheta, ependyTxnPatchCounts, by.x = "row.names", by.y = 0, all.x = TRUE)
+# the merge has columns from both data frames (will need to edit this later perhaps)
+# keep the specific columns from the 'ependyTxnPatchCounts'
+ependyTxnTheta <- ependyTxnTheta[,7:11]
+
+# some additional cleanup
+ependyTxnTheta[is.na(ependyTxnTheta)] <- 0
+colnames(ependyTxnTheta) <- c("1", "2", "3", "4", "5")
+rownames(ependyTxnTheta) <- rownames(tmp_positions)
+
+# finally, add in an additional column with counts of the 'other' cells
+# I have counts of all the cells in each patch. So use these less the actual ependymal cells:
+ependyTxnTheta$other <- FN7_2_M22_M26_hash[["-0.04"]]$totalCells - rowSums(ependyTxnTheta)
+
+ependyTxnTheta <- ependyTxnTheta / rowSums(ependyTxnTheta)
+ependyTxnTheta
+
+```
+
+Colors for the ependymal txn clusters
+
+```{r}
+
+ependyTxnCols <-gg_color_hue(5)
+ependyTxnCols <- append(ependyTxnCols, "gray")
+names(ependyTxnCols) <- c("1", "2", "3", "4", "5", "other")
+ependyTxnCols <- as.factor(ependyTxnCols)
+ependyTxnCols
+
+```
+
+Finally, the proportions of the txns in each spot:
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = ependyTxnTheta,
+             pos = tmp_positions,
+             topicOrder = 1:6,
+             cluster_cols = ependyTxnCols,
+             r = 40,
+             lwd = 0.1)
+
+vizTopicClusters(theta = ependyTxnTheta,
+                 pos = tmp_positions,
+                 topicOrder = 1:5,
+                 clusters = droplevels(ependyTxnCols[1:5]), # don't need to look at column "other" in this theta
+                 sharedCol = TRUE,
+                 r = 40,
+                 lwd = 0.1)
+
+```
+
+Lastly, check the correlation between the txn cluster proportions and the topic proportions
+
+```{r}
+
+LDA.k50.thetaEpendyCor <- correlationBetweenThetas(theta1 = LDA.k50.theta,
+                         theta2 = ependyTxnTheta[,1:5])
+
+LDA.k3.thetaEpendyCor <- correlationBetweenThetas(theta1 = LDA.k3.theta,
+                         theta2 = ependyTxnTheta[,1:5])
+
+LDA.k200.thetaEpendyCor <- correlationBetweenThetas(theta1 = LDA.k200.theta,
+                         theta2 = ependyTxnTheta[,1:5])
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.thetaEpendyCor,
+          Rowv = LDA.k50.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors),
+          ColSideColors = as.vector(droplevels(ependyTxnCols[1:5])),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k50.thetaEpendyCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k3.thetaEpendyCor,
+          Rowv = LDA.k3.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k3ClusterColors),
+          ColSideColors = as.vector(droplevels(ependyTxnCols[1:5])),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k3.thetaEpendyCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.thetaEpendyCor,
+          Rowv = LDA.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k200ClusterColors),
+          ColSideColors = as.vector(droplevels(ependyTxnCols[1:5])),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k200.thetaEpendyCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+### beta
+
+Make a "beta" topic-term distribution for the ependymal txn clusters and compare that way too.
+
+```{r}
+
+ependyTxnTypes <- df_ependy[,c("txn_clust")]
+
+mm <- model.matrix(~ 0 + factor(ependyTxnTypes))
+colnames(mm) <- levels(factor(ependyTxnTypes))
+
+ependyBeta <- t(t(as.matrix(geneCountsEpendy)) %*% mm)
+ependyBeta <- ependyBeta/rowSums(ependyBeta)
+
+```
+
+```{r}
+
+LDA.k50.betaEpendyCor <- correlationBetweenBetas(beta1 = LDA.k50.beta,
+                                                beta2 = ependyBeta,
+                                                thresh = 0.01)
+
+LDA.k3.betaEpendyCor <- correlationBetweenBetas(beta1 = LDA.k3.beta,
+                                               beta2 = ependyBeta,
+                                               thresh = 0.01)
+
+LDA.k200.betaEpendyCor <- correlationBetweenBetas(beta1 = LDA.k200.beta,
+                                                 beta2 = ependyBeta,
+                                                 thresh = 0.01)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.betaEpendyCor,
+          Rowv = LDA.k50.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors),
+          ColSideColors = as.vector(droplevels(ependyTxnCols[1:5])),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k50.betaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k3.betaEpendyCor,
+          Rowv = LDA.k3.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k3ClusterColors),
+          ColSideColors = as.vector(droplevels(ependyTxnCols[1:5])),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k3.betaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.betaEpendyCor,
+          Rowv = LDA.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k200ClusterColors),
+          ColSideColors = as.vector(droplevels(ependyTxnCols[1:5])),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=1,margins=c(6,3),
+          main = "LDA.k200.betaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+hmm...why do all the ependy topics in the cluster correlate equally high with all ependy txn clusters? Make sure everything is ok in terms of the betas....I would expect topic 6 to correlate the best with txn 1.
+
+actually i think it is correct. But note that when I look at the correlation mtx specifically, topic 6 correlates the strongest with txn1, but also correlates strong with all actualy. 33 and 38 also correlate strongly with all but less so:
+> LDA.k50.betaEpendyCor[c(6, 33, 38),]
+           1         2         3         4         5
+6  0.9981921 0.9660195 0.9728489 0.9697784 0.9760843
+33 0.7340337 0.8939755 0.8810773 0.8925019 0.8858554
+38 0.8364484 0.9866438 0.9868790 0.9810055 0.9778181
+
+
+
+## Inhibitory and Exhitatory subtypes
+
+Similar to the Ependymal cells, make a mock "theta" of each of the subtypes of inhibitory and excitatory across the spots. The subtype labels are also in the `df` from FN7_2_M22_M26_hash[["-0.04"]][["bregmaFullDf"]]
+
+### txn sub clustering
+
+```{r}
+
+df_neuro <- df[which(!df$Neuron_cluster_ID == ""),]
+
+geneCountsNeuro <- geneCountsBreg04[rownames(df_neuro),]
+
+neuroCellPositions <- df_neuro[,c("Centroid_X", "Centroid_Y")]
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+# PCA of log10 + pseudo count 1 gene counts (cells x genes)
+# don't use CPM b/c the topic model clustering based on raw gene counts not CPM
+pcs.info <- prcomp(log10(as.matrix(geneCountsNeuro + 1)), center=TRUE)
+nPcs <- 5
+pcs <- pcs.info$x[,1:nPcs]
+
+# 2D embedding by tSNE
+emb <- Rtsne::Rtsne(pcs,
+             is_distance=FALSE,
+             perplexity=30,
+             num_threads=1,
+             verbose=FALSE)$Y
+rownames(emb) <- rownames(pcs)
+
+# Graph-based cluster detection
+k <- 30
+com <- getClusters(pcs, k, weight=TRUE)
+
+
+par(mfrow=c(1,1), mar=rep(1,4))
+plotEmbedding(emb, groups=com, 
+              show.legend=TRUE, xlab=NA, ylab=NA,
+              verbose=FALSE)
+
+par(mfrow=c(1,1), mar=rep(1,4))
+plotEmbedding(df[,c("Centroid_X", "Centroid_Y")], groups=com, 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+
+```
+
+9 txn clusters among the excitatory and inhibitory cells, but actually there are 65 unique subtypes listed in the data set...
+
+maybe think about clustering excitatory and inhibitory separately?
+
+At any rate, can continue with building theta based on the actual 65 subtypes listed..
+
+### theta
+
+#### make truth
+
+```{r}
+
+numSubtypes <- length(unique(df_neuro$Neuron_cluster_ID))
+
+patches <- unique(df_neuro$patch_id)
+neuroPatchCounts <- do.call(rbind, lapply(patches, function(patch) {
+  # vector with positions names after the neuro subtypes
+  basecounts <- rep(0, numSubtypes)
+  names(basecounts) <- unique(df_neuro$Neuron_cluster_ID)
+  # get counts of cells belonging to each txn cluster for a given patch
+  # table returns vector of counts for each named neuro subtype
+  freqs <- table(df_neuro[df_neuro$patch_id == patch,]$Neuron_cluster_ID)
+  # add these counts to the appropriate named position in the "basecounts" vector
+  basecounts[names(freqs)] <- as.vector(freqs)
+  basecounts
+}))
+
+neuroPatchCounts <- data.frame(neuroPatchCounts)
+rownames(neuroPatchCounts) <- patches
+colnames(neuroPatchCounts) <- unique(df_neuro$Neuron_cluster_ID)
+neuroPatchCounts
+
+```
+
+```{r}
+
+neuroTheta <- data.frame(matrix(0, nrow = dim(tmp_positions)[1], ncol = 65))
+rownames(neuroTheta) <- rownames(tmp_positions)
+colnames(neuroTheta) <- unique(df_neuro$Neuron_cluster_ID)
+
+neuroTheta <- merge(neuroTheta, neuroPatchCounts, by.x = "row.names", by.y = 0, all.x = TRUE)
+# the merge has columns from both data frames (will need to edit this later perhaps)
+# keep the specific columns from the 'neuroTheta'
+neuroTheta <- neuroTheta[,67:131]
+
+# some additional cleanup
+neuroTheta[is.na(neuroTheta)] <- 0
+colnames(neuroTheta) <- unique(df_neuro$Neuron_cluster_ID)
+rownames(neuroTheta) <- rownames(tmp_positions)
+
+# finally, add in an additional column with counts of the 'other' cells
+# I have counts of all the cells in each patch. So use these less the actual ependymal cells:
+neuroTheta$other <- FN7_2_M22_M26_hash[["-0.04"]]$totalCells - rowSums(neuroTheta)
+
+neuroTheta <- neuroTheta / rowSums(neuroTheta)
+neuroTheta
+
+```
+
+Colors for the ependymal txn clusters
+
+```{r}
+
+neuroCols <-rainbow(65)
+neuroCols <- append(neuroCols, "gray")
+names(neuroCols) <- append(unique(df_neuro$Neuron_cluster_ID), "other")
+neuroCols <- as.factor(neuroCols)
+neuroCols
+
+```
+
+Out of curiosity, how do the different neuronal subtypes correlate?
+
+```{r, fig.height=7, fig.width=8}
+
+neuroThetaCor <- correlationBetweenThetas(theta1 = neuroTheta,
+                                                theta2 = neuroTheta)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(neuroThetaCor,
+          # Rowv = LDA.k50.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(droplevels(neuroCols[1:66])),
+          ColSideColors = as.vector(droplevels(neuroCols[1:66])),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "neuroThetaCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = neuroTheta,
+             pos = tmp_positions,
+             topicOrder = 1:66,
+             cluster_cols = neuroCols,
+             r = 40)
+
+vizAllTopics(theta = neuroTheta,
+             pos = tmp_positions,
+             topicOrder = 1:66,
+             cluster_cols = neuroCols,
+             r = 40,
+             showLegend = FALSE)
+
+vizTopicClusters(theta = neuroTheta,
+                 pos = tmp_positions,
+                 topicOrder = 1:65,
+                 clusters = droplevels(neuroCols[1:65]), # don't need to look at column "other" in this theta
+                 sharedCol = TRUE,
+                 r = 40)
+
+```
+
+#### all topics
+
+```{r}
+
+LDA.k50.thetaNeuroCor <- correlationBetweenThetas(theta1 = LDA.k50.theta,
+                         theta2 = neuroTheta[,1:66]) # ignore "other" column
+
+LDA.k3.thetaNeuroCor <- correlationBetweenThetas(theta1 = LDA.k3.theta,
+                         theta2 = neuroTheta[,1:66])
+
+LDA.k200.thetaNeuroCor <- correlationBetweenThetas(theta1 = LDA.k200.theta,
+                         theta2 = neuroTheta[,1:66])
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.thetaNeuroCor,
+          Rowv = LDA.k50.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors),
+          ColSideColors = as.vector(droplevels(neuroCols[1:66])),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k50.thetaNeuroCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k3.thetaNeuroCor,
+          Rowv = LDA.k3.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k3ClusterColors),
+          ColSideColors = as.vector(droplevels(neuroCols[1:66])),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k3.thetaNeuroCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.thetaNeuroCor,
+          Rowv = LDA.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k200ClusterColors),
+          ColSideColors = as.vector(droplevels(neuroCols[1:66])),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k200.thetaNeuroCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+#### lsat matching
+
+do the lsat hungarian sort to help visualize order
+
+> order
+Optimal assignment:
+1 => 2, 2 => 3, 3 => 1
+
+Row 1 paired with column 2, etc..
+the first number in each pair. The rows (ground truth topics)
+> seq_along(order)
+[1] 1 2 3
+
+the second number in each pair. The columns (predicted topics)
+> as.numeric(order)
+[1] 2 3 1
+
+lsat doesn't work if more rows than columns
+
+```{r, fig.height=7, fig.width=8}
+
+# adjust correlations to 0-1 range
+lsatPairs <- clue::solve_LSAP(scale0_1(LDA.k50.thetaNeuroCor), maximum = TRUE)
+pairedTopics <- seq_along(lsatPairs)
+pairedCts <- as.numeric(lsatPairs)
+
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.thetaNeuroCor[pairedTopics,pairedCts],
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors)[pairedTopics],
+          ColSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k50.thetaNeuroCor lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+lsatPairs <- clue::solve_LSAP(scale0_1(LDA.k3.thetaNeuroCor), maximum = TRUE)
+pairedTopics <- seq_along(lsatPairs)
+pairedCts <- as.numeric(lsatPairs)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k3.thetaNeuroCor[pairedTopics,pairedCts],
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k3ClusterColors)[pairedTopics],
+          ColSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k3.thetaNeuroCor lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+# had transpose mtx. Can't have more rows than columns
+lsatPairs <- clue::solve_LSAP(t(scale0_1(LDA.k200.thetaNeuroCor)), maximum = TRUE)
+pairedCts <- seq_along(lsatPairs) # now the rows
+pairedTopics <- as.numeric(lsatPairs) # now the columns
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(t(LDA.k200.thetaNeuroCor)[pairedCts, pairedTopics], # in this case, rows are Cts and cols are matched topics
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+          ColSideColors = as.vector(k200ClusterColors)[pairedTopics],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k200.thetaNeuroCor lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+#### trim topics
+
+```{r, fig.height=7, fig.width=8}
+
+LDA.k50.sigTopics <- LDA.k50.termCor.geneCounts[LDA.k50.termCor.geneCounts$p.adj.fdr < 0.05,]$topic
+LDA.k50.thetaNeuroCorTrim <- LDA.k50.thetaNeuroCor[LDA.k50.sigTopics,]
+print(length(LDA.k50.sigTopics))
+# adjust correlations to 0-1 range
+lsatPairs <- clue::solve_LSAP(scale0_1(LDA.k50.thetaNeuroCorTrim[LDA.k50.sigTopics,]), maximum = TRUE)
+pairedTopics <- seq_along(lsatPairs)
+pairedCts <- as.numeric(lsatPairs)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.thetaNeuroCorTrim[pairedTopics,pairedCts],
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors)[pairedTopics],
+          ColSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k50.thetaNeuroCor trimmed topics lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+# LDA.k3.sigTopics <- LDA.k3.termCor.geneCounts[LDA.k3.termCor.geneCounts$pval < 0.05,]$topic
+# LDA.k3.betaNeuroCorTrim <- LDA.k3.betaNeuroCor[LDA.k3.sigTopics,]
+# 
+# # adjust correlations to 0-1 range
+# lsatPairs <- clue::solve_LSAP(scale0_1(LDA.k3.betaNeuroCorTrim[LDA.k3.sigTopics,]), maximum = TRUE)
+# pairedTopics <- seq_along(lsatPairs)
+# pairedCts <- as.numeric(lsatPairs)
+# 
+# par(mfrow=c(1,1), mar=c(8,8,3,2))
+# heatmap.2(LDA.k3.betaNeuroCorTrim[pairedTopics,pairedCts],
+#           Rowv = FALSE,
+#           Colv = FALSE,
+#           density.info = "none",
+#           trace = "none",
+#           RowSideColors = as.vector(k3ClusterColors)[pairedTopics],
+#           ColSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+#           col = correlation_palette,
+#           breaks = correlation_breaks,
+#           cexRow=0.5,cexCol=0.5,margins=c(6,3),
+#           main = "LDA.k3.betaNeuroCor trimmed topics lsat pairs",
+#           lhei = c(1,5),
+#           key.xlab = "Correlation",
+#           key.title = NA)
+
+
+LDA.k200.sigTopics <- LDA.k200.termCor.geneCounts[LDA.k200.termCor.geneCounts$p.adj.fdr < 0.05,]$topic
+LDA.k200.thetaNeuroCorTrim <- LDA.k200.thetaNeuroCor[LDA.k200.sigTopics,]
+print(length(LDA.k200.sigTopics))
+# had transpose mtx. Can't have more rows than columns
+lsatPairs <- clue::solve_LSAP(t(scale0_1(LDA.k200.thetaNeuroCorTrim[LDA.k200.sigTopics,])), maximum = TRUE)
+pairedCts <- seq_along(lsatPairs) # now the rows
+pairedTopics <- as.numeric(lsatPairs) # now the columns
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(t(LDA.k200.thetaNeuroCorTrim)[pairedCts, pairedTopics], # in this case, rows are Cts and cols are matched topics
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+          ColSideColors = as.vector(k200ClusterColors)[pairedTopics],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k200.thetaNeuroCor trimmed topics lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# at a certain point, k200 does have less topics (rows) than cell types (columns)
+# LDA.k200.sigTopics <- LDA.k200.termCor.geneCounts[LDA.k200.termCor.geneCounts$pval < 0.001,]$topic # 0.05/200 = 0.00025
+# LDA.k200.betaNeuroCorTrim <- LDA.k200.betaNeuroCor[LDA.k200.sigTopics,]
+# print(length(LDA.k200.sigTopics))
+# # adjust correlations to 0-1 range
+# lsatPairs <- clue::solve_LSAP(scale0_1(LDA.k200.betaNeuroCorTrim[LDA.k200.sigTopics,]), maximum = TRUE)
+# pairedTopics <- seq_along(lsatPairs)
+# pairedCts <- as.numeric(lsatPairs)
+# 
+# par(mfrow=c(1,1), mar=c(8,8,3,2))
+# heatmap.2(LDA.k200.betaNeuroCorTrim[pairedTopics,pairedCts],
+#           Rowv = FALSE,
+#           Colv = FALSE,
+#           density.info = "none",
+#           trace = "none",
+#           RowSideColors = as.vector(k200ClusterColors)[pairedTopics],
+#           ColSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+#           col = correlation_palette,
+#           breaks = correlation_breaks,
+#           cexRow=0.5,cexCol=0.5,margins=c(6,3),
+#           main = "LDA.k200.betaNeuroCor trimmed topics lsat pairs",
+#           lhei = c(1,5),
+#           key.xlab = "Correlation",
+#           key.title = NA)
+
+```
+
+remember, with the sort, you are matching columns to the rows. So some columns will be missing if more columns than rows...
+
+#### topics clusters
+
+Get correlations between the topic clusters themselves.
+Also do clusters but cluster after discarding non-significant topics
+
+```{r}
+
+
+
+```
+
+### beta
+
+#### make truth
+
+Make a "beta" topic-term distribution for the ependymal txn clusters and compare that way too.
+
+```{r}
+
+neuroCellTypes <- df_neuro[,c("Neuron_cluster_ID")]
+
+mm <- model.matrix(~ 0 + factor(neuroCellTypes))
+colnames(mm) <- levels(factor(neuroCellTypes))
+
+neuroBeta <- t(t(as.matrix(geneCountsNeuro)) %*% mm)
+neuroBeta <- neuroBeta/rowSums(neuroBeta)
+
+```
+
+Out of curiosity, how do the different neuronal subtypes correlate?
+
+```{r, fig.height=7, fig.width=8}
+
+betaNeuroCor <- correlationBetweenBetas(beta1 = neuroBeta,
+                                                beta2 = neuroBeta,
+                                                thresh = NULL)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(betaNeuroCor,
+          # Rowv = LDA.k50.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(droplevels(neuroCols[1:65])),
+          ColSideColors = as.vector(droplevels(neuroCols[1:65])),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "betaNeuroCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+#### all topics
+
+```{r}
+
+LDA.k50.betaNeuroCor <- correlationBetweenBetas(beta1 = LDA.k50.beta,
+                                                beta2 = neuroBeta,
+                                                thresh = NULL)
+
+LDA.k3.betaNeuroCor <- correlationBetweenBetas(beta1 = LDA.k3.beta,
+                                               beta2 = neuroBeta,
+                                               thresh = NULL)
+
+LDA.k200.betaNeuroCor <- correlationBetweenBetas(beta1 = LDA.k200.beta,
+                                                 beta2 = neuroBeta,
+                                                 thresh = NULL)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.betaNeuroCor,
+          Rowv = LDA.k50.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors),
+          ColSideColors = as.vector(droplevels(neuroCols[1:65])),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k50.betaNeuroCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k3.betaNeuroCor,
+          Rowv = LDA.k3.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k3ClusterColors),
+          ColSideColors = as.vector(droplevels(neuroCols[1:65])),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k3.betaNeuroCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.betaNeuroCor,
+          Rowv = LDA.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k200ClusterColors),
+          ColSideColors = as.vector(droplevels(neuroCols[1:65])),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k200.betaNeuroCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+#### lsat matching
+
+```{r, fig.height=7, fig.width=8}
+
+# adjust correlations to 0-1 range
+lsatPairs <- clue::solve_LSAP(scale0_1(LDA.k50.betaNeuroCor), maximum = TRUE)
+pairedTopics <- seq_along(lsatPairs)
+pairedCts <- as.numeric(lsatPairs)
+
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.betaNeuroCor[pairedTopics,pairedCts],
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors)[pairedTopics],
+          ColSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k50.betaNeuroCor lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+lsatPairs <- clue::solve_LSAP(scale0_1(LDA.k3.betaNeuroCor), maximum = TRUE)
+pairedTopics <- seq_along(lsatPairs)
+pairedCts <- as.numeric(lsatPairs)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k3.thetaNeuroCor[pairedTopics,pairedCts],
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k3ClusterColors)[pairedTopics],
+          ColSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k3.betaNeuroCor lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+# had transpose mtx. Can't have more rows than columns
+lsatPairs <- clue::solve_LSAP(t(scale0_1(LDA.k200.betaNeuroCor)), maximum = TRUE)
+pairedCts <- seq_along(lsatPairs) # now the rows
+pairedTopics <- as.numeric(lsatPairs) # now the columns
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(t(LDA.k200.betaNeuroCor)[pairedCts, pairedTopics], # in this case, rows are Cts and cols are matched topics
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+          ColSideColors = as.vector(k200ClusterColors)[pairedTopics],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k200.betaNeuroCor lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+If you look at the betaNeuroCor, most of the I subtypes correlate very strongly with each other, the gene proportions are very similar. So it makes sense that topics assigned to these subtypes would also have very similar correlation with the rest of the I subtypes. Interestingly, though, is that the matched topics still form a diagonal within this group that can be seen. So some topics appear to really be matching these cell types as well. 
+
+Of course, without the ground truth, need someway to asses topic quality.
+
+What happens if I trim topics without significant term correlation?
+
+#### trim topics
+
+```{r, fig.height=7, fig.width=8}
+
+LDA.k50.sigTopics <- LDA.k50.termCor.geneCounts[LDA.k50.termCor.geneCounts$p.adj.fdr < 0.05,]$topic
+LDA.k50.betaNeuroCorTrim <- LDA.k50.betaNeuroCor[LDA.k50.sigTopics,]
+print(length(LDA.k50.sigTopics))
+# adjust correlations to 0-1 range
+lsatPairs <- clue::solve_LSAP(scale0_1(LDA.k50.betaNeuroCorTrim[LDA.k50.sigTopics,]), maximum = TRUE)
+pairedTopics <- seq_along(lsatPairs)
+pairedCts <- as.numeric(lsatPairs)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.betaNeuroCorTrim[pairedTopics,pairedCts],
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors)[as.numeric(LDA.k50.sigTopics[pairedTopics])],
+          ColSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k50.betaNeuroCor trimmed topics lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+# LDA.k3.sigTopics <- LDA.k3.termCor.geneCounts[LDA.k3.termCor.geneCounts$pval < 0.05,]$topic
+# LDA.k3.betaNeuroCorTrim <- LDA.k3.betaNeuroCor[LDA.k3.sigTopics,]
+# 
+# # adjust correlations to 0-1 range
+# lsatPairs <- clue::solve_LSAP(scale0_1(LDA.k3.betaNeuroCorTrim[LDA.k3.sigTopics,]), maximum = TRUE)
+# pairedTopics <- seq_along(lsatPairs)
+# pairedCts <- as.numeric(lsatPairs)
+# 
+# par(mfrow=c(1,1), mar=c(8,8,3,2))
+# heatmap.2(LDA.k3.betaNeuroCorTrim[pairedTopics,pairedCts],
+#           Rowv = FALSE,
+#           Colv = FALSE,
+#           density.info = "none",
+#           trace = "none",
+#           RowSideColors = as.vector(k3ClusterColors)[pairedTopics],
+#           ColSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+#           col = correlation_palette,
+#           breaks = correlation_breaks,
+#           cexRow=0.5,cexCol=0.5,margins=c(6,3),
+#           main = "LDA.k3.betaNeuroCor trimmed topics lsat pairs",
+#           lhei = c(1,5),
+#           key.xlab = "Correlation",
+#           key.title = NA)
+
+
+LDA.k200.sigTopics <- LDA.k200.termCor.geneCounts[LDA.k200.termCor.geneCounts$p.adj.fdr < 0.05,]$topic
+LDA.k200.betaNeuroCorTrim <- LDA.k200.betaNeuroCor[LDA.k200.sigTopics,]
+print(length(LDA.k200.sigTopics))
+# had transpose mtx. Can't have more rows than columns
+lsatPairs <- clue::solve_LSAP(t(scale0_1(LDA.k200.betaNeuroCorTrim[LDA.k200.sigTopics,])), maximum = TRUE)
+pairedCts <- seq_along(lsatPairs) # now the rows
+pairedTopics <- as.numeric(lsatPairs) # now the columns
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(t(LDA.k200.betaNeuroCorTrim)[pairedCts, pairedTopics], # in this case, rows are Cts and cols are matched topics
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+          ColSideColors = as.vector(k200ClusterColors)[as.numeric(LDA.k200.sigTopics[pairedTopics])],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k200.betaNeuroCor trimmed topics lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# at a certain point, k200 does have less topics (rows) than cell types (columns)
+# LDA.k200.sigTopics <- LDA.k200.termCor.geneCounts[LDA.k200.termCor.geneCounts$pval < 0.001,]$topic # 0.05/200 = 0.00025
+# LDA.k200.betaNeuroCorTrim <- LDA.k200.betaNeuroCor[LDA.k200.sigTopics,]
+# print(length(LDA.k200.sigTopics))
+# # adjust correlations to 0-1 range
+# lsatPairs <- clue::solve_LSAP(scale0_1(LDA.k200.betaNeuroCorTrim[LDA.k200.sigTopics,]), maximum = TRUE)
+# pairedTopics <- seq_along(lsatPairs)
+# pairedCts <- as.numeric(lsatPairs)
+# 
+# par(mfrow=c(1,1), mar=c(8,8,3,2))
+# heatmap.2(LDA.k200.betaNeuroCorTrim[pairedTopics,pairedCts],
+#           Rowv = FALSE,
+#           Colv = FALSE,
+#           density.info = "none",
+#           trace = "none",
+#           RowSideColors = as.vector(k200ClusterColors)[pairedTopics],
+#           ColSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+#           col = correlation_palette,
+#           breaks = correlation_breaks,
+#           cexRow=0.5,cexCol=0.5,margins=c(6,3),
+#           main = "LDA.k200.betaNeuroCor trimmed topics lsat pairs",
+#           lhei = c(1,5),
+#           key.xlab = "Correlation",
+#           key.title = NA)
+
+```
+
+
+Another question: as K increases (which it would here as the perplexity for 200 is lower than 50), does the number of topics with significant correlation start to stabilize around a certain number? And thus these would be the topics I'd 
+
+## Ambiguous cell class
+
+
+# ---------------------------------------------
+# Topic significance assessment
+# Compare methods
+
+Question is whether the trimming based on term correlation improves how topics model the data...compare result with and without trimming and for different numbers of topics (k50 versus k200 for example). Also compare if topics are instead collapsed into topic clusters.
+
+idea: compare the correlation matrix to an "ideal" matrix and compute similarity. Ideal matrix could be a diagonal of perfect correlation and 0 correlation everywhere else. This would be if the lsat pairing was applied and if there were perfect matches between topics and cell types, then this is what I would expect. If it was perfect, then I don't think the matching necessarily would matter if the topics or the cell types were the rows. But the shape of this ideal matrix should be the same for whatever lsat derived matrix I am assessing. Note that in the lasat matrix, whatever is the columns, some will not be considered (if more cell types than topics, then not all cell types will be considered in the lsat matrix). But maybe this is ok as only the "best" matches would have been considered anyways.
+
+One concern: would the "ideal matrix" be perfect correlation and no correlation everywhere else? Or would it be 1 and -1 everywhere else?
+
+Should make a "universal" beta and theta of not just the neuronal cell types but also all the other cell classes. Although as long as each method is correlated to the same beta or theta for comparison purposes then probably ok. So could do different comparisons comparing different ground truth "resolutions".
+
+I bet a "low resolution" where neuronal cells are collapsed, many methods may do just as well: as for 50 topics, the best topic will match the "inhibitory" and same for the 200. Other topics get dropped if based on lsat pairing. But when expanded, maybe the 200 topics actually do a better job representing then the 50 topics. Or the same issue: the best of the 50 topics gets assigned in the lsat matrix. The other cell types that were not matched are dropped and thus it looks better than it is, when in fact the 200 topics covered more of the cell types.
+
+It would make sense that as you increased the number of topics you would have a higher resolution and perhaps better way to detect more cell types. So I would expect the 200 clusters to do better than the 50 at least when considering the different neuronal cell types. So instead really need to assess each topic individually. AND in a way that doesn't require a ground truth.
+
+Well, lets start with trimming and if it does anything:
+
+## betas
+
+```{r}
+
+# trim overall beta and add in the neuronal subtypes
+# bregma04$gtTopicWords[!rownames(bregma04$gtTopicWords) %in% c("Excitatory", "Inhibitory"),]
+# Universal beta:
+betaExpanded <- rbind(bregma04$gtTopicWords[!rownames(bregma04$gtTopicWords) %in% c("Excitatory", "Inhibitory"),],
+      neuroBeta)
+
+betaExpandedCols <-rainbow(72)
+names(betaExpandedCols) <- rownames(betaExpanded)
+betaExpandedCols <- as.factor(betaExpandedCols)
+betaExpandedCols
+
+```
+
+```{r}
+
+LDA.k50.betaExpandCor <- correlationBetweenBetas(beta1 = LDA.k50.beta,
+                                                beta2 = betaExpanded,
+                                                thresh = NULL)
+
+LDA.k200.betaExpandCor <- correlationBetweenBetas(beta1 = LDA.k200.beta,
+                                                 beta2 = betaExpanded,
+                                                 thresh = NULL)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.betaExpandCor,
+          Rowv = LDA.k50.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors),
+          ColSideColors = as.vector(betaExpandedCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k50.betaExpandCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.betaExpandCor,
+          Rowv = LDA.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k200ClusterColors),
+          ColSideColors = as.vector(betaExpandedCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k200.betaExpandCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+# ** beta lsat pairs with expanded cells
+```{r, fig.height=7, fig.width=8}
+
+# adjust correlations to 0-1 range
+lsatPairsK50 <- clue::solve_LSAP(scale0_1(LDA.k50.betaExpandCor), maximum = TRUE)
+pairedTopicsk50 <- seq_along(lsatPairsK50)
+pairedCtsk50 <- as.numeric(lsatPairsK50)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.betaExpandCor[pairedTopicsk50,pairedCtsk50],
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors)[pairedTopicsk50],
+          ColSideColors = as.vector(betaExpandedCols)[pairedCtsk50],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k50.betaExpandCor lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# had transpose mtx. Can't have more rows than columns
+lsatPairsK200 <- clue::solve_LSAP(t(scale0_1(LDA.k200.betaExpandCor)), maximum = TRUE)
+pairedCtsK200 <- seq_along(lsatPairsK200) # now the rows
+pairedTopicsK200 <- as.numeric(lsatPairsK200) # now the columns
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(t(LDA.k200.betaExpandCor)[pairedCtsK200, pairedTopicsK200], # in this case, rows are Cts and cols are matched topics
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(betaExpandedCols)[pairedCtsK200],
+          ColSideColors = as.vector(k200ClusterColors)[pairedTopicsK200],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k200.betaExpandCor lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+curious how the lsat matched topics and the unmatched topics compare wrt their p-values
+
+```{r}
+
+pairedTopicsK200 <- as.numeric(lsatPairsK200)
+matchedK200topics <- LDA.k200.termCor.geneCounts[pairedTopicsK200,]
+UnmatchedK200topics <- LDA.k200.termCor.geneCounts[-pairedTopicsK200,]
+
+boxplot(-log10(matchedK200topics$p.adj.fdr), -log10(UnmatchedK200topics$p.adj.fdr))
+wilcox.test(-log10(matchedK200topics$p.adj.fdr), -log10(UnmatchedK200topics$p.adj.fdr))
+
+
+
+# all the K50s were paired so can't compare in this way
+
+# pairedTopicsK50 <- seq_along(lsatPairsK50)
+# matchedK50topics <- LDA.k50.termCor.geneCounts[pairedTopicsK50,]
+# UnmatchedK50topics <- LDA.k50.termCor.geneCounts[-pairedTopicsK50,]
+# 
+# boxplot(-log10(matchedK50topics$p.adj.fdr), -log10(UnmatchedK50topics$p.adj.fdr))
+# wilcox.test(-log10(matchedK50topics$p.adj.fdr), -log10(UnmatchedK50topics$p.adj.fdr))
+
+```
+
+For the K50 (and also check for K200), compare correlation matrix of significant topics with insignificant topics
+
+```{r, fig.height=7, fig.width=8}
+
+LDA.k50.sigTopics <- LDA.k50.termCor.geneCounts[LDA.k50.termCor.geneCounts$p.adj.fdr < 0.05,]$topic
+LDA.k50.betaExpandCorSig <- LDA.k50.betaExpandCor[LDA.k50.sigTopics,]
+LDA.k50.betaExpandCorNS <- LDA.k50.betaExpandCor[-as.numeric(LDA.k50.sigTopics),]
+
+lsatPairsSig <- clue::solve_LSAP(scale0_1(LDA.k50.betaExpandCorSig), maximum = TRUE)
+pairedTopicsSig <- seq_along(lsatPairsSig)
+pairedCtsSig <- as.numeric(lsatPairsSig)
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.betaExpandCorSig[pairedTopicsSig,pairedCtsSig],
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors)[as.numeric(LDA.k50.sigTopics[pairedTopicsSig])],
+          ColSideColors = as.vector(betaExpandedCols)[pairedCtsSig],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k50.betaExpandCorSig trimmed topics lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+lsatPairsNS <- clue::solve_LSAP(scale0_1(LDA.k50.betaExpandCorNS), maximum = TRUE)
+pairedTopicsNS <- seq_along(lsatPairsNS)
+pairedCtsNS <- as.numeric(lsatPairsNS)
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.betaExpandCorNS[pairedTopicsNS,pairedCtsNS],
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors)[-as.numeric(LDA.k50.sigTopics[pairedTopicsSig])],
+          ColSideColors = as.vector(betaExpandedCols)[pairedCtsNS],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k50.betaExpandCorNS trimmed topics lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+```{r}
+
+LDA.k200.sigTopics <- LDA.k200.termCor.geneCounts[LDA.k200.termCor.geneCounts$p.adj.fdr < 0.05,]$topic
+LDA.k200.betaExpandCorSig <- LDA.k200.betaExpandCor[LDA.k200.sigTopics,]
+LDA.k200.betaExpandCorNS <- LDA.k200.betaExpandCor[-as.numeric(LDA.k200.sigTopics),]
+
+lsatPairsSigk200 <- clue::solve_LSAP(t(scale0_1(LDA.k200.betaExpandCorSig)), maximum = TRUE)
+pairedCtsSigk200 <- seq_along(lsatPairsSigk200)
+pairedTopicsSigk200 <- as.numeric(lsatPairsSigk200)
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(t(LDA.k200.betaExpandCorSig[pairedTopicsSigk200,pairedCtsSigk200]),
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          # ColSideColors = as.vector(k200ClusterColors)[as.numeric(LDA.k200.sigTopics[pairedTopicsSigk200])],
+          # RowSideColors = as.vector(betaExpandedCols)[pairedCtsSigk200],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k200.betaExpandCorSig trimmed topics lsat pairs",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+lsatPairsNSk200 <- clue::solve_LSAP(t(scale0_1(LDA.k200.betaExpandCorNS)), maximum = TRUE)
+pairedCtsNSk200 <- seq_along(lsatPairsNSk200)
+pairedTopicsNSk200 <- as.numeric(lsatPairsNSk200)
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(t(LDA.k200.betaExpandCorNS[pairedTopicsNSk200,pairedCtsNSk200]),
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          # ColSideColors = as.vector(k200ClusterColors)[-as.numeric(LDA.k200.sigTopics[pairedTopicsSigk200])],
+          # RowSideColors = as.vector(betaExpandedCols)[pairedCtsNSk200],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k200.betaExpandCorNS trimmed topics lsat pairs",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+#### mtx distances
+
+```{r}
+
+# distance of k50 lsat paired all topics:
+computeDistance(mtx1 = LDA.k50.betaExpandCor[pairedTopicsk50,pairedCtsk50],
+                mtx2 = diag(1,50,50))
+
+# distance of k50 lsat paired significant topics:
+computeDistance(mtx1 = LDA.k50.betaExpandCorSig[pairedTopicsSig,pairedCtsSig],
+                mtx2 = diag(1,32,32))
+
+# distance of k50 lsat paired insignificant topics:
+computeDistance(mtx1 = LDA.k50.betaExpandCorNS[pairedTopicsNS,pairedCtsNS],
+                mtx2 = diag(1,18,18))
+
+# distance of k200 lsat matched topics with cells:
+computeDistance(mtx1 = t(LDA.k200.betaExpandCor)[pairedCtsK200, pairedTopicsK200],
+                mtx2 = diag(1,72,72))
+
+# distance of k200 lsat matched trimmed sig topics with cells:
+computeDistance(mtx1 = t(LDA.k200.betaExpandCorSig[pairedTopicsSigk200,pairedCtsSigk200]),
+                mtx2 = diag(1,72,72))
+
+# distance of k200 lsat matched trimmed insignificanttopics with cells:
+computeDistance(mtx1 = t(LDA.k200.betaExpandCorNS[pairedTopicsNSk200,pairedCtsNSk200]),
+                mtx2 = diag(1,72,72))
+
+
+
+
+
+```
+
+
+```{r}
+
+fnorms <- lapply(seq(100), function(x) {
+  
+  norm(diag(1,x,x), type = "F")
+  
+})
+
+plot.new()
+plot(seq(100), (unlist(fnorms))**2)
+
+```
+
+Still stuck about assessing topics...matrix distances maybe not correct yet?
+Matched topics for k200 seem to also be significant compared to unmatched topics.
+Way to do this for k50? When doing the correlations, the same cell types get used and so not significant topics can also end up correlating well with same cell types.
+
+Way to assess the correlation with ground truth between significant and insignificant topics and show that significant correlate better?
+
+but for comparing different techniques....how to compare using topic clusters versus individual topics?
+Well the clusters could be though of differently. Way to have a lower rez but perhaps more accurate picture? Then can go into individual topics if needed
+
+
+
+for each cell layer:
+plot the correlations between significant and insignificant topics.
+(note that all of this has been done with betas. Does it make sense to instead look at thetas?)
+
+```{r}
+
+LDA.k50.betaExpandCorSig
+LDA.k50.betaExpandCorNS
+
+```
+
+```{r}
+
+k50betaExpandSigLong <- mtx2ggplotDf(mtx = LDA.k50.betaExpandCorSig,
+                                     colLab = "cellTypes",
+                                     rowLab = "topics",
+                                     cellLab = "cor")
+
+k50betaExpandNSLong <- mtx2ggplotDf(mtx = LDA.k50.betaExpandCorNS,
+                                     colLab = "cellTypes",
+                                     rowLab = "topics",
+                                     cellLab = "cor")
+
+k50betaExpandSigLong$sig <- rep("Y", dim(k50betaExpandSigLong)[1])
+k50betaExpandNSLong$sig <- rep("N", dim(k50betaExpandNSLong)[1])
+
+k50betaExpandLong <- rbind(k50betaExpandSigLong, k50betaExpandNSLong)
+
+```
+
+```{r, fig.height=12, fig.width=8}
+
+ggplot(data = k50betaExpandLong, aes(x = sig, y = cor, group = sig, fill = sig)) +
+  geom_boxplot() +
+  geom_point(aes(color = sig)) +
+  facet_wrap(~cellTypes, nrow = 10) +
+  guides(fill=FALSE)
+
+```
+
+```{r}
+
+k200betaExpandSigLong <- mtx2ggplotDf(mtx = LDA.k200.betaExpandCorSig,
+                                     colLab = "cellTypes",
+                                     rowLab = "topics",
+                                     cellLab = "cor")
+
+k200betaExpandNSLong <- mtx2ggplotDf(mtx = LDA.k200.betaExpandCorNS,
+                                     colLab = "cellTypes",
+                                     rowLab = "topics",
+                                     cellLab = "cor")
+
+k200betaExpandSigLong$sig <- rep("Y", dim(k200betaExpandSigLong)[1])
+k200betaExpandNSLong$sig <- rep("N", dim(k200betaExpandNSLong)[1])
+
+k200betaExpandLong <- rbind(k200betaExpandSigLong, k200betaExpandNSLong)
+
+```
+
+```{r, fig.height=12, fig.width=8}
+
+ggplot(data = k200betaExpandLong, aes(x = sig, y = cor, group = sig, fill = sig)) +
+  geom_boxplot() +
+  geom_point(aes(color = sig)) +
+  facet_wrap(~cellTypes, nrow = 10) +
+  guides(fill=FALSE)
+
+```
+
+## thetas
+
+```{r}
+
+thetaExpanded <- t(rbind(t(bregma04$gtDocTopics[,!colnames(bregma04$gtDocTopics) %in% c("Excitatory", "Inhibitory")]), t(neuroTheta[,1:65])))
+
+```
+
+```{r}
+
+LDA.k50.thetaExpandCor <- correlationBetweenThetas(theta1 = LDA.k50.theta,
+                                                   theta2 = thetaExpanded)
+
+LDA.k200.thetaExpandCor <- correlationBetweenThetas(theta1 = LDA.k200.theta,
+                                                   theta2 = thetaExpanded)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.thetaExpandCor,
+          Rowv = LDA.k50.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors),
+          ColSideColors = as.vector(betaExpandedCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k50.thetaExpandCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k200.thetaExpandCor,
+          Rowv = LDA.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k200ClusterColors),
+          ColSideColors = as.vector(betaExpandedCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k200.thetaExpandCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+do the lsat and trimming and then the boxplots. also for the lsat k200 compare correlations between sig and insig topics
+
+# ** theta lsat expanded cells
+lsat:
+```{r, fig.height=7, fig.width=8}
+
+# adjust correlations to 0-1 range
+lsatPairsk50thetaExpand <- clue::solve_LSAP(scale0_1(LDA.k50.thetaExpandCor), maximum = TRUE)
+pairedTopicsk50thetaExpand <- seq_along(lsatPairsk50thetaExpand)
+pairedCtsk50thetaExpand <- as.numeric(lsatPairsk50thetaExpand)
+
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.thetaExpandCor[pairedTopicsk50thetaExpand,pairedCtsk50thetaExpand],
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors)[pairedTopicsk50thetaExpand],
+          # ColSideColors = as.vector(betaExpandedCols)[pairedCtsk50thetaExpand],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k50.thetaExpandCor lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+# had transpose mtx. Can't have more rows than columns
+lsatPairsk200thetaExpand <- clue::solve_LSAP(t(scale0_1(LDA.k200.thetaExpandCor)), maximum = TRUE)
+pairedCtsk200thetaExpand <- seq_along(lsatPairsk200thetaExpand) # now the rows
+pairedTopicsk200thetaExpand <- as.numeric(lsatPairsk200thetaExpand) # now the columns
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(t(LDA.k200.thetaExpandCor)[pairedCtsk200thetaExpand, pairedTopicsk200thetaExpand], # in this case, rows are Cts and cols are matched topics
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(betaExpandedCols)[pairedCtsk200thetaExpand],
+          ColSideColors = as.vector(k200ClusterColors)[pairedTopicsk200thetaExpand],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k200.thetaExpandCor lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+curious how the lsat matched topics and the unmatched topics compare wrt their p-values
+
+Idea is if the unmatched are not significant then maybe would justify trimming these away based on term correlation significance
+
+```{r}
+
+matchedK200topics <- LDA.k200.termCor.geneCounts[pairedTopicsk200thetaExpand,]
+UnmatchedK200topics <- LDA.k200.termCor.geneCounts[-pairedTopicsk200thetaExpand,]
+
+boxplot(-log10(matchedK200topics$p.adj.fdr), -log10(UnmatchedK200topics$p.adj.fdr))
+wilcox.test(-log10(matchedK200topics$p.adj.fdr), -log10(UnmatchedK200topics$p.adj.fdr))
+
+
+
+# all the K50s were paired so can't compare in this way
+
+# pairedTopicsK50 <- seq_along(lsatPairsK50)
+# matchedK50topics <- LDA.k50.termCor.geneCounts[pairedTopicsK50,]
+# UnmatchedK50topics <- LDA.k50.termCor.geneCounts[-pairedTopicsK50,]
+# 
+# boxplot(-log10(matchedK50topics$p.adj.fdr), -log10(UnmatchedK50topics$p.adj.fdr))
+# wilcox.test(-log10(matchedK50topics$p.adj.fdr), -log10(UnmatchedK50topics$p.adj.fdr))
+
+```
+
+paired have slightly better adjusted pvals but it is not significant in the case of theta correlation matching
+
+
+lsat w/ trimming:
+```{r, fig.height=7, fig.width=8}
+
+LDA.k50.sigTopics <- LDA.k50.termCor.geneCounts[LDA.k50.termCor.geneCounts$p.adj.fdr < 0.05,]$topic
+LDA.k50.thetaExpandCorSig <- LDA.k50.thetaExpandCor[LDA.k50.sigTopics,]
+LDA.k50.thetaExpandCorNS <- LDA.k50.thetaExpandCor[-as.numeric(LDA.k200.sigTopics),]
+
+LDA.k50.NSTopics <- rownames(LDA.k50.termCor.geneCounts)[-as.numeric(LDA.k50.sigTopics)]
+
+
+# adjust correlations to 0-1 range
+lsatPairsSigk50theta <- clue::solve_LSAP(scale0_1(LDA.k50.thetaExpandCorSig), maximum = TRUE)
+pairedTopicsSigk50theta <- seq_along(lsatPairsSigk50theta)
+pairedCtsSigk50theta <- as.numeric(lsatPairsSigk50theta)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.thetaExpandCorSig[pairedTopicsSigk50theta,pairedCtsSigk50theta],
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors)[as.numeric(LDA.k50.sigTopics)[pairedTopicsSigk50theta]],
+          # ColSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k50.thetaExpandCorSig trimmed topics lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+# adjust correlations to 0-1 range
+lsatPairsNSk50theta <- clue::solve_LSAP(scale0_1(LDA.k50.thetaExpandCorNS), maximum = TRUE)
+pairedTopicsNSk50theta <- seq_along(lsatPairsNSk50theta)
+pairedCtsNSk50theta <- as.numeric(lsatPairsNSk50theta)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(LDA.k50.thetaExpandCorNS[pairedTopicsNSk50theta,pairedCtsNSk50theta],
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(k50ClusterColors)[as.numeric(LDA.k50.NSTopics)[pairedTopicsNSk50theta]],
+          # ColSideColors = as.vector(droplevels(neuroCols[1:66]))[pairedCts],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k50.thetaExpandCorNS trimmed topics lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+#### triming
+```{r, fig.height=7, fig.width=8}
+
+LDA.k200.sigTopics <- LDA.k200.termCor.geneCounts[LDA.k200.termCor.geneCounts$p.adj.fdr < 0.05,]$topic
+LDA.k200.thetaExpandCorSig <- LDA.k200.thetaExpandCor[LDA.k200.sigTopics,]
+LDA.k200.thetaExpandCorNS <- LDA.k200.thetaExpandCor[-as.numeric(LDA.k200.sigTopics),]
+
+lsatPairsSigk200theta <- clue::solve_LSAP(t(scale0_1(LDA.k200.thetaExpandCorSig)), maximum = TRUE)
+pairedCtsSigk200theta <- seq_along(lsatPairsSigk200theta)
+pairedTopicsSigk200theta <- as.numeric(lsatPairsSigk200theta)
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(t(LDA.k200.thetaExpandCorSig[pairedTopicsSigk200theta,pairedCtsSigk200theta]),
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          ColSideColors = as.vector(k200ClusterColors)[as.numeric(LDA.k200.sigTopics[pairedTopicsSigk200theta])],
+          # RowSideColors = as.vector(betaExpandedCols)[pairedCtsSigk200theta],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k200.thetaExpandCorSig trimmed topics lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+LDA.k200.NSTopics <- rownames(LDA.k200.termCor.geneCounts)[-as.numeric(LDA.k200.sigTopics)]
+
+lsatPairsNSk200theta <- clue::solve_LSAP(t(scale0_1(LDA.k200.thetaExpandCorNS)), maximum = TRUE)
+pairedCtsNSk200theta <- seq_along(lsatPairsNSk200theta)
+pairedTopicsNSk200theta <- as.numeric(lsatPairsNSk200theta)
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(t(LDA.k200.thetaExpandCorNS[pairedTopicsNSk200theta,pairedCtsNSk200theta]),
+          Rowv = FALSE,
+          Colv = FALSE,
+          density.info = "none",
+          trace = "none",
+          ColSideColors = as.vector(k200ClusterColors)[as.numeric(LDA.k200.NSTopics)[pairedTopicsNSk200theta]],
+          # RowSideColors = as.vector(betaExpandedCols)[pairedCtsNSk200],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.5,margins=c(6,3),
+          main = "LDA.k200.thetaExpandCorNS trimmed topics lsat pairs",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+
+```{r}
+
+k50thetaExpandSigLong <- mtx2ggplotDf(mtx = LDA.k50.thetaExpandCorSig,
+                                     colLab = "cellTypes",
+                                     rowLab = "topics",
+                                     cellLab = "cor")
+
+k50thetaExpandNSLong <- mtx2ggplotDf(mtx = LDA.k50.thetaExpandCorNS,
+                                     colLab = "cellTypes",
+                                     rowLab = "topics",
+                                     cellLab = "cor")
+
+k50thetaExpandSigLong$sig <- rep("Y", dim(k50thetaExpandSigLong)[1])
+k50thetaExpandNSLong$sig <- rep("N", dim(k50thetaExpandNSLong)[1])
+
+k50thetaExpandLong <- rbind(k50thetaExpandSigLong, k50thetaExpandNSLong)
+
+```
+
+```{r, fig.height=12, fig.width=8}
+
+ggplot(data = k50thetaExpandLong, aes(x = sig, y = cor, group = sig, fill = sig)) +
+  geom_boxplot() +
+  geom_point(aes(color = sig)) +
+  facet_wrap(~cellTypes, nrow = 10) +
+  guides(fill=FALSE)
+
+```
+
+```{r}
+
+k200thetaExpandSigLong <- mtx2ggplotDf(mtx = LDA.k200.thetaExpandCorSig,
+                                     colLab = "cellTypes",
+                                     rowLab = "topics",
+                                     cellLab = "cor")
+
+k200thetaExpandNSLong <- mtx2ggplotDf(mtx = LDA.k200.thetaExpandCorNS,
+                                     colLab = "cellTypes",
+                                     rowLab = "topics",
+                                     cellLab = "cor")
+
+k200thetaExpandSigLong$sig <- rep("Y", dim(k200thetaExpandSigLong)[1])
+k200thetaExpandNSLong$sig <- rep("N", dim(k200thetaExpandNSLong)[1])
+
+k200thetaExpandLong <- rbind(k200thetaExpandSigLong, k200thetaExpandNSLong)
+
+```
+
+```{r, fig.height=12, fig.width=8}
+
+ggplot(data = k200thetaExpandLong, aes(x = sig, y = cor, group = sig, fill = sig)) +
+  geom_boxplot() +
+  geom_point(aes(color = sig)) +
+  facet_wrap(~cellTypes, nrow = 10) +
+  guides(fill=FALSE)
+
+```
+
+
+
+
+
+
+
+
+# ---------------------------------------------
+# Check gene expression distributions
+
+Are lowly expressed gene inflated in the topic-term beta distributions? Compare this to the ground truth term proportions comparing topics that you have high confidence match to one of the ground truth cell types. Think Ependymal cells.
+
+
+```{r}
+
+# for the 5 txn clusters
+# ependyTxnTypes <- df_ependy[,c("txn_clust")]
+# mm <- model.matrix(~ 0 + factor(ependyTxnTypes))
+# colnames(mm) <- levels(factor(ependyTxnTypes))
+# ependyBeta <- t(t(as.matrix(geneCountsEpendy)) %*% mm)
+# ependyBeta <- ependyBeta/rowSums(ependyBeta)
+ependyBeta
+
+# beta for the 50 topics.
+k50ependyTopicsBeta <- LDA.k50.beta[c(6,33,38),]
+# i know topics 6, 33, 38 correspond to the ependymal cells well
+
+```
+
+```{r}
+
+k50ependyBetaCor <- correlationBetweenBetas(beta1 = k50ependyTopicsBeta,
+                                                beta2 = ependyBeta,
+                                                thresh = NULL)
+k50ependyBetaCor
+lsatPairs <- clue::solve_LSAP(scale0_1(k50ependyBetaCor), maximum = TRUE)
+lsatPairs
+```
+
+txn1 to pair with topic 6
+
+correlation between genes
+
+Also color genes by their counts in the ependymal cells themselves
+
+```{r}
+
+txn1GeneCounts <- geneCountsEpendy[which(df_ependy$txn_clust == "1"),]
+
+txn1Topic6BetaCompare <- data.frame(genes = colnames(ependyBeta),
+           topic6Beta = k50ependyTopicsBeta["6",],
+           txn1Beta = ependyBeta[1,],
+           txn1Tot = colSums(txn1GeneCounts),
+           txn1Mean = colMeans(txn1GeneCounts))
+
+```
+
+```{r}
+
+ggplot(data = txn1Topic6BetaCompare[txn1Topic6BetaCompare$txn1Mean < 1,], aes(x = txn1Beta, y = topic6Beta, color = txn1Mean)) +
+  geom_point(alpha = 0.5) +
+  scale_color_viridis(option = "C")
+
+
+ggplot(data = txn1Topic6BetaCompare[txn1Topic6BetaCompare$txn1Mean < 1,], aes(x = txn1Beta, y = topic6Beta, color = txn1Mean)) +
+  geom_point(alpha = 0.5) +
+  scale_color_viridis(option = "C") +
+  coord_cartesian(xlim=c(0,0.1), ylim=c(0,0.1))
+
+ggplot(data = txn1Topic6BetaCompare[txn1Topic6BetaCompare$txn1Mean < 1,], aes(x = txn1Beta, y = topic6Beta, color = txn1Mean)) +
+  geom_point(alpha = 0.5) +
+  scale_color_viridis(option = "C") +
+  coord_cartesian(xlim=c(0,0.1), ylim=c(0,0.1))
+
+ggplot(data = txn1Topic6BetaCompare[txn1Topic6BetaCompare$txn1Mean < 1,], aes(x = txn1Beta, y = topic6Beta, color = txn1Mean)) +
+  geom_point(alpha = 0.5) +
+  scale_color_viridis(option = "C") +
+  coord_cartesian(xlim=c(0,0.005), ylim=c(0,0.005))
+
+```
+Mlc1 3.830153e-01 0.3399370308    7018 88.83544304
+for ependymal, by far the major gene marker and essentially driving the ependymal classification
+
+```{r}
+
+head(k50ependyTopicsBeta["6",order(k50ependyTopicsBeta["6",], decreasing = TRUE)], n=10)
+
+```
+
+
+```{r, fig.height=6, fig.width=8}
+
+Mlc1 <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts[,"Mlc1"]
+bregma04cellsExp <- df[,c("Centroid_X", "Centroid_Y")]
+bregma04cellsExp$Mlc1 <- Mlc1[rownames(df[,c("Centroid_X", "Centroid_Y")])]
+
+# par(mfrow=c(1,1), mar=rep(1,4))
+# plotEmbedding(bregma04cellsExp[,c("Centroid_X", "Centroid_Y")], col=bregma04cellsExp$Mlc1, 
+#               cex=1, xlab=NA, ylab=NA,
+#               verbose=FALSE)
+
+```
+```{r, fig.height=6, fig.width=8}
+
+ggplot() +
+  geom_point(data = bregma04cellsExp, aes(x=Centroid_X, y=Centroid_Y, color=Mlc1), alpha=0.7) +
+  scale_color_viridis(option = "A", direction = -1) +
+  geom_rect(data = cellClassProportions,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black") +
+  theme_classic()
+
+```
+
+Now lets pick another topic. How about topic 40 for the k50
+
+```{r}
+
+head(LDA.k50.beta[40,order(LDA.k50.beta[40,], decreasing = TRUE)], n=10)
+
+```
+
+```{r}
+
+Ndrg1 <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts[,"Ndrg1"]
+bregma04cellsExp$Ndrg1 <- Ndrg1[rownames(df[,c("Centroid_X", "Centroid_Y")])]
+
+Sgk1 <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts[,"Sgk1"]
+bregma04cellsExp$Sgk1 <- Sgk1[rownames(df[,c("Centroid_X", "Centroid_Y")])]
+
+Ermn <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts[,"Ermn"]
+bregma04cellsExp$Ermn <- Ermn[rownames(df[,c("Centroid_X", "Centroid_Y")])]
+
+Gjc3 <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts[,"Gjc3"]
+bregma04cellsExp$Gjc3 <- Gjc3[rownames(df[,c("Centroid_X", "Centroid_Y")])]
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+ggplot() +
+  geom_point(data = bregma04cellsExp, aes(x=Centroid_X, y=Centroid_Y, color=Ndrg1), alpha=0.7) +
+  scale_color_viridis(option = "A", direction = -1) +
+  geom_rect(data = cellClassProportions,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = bregma04cellsExp, aes(x=Centroid_X, y=Centroid_Y, color=Sgk1), alpha=0.7) +
+  scale_color_viridis(option = "A", direction = -1) +
+  geom_rect(data = cellClassProportions,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = bregma04cellsExp, aes(x=Centroid_X, y=Centroid_Y, color=Ermn), alpha=0.7) +
+  scale_color_viridis(option = "A", direction = -1) +
+  geom_rect(data = cellClassProportions,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = bregma04cellsExp, aes(x=Centroid_X, y=Centroid_Y, color=Gjc3), alpha=0.7) +
+  scale_color_viridis(option = "A", direction = -1) +
+  geom_rect(data = cellClassProportions,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black") +
+  theme_classic()
+
+```
+
+even by top genes in beta distribution topic 40 looking very much like OD layer.
+
+
+What about something hard? Some of the neuronal cell layers..
+
+topic 44 in k50 correlates with excitatory, and when collapsed into cluster "#F8766D" this also corelates well with "exhitatory". Any particular one? Could is be b/c of the ditribution of terms (a few weighted heavilty?)
+
+```{r}
+
+head(LDA.k50.betaCombined["#F8766D",order(LDA.k50.betaCombined["#F8766D",], decreasing = TRUE)], n=10)
+
+```
+
+```{r}
+
+Nos1 <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts[,"Nos1"]
+bregma04cellsExp$Nos1 <- Nos1[rownames(df[,c("Centroid_X", "Centroid_Y")])]
+
+Pak3 <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts[,"Pak3"]
+bregma04cellsExp$Pak3 <- Pak3[rownames(df[,c("Centroid_X", "Centroid_Y")])]
+
+Slc17a6 <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts[,"Slc17a6"]
+bregma04cellsExp$Slc17a6 <- Slc17a6[rownames(df[,c("Centroid_X", "Centroid_Y")])]
+
+Gpr165 <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts[,"Gpr165"]
+bregma04cellsExp$Gpr165 <- Gpr165[rownames(df[,c("Centroid_X", "Centroid_Y")])]
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+ggplot() +
+  geom_point(data = bregma04cellsExp, aes(x=Centroid_X, y=Centroid_Y, color=Nos1), alpha=0.7) +
+  scale_color_viridis(option = "A", direction = -1) +
+  geom_rect(data = cellClassProportions,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = bregma04cellsExp, aes(x=Centroid_X, y=Centroid_Y, color=Pak3), alpha=0.7) +
+  scale_color_viridis(option = "A", direction = -1) +
+  geom_rect(data = cellClassProportions,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = bregma04cellsExp, aes(x=Centroid_X, y=Centroid_Y, color=Slc17a6), alpha=0.7) +
+  scale_color_viridis(option = "A", direction = -1) +
+  geom_rect(data = cellClassProportions,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = bregma04cellsExp, aes(x=Centroid_X, y=Centroid_Y, color=Gpr165), alpha=0.7) +
+  scale_color_viridis(option = "A", direction = -1) +
+  geom_rect(data = cellClassProportions,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black") +
+  theme_classic()
+
+```
+
+Kinda follows Excitatoy in general. What about topic 44 specifically?
+
+```{r}
+
+head(LDA.k50.beta[44,order(LDA.k50.beta[44,], decreasing = TRUE)], n=10)
+
+```
+
+```{r}
+
+# Pak3 <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts[,"Pak3"]
+# bregma04cellsExp$Pak3 <- Pak3[rownames(df[,c("Centroid_X", "Centroid_Y")])]
+
+Cbln2 <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts[,"Cbln2"]
+bregma04cellsExp$Cbln2 <- Cbln2[rownames(df[,c("Centroid_X", "Centroid_Y")])]
+
+# Slc17a6 <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts[,"Slc17a6"]
+# bregma04cellsExp$Slc17a6 <- Slc17a6[rownames(df[,c("Centroid_X", "Centroid_Y")])]
+
+# Gpr165 <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts[,"Gpr165"]
+# bregma04cellsExp$Gpr165 <- Gpr165[rownames(df[,c("Centroid_X", "Centroid_Y")])]
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+ggplot() +
+  geom_point(data = bregma04cellsExp, aes(x=Centroid_X, y=Centroid_Y, color=Cbln2), alpha=0.7) +
+  scale_color_viridis(option = "A", direction = -1) +
+  geom_rect(data = cellClassProportions,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black") +
+  theme_classic()
+
+```
+
+A little more weighted to Pak3 and Cbln2. 
+
+# ---------------------------------------------
+# To Do
+
+
+Spatial pattern filtering (moran's I values and getting the correct null to test for significance)
+
+
+
+
+
+
+Story:
+
+get topics -> view clusters
+One example: looks like obvious layer that matches txn layer.
+Gene expression suggests it is a given cell type
+lo and behold, the txn cluster and previous analysis agrees that the corresponding txn is similar.
+So matches txm pattern (wrt theta proportions), gene expression (wrt beta), and the top genes of the topic are consistent with markers of that cell type.
+
+Then more interesting example; find something new?
+1. Pick another topic that is similar pattern with the example above. Is this a cell type that is interacting? Is the cell type it might correspond to also been previously documented in literature? (careful..maybe the topic represents some other latent info, like "hybrid expression", noise, etc?)
+2. A topic that doesn't really have much of a pattern, or at least not picked up in a txn cluster.
+But its' top terms are consistent with a cell layer that may be there that is consistent with literature, or maybe markers match Allen Brain?
+
+
+Of course, also the proof of concept with MERFISH and good ground truth
+Then look at mOB (and perhaps do the story above..)
+Then maybe something more interesting like disease (10X breast?), higher res Slideseq?
+
+And also be comparing to other deconvolution techniques.
+The disease sample will be interesting if not a good matching reference...
+
+
+For the tool:
+idea:
+form one object with differnt slots. Functions to perform on object to do different things. The primary required input it the object itself. The other args are just default args that can be changed with other options.
+
+Slots can be:
+The LDA object and associated info,
+beta and theta mtxs -> one for individual topics to start.
+"clustering" function adds additional mtxs with the assigned clusters. Also new ones with the topics in collapsed clusters.
+Unclear if any significance should be added as I'm having doubts how useful it is now.
+If so, during the clustering can have a defualt arg for do with only sig topics, but can change to have all topics used
+
+ANd for visualiztion, apply to object to get plots of proportions of topics in space. Positional information should probably by another slot in object
+
+
+

@@ -1,0 +1,1746 @@
+---
+title: "Untitled"
+author: "Brendan F. Miller"
+date: "1/28/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, mob-init}
+
+suppressMessages(library(MERINGUE))
+data(mOB)
+pos <- mOB$pos
+cd <- mOB$counts
+
+```
+
+# data
+
+```{r, mob-qc, fig.width=8, fig.height=3}
+
+# Remove poor datasets and genes
+counts <- MERINGUE::cleanCounts(counts = cd, 
+                      min.reads = 100, 
+                      min.lib.size = 100, 
+                      plot=TRUE,
+                      verbose=TRUE)
+posMob <- pos[colnames(counts),]
+
+# CPM normalize
+mat <- MERINGUE::normalizeCounts(counts = counts, 
+                       log=FALSE,
+                       verbose=TRUE)
+
+```
+
+## original clusters
+
+All gene and values in CPM (the original transcriptional clustering)
+
+```{r}
+
+# using the overdispersed genes (derived from the raw counts) and the values of the the CPM count matrix
+
+# Dimensionality reduction by PCA on log10 CPM expression values
+pcs.info <- prcomp(t(log10(as.matrix(mat)+1)), center=TRUE)
+nPcs <- 5
+pcs <- pcs.info$x[,1:nPcs]
+
+# 2D embedding by tSNE
+emb <- Rtsne::Rtsne(pcs,
+             is_distance=FALSE,
+             perplexity=30,
+             num_threads=1,
+             verbose=FALSE)$Y
+rownames(emb) <- rownames(pcs)
+
+# Graph-based cluster detection
+k <- 30
+com <- getClusters(pcs, k, weight=TRUE)
+
+# Manually annotate identified clusters with cell-types
+annot <- as.character(com); names(annot) <- names(com)
+annot[com==4] <- '1: Granule Cell Layer'
+annot[com==1] <- '2: Mitral Cell Layer'
+annot[com==3] <- '3: Outer Plexiform Layer'
+annot[com==2] <- '4: Glomerular Layer'
+annot[com==5] <- '5: Olfactory Nerve Layer'
+annot <- as.factor(annot)
+
+# Plot
+par(mfrow=c(2,2), mar=rep(1,4))
+plotEmbedding(emb, groups=annot, 
+              show.legend=TRUE, xlab=NA, ylab=NA,
+              verbose=FALSE)
+plotEmbedding(posMob, groups=annot, 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+plotEmbedding(emb, groups=com, 
+              show.legend=TRUE, xlab=NA, ylab=NA,
+              verbose=FALSE)
+plotEmbedding(posMob, groups=com, 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+
+```
+
+## filter genes
+
+```{r}
+
+top_expressed <- names(rowSums(counts)[order(rowSums(counts),
+                                             decreasing = TRUE)][1:5])
+
+countsFilt <- counts[rownames(counts) %in% top_expressed == FALSE,]
+
+dim(countsFilt)
+
+# remove mitochondrial genes (if there are any)
+countsFilt <- countsFilt[!grepl("mt-", rownames(countsFilt)),]
+
+dim(countsFilt)
+
+```
+
+Remove words that appear in every document
+
+```{r}
+
+# poor datasets and genes already removed, as well as top 5 genes and mitochondrial genes
+
+# remove genes that are present in all spots
+countsFilt_ <- countsFilt
+countsFilt_[which(countsFilt_ > 0)] <- 1
+countsFiltnoUnifGenes <- countsFilt[which(rowSums(countsFilt_) < 260),]
+
+```
+
+```{r, fig.width=6, fig.height=3}
+
+# $mat -> normalized matrix for all genes
+# $ods -> list of the overdispersed genes
+# $df -> table of stats for all the input genes
+
+par(mfrow=c(4,2), mar=c(1,1,1,1))
+
+odGenesNoUnif <- getOverdispersedGenes(countsFiltnoUnifGenes,
+                                    plot = TRUE,
+                                    details = TRUE)
+
+```
+
+## check txn clusters
+
+220 OD genes and raw counts (not CPM norm)
+
+```{r}
+
+# using the overdispersed genes (derived from the CPM counts) and the values of the the CPM count matrix
+
+pcs.info <- prcomp(t(log10(as.matrix(countsFiltnoUnifGenes[odGenesNoUnif$ods,])+1)), center=TRUE)
+nPcs <- 5
+pcs <- pcs.info$x[,1:nPcs]
+
+# 2D embedding by tSNE
+emb <- Rtsne::Rtsne(pcs,
+             is_distance=FALSE,
+             perplexity=30,
+             num_threads=1,
+             verbose=FALSE)$Y
+rownames(emb) <- rownames(pcs)
+
+# Graph-based cluster detection
+k <- 30
+com2 <- getClusters(pcs, k, weight=TRUE)
+
+par(mfrow=c(2,2), mar=rep(1,4))
+plotEmbedding(emb, groups=annot, 
+              show.legend=TRUE, xlab=NA, ylab=NA,
+              verbose=FALSE)
+plotEmbedding(posMob, groups=annot, 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+plotEmbedding(emb, groups=com2, 
+              show.legend=TRUE, xlab=NA, ylab=NA,
+              verbose=FALSE)
+plotEmbedding(posMob, groups=com2, 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+
+```
+
+quite similar transcription clusters, even with using the raw counts and the OD genes after filtering instead of all the genes in mat
+
+## corpus
+
+```{r}
+
+# docs x terms
+
+mob_corpus <- t(as.matrix(countsFiltnoUnifGenes[odGenesNoUnif$ods,]))
+mob_corpus_slamMtx <- slam::as.simple_triplet_matrix(mob_corpus)
+
+```
+
+# fit
+
+## k30
+
+```{r}
+
+mob_lda <- fitLDA(mob_corpus_slamMtx, k_)
+
+```
+
+beta and theta distributions:
+
+```{r}
+
+mob_lda.tmResult<- posterior(mob_lda)
+mob_lda.theta <- mob_lda.tmResult$topics
+mob_lda.beta <- mob_lda.tmResult$terms
+mob_lda.topicFreqsOverall <- colSums(mob_lda.theta) / nrow(mob_corpus_slamMtx)
+
+```
+
+## excess topics k200
+
+```{r}
+
+controls <- list(seed = 0, verbose = 1, keep = 1, alpha = 1, estimate.alpha = TRUE)
+mob_lda.k200 <- topicmodels::LDA(mob_corpus_slamMtx, k=200, control = controls)
+
+topicmodels::perplexity(mob_lda.k200, mob_corpus_slamMtx)
+
+```
+
+```{r}
+
+mob_lda.k200.tmResult<- posterior(mob_lda.k200)
+mob_lda.k200.theta <- mob_lda.k200.tmResult$topics
+mob_lda.k200.beta <- mob_lda.k200.tmResult$terms
+mob_lda.k200.topicFreqsOverall <- colSums(mob_lda.k200.theta) / nrow(mob_corpus_slamMtx)
+
+```
+
+# clusters
+
+```{r}
+
+mob_lda.clust <- clusterTopics(beta = mob_lda.beta,
+                               distance = "euclidean",
+                               clustering = "ward.D",
+                               dynamic = "hybrid",
+                               deepSplit = 4,
+                               plotDendro = TRUE)
+
+mob_lda.k200.clust <- clusterTopics(beta = mob_lda.k200.beta,
+                               distance = "euclidean",
+                               clustering = "ward.D",
+                               dynamic = "hybrid",
+                               deepSplit = 4,
+                               plotDendro = TRUE)
+
+```
+
+```{r}
+
+mobClusterColorsk30 <- mob_lda.clust$clusters
+levels(mobClusterColorsk30) <- gg_color_hue(length(levels(mobClusterColorsk30)))
+
+mobClusterColorsk200 <- mob_lda.k200.clust$clusters
+levels(mobClusterColorsk200) <- gg_color_hue(length(levels(mobClusterColorsk200)))
+
+```
+
+# ---------------------------------------------
+# Correlation - beta
+
+## proxy beta
+
+```{r}
+
+cellLayerProxy <- do.call(rbind, lapply(levels(annot), function(cell_layer){
+  
+  layerCounts <- colSums(mob_corpus[names(annot[which(annot == cell_layer)]),])
+  layerProportions <- layerCounts / sum(layerCounts)
+  layerProportions
+  
+}))
+
+rownames(cellLayerProxy) <- levels(annot)
+
+```
+
+## -- all topics
+
+```{r}
+
+mob_lda.betaGTcorMtx <- correlationBetweenBetas(beta1 = mob_lda.beta,
+                                                beta2 = cellLayerProxy,
+                                                thresh = NULL)
+
+mob_lda.k200.betaGTcorMtx <- correlationBetweenBetas(beta1 = mob_lda.k200.beta,
+                                                beta2 = cellLayerProxy,
+                                                thresh = NULL)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.betaGTcorMtx,
+          Rowv = mob_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk30),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_ldak30.beta.betaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.k200.betaGTcorMtx,
+          Rowv = mob_lda.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk200),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_ldak200.beta.betaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+note the one topic "172" is its own cluster. Why is it so different from the other topics?
+
+## -- clustered topics
+
+```{r}
+
+# combine significant topics into their clusters
+mob_lda.betaCombined <- combineTopics(mtx = mob_lda.beta, clusters = mobClusterColorsk30, mtxType = "b")
+mob_lda.betaCombinedCor <- correlationBetweenBetas(beta1 = mob_lda.betaCombined,
+                                                beta2 = cellLayerProxy,
+                                                thresh = 0.01)
+
+mob_lda.k200.betaCombined <- combineTopics(mtx = mob_lda.k200.beta, clusters = mobClusterColorsk200, mtxType = "b")
+mob_lda.k200.betaCombinedCor <- correlationBetweenBetas(beta1 = mob_lda.k200.betaCombined,
+                                                beta2 = cellLayerProxy,
+                                                thresh = 0.01)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.betaCombinedCor,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = rownames(mob_lda.betaCombined),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_lda.betaCombinedCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.k200.betaCombinedCor,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = rownames(mob_lda.k200.betaCombined),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_lda.k200.betaCombinedCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+note the one topic "172" is its own cluster. Why is it so different from the other topics? "#F8766D"
+
+# ---------------------------------------------
+# viz topics theta
+
+visualize the predicted document-topic proportions
+
+correlation to the 5 txn clusters?
+Actually check out individual topics or increase cluster res and see if you get sub txn clusters. As additional proof of concepts like the ependymal cells.
+
+## k30
+
+```{r}
+
+mob_lda.thetaCombined <- t(combineTopics(mtx = t(mob_lda.theta), clusters = mobClusterColorsk30, mtxType = "t"))
+
+```
+
+```{r, fig.height=5, fig.width=8}
+
+vizAllTopics(theta = mob_lda.thetaCombined,
+             pos = posMob,
+             topicOrder = seq_len(length(colnames(mob_lda.thetaCombined))),
+             cluster_cols = colnames(mob_lda.thetaCombined),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mOB")
+
+vizAllTopics(theta = mob_lda.thetaCombined,
+             pos = posMob,
+             topicOrder = seq_len(length(colnames(mob_lda.thetaCombined))),
+             cluster_cols = colnames(mob_lda.thetaCombined),
+             groups = as.character(cellLayerTheta[,"Granule Cell Layer"]),
+             group_cols = c("0" = "black", "1" = "white"), 
+             r = 0.4,
+             lwd = 0.3,
+             plotTitle = "Granule Cell Layer")
+
+vizAllTopics(theta = mob_lda.thetaCombined,
+             pos = posMob,
+             topicOrder = seq_len(length(colnames(mob_lda.thetaCombined))),
+             cluster_cols = colnames(mob_lda.thetaCombined),
+             groups = as.character(cellLayerTheta[,"Mitral Cell Layer"]),
+             group_cols = c("0" = "black", "1" = "white"), 
+             r = 0.4,
+             lwd = 0.3,
+             plotTitle = "Mitral Cell Layer")
+
+vizAllTopics(theta = mob_lda.thetaCombined,
+             pos = posMob,
+             topicOrder = seq_len(length(colnames(mob_lda.thetaCombined))),
+             cluster_cols = colnames(mob_lda.thetaCombined),
+             groups = as.character(cellLayerTheta[,"Outer Plexiform Layer"]),
+             group_cols = c("0" = "black", "1" = "white"), 
+             r = 0.4,
+             lwd = 0.3,
+             plotTitle = "Outer Plexiform Layer")
+
+vizAllTopics(theta = mob_lda.thetaCombined,
+             pos = posMob,
+             topicOrder = seq_len(length(colnames(mob_lda.thetaCombined))),
+             cluster_cols = colnames(mob_lda.thetaCombined),
+             groups = as.character(cellLayerTheta[,"Glomerular Layer"]),
+             group_cols = c("0" = "black", "1" = "white"), 
+             r = 0.4,
+             lwd = 0.3,
+             plotTitle = "Glomerular Layer")
+
+vizAllTopics(theta = mob_lda.thetaCombined,
+             pos = posMob,
+             topicOrder = seq_len(length(colnames(mob_lda.thetaCombined))),
+             cluster_cols = colnames(mob_lda.thetaCombined),
+             groups = as.character(cellLayerTheta[,"Olfactory Nerve Layer"]),
+             group_cols = c("0" = "black", "1" = "white"), 
+             r = 0.4,
+             lwd = 0.3,
+             plotTitle = "Olfactory Nerve Layer")
+
+```
+
+
+```{r, fig.height=6, fig.width=8}
+
+vizTopicClusters(theta = mob_lda.theta,
+                pos = posMob,
+                topicOrder = mob_lda.clust$order,
+                clusters = mobClusterColorsk30,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
+
+k30thetaCombinedClusters <- as.factor(colnames(mob_lda.thetaCombined))
+names(k30thetaCombinedClusters) <- colnames(mob_lda.thetaCombined)
+vizTopicClusters(theta = mob_lda.thetaCombined,
+                pos = posMob,
+                topicOrder = seq_len(length(colnames(mob_lda.thetaCombined))),
+                clusters = k30thetaCombinedClusters,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+## k200
+
+for the larger set of topics, filter out those that are represented at very low proportions in spots.
+Estimate that if 25 cells, then cannot have topics that are less than 0.04
+
+```{r}
+
+mob_lda.k200.thetaFilt <- mob_lda.k200.theta
+mob_lda.k200.thetaFilt[mob_lda.k200.thetaFilt < 0.04] <- 0
+
+```
+
+interesting observation: 
+the distribution of document topic proportions in the corpus are different between k30 and k200.
+For k30, tend to documents enriched for a few topics.
+In k200, each topic is represented in each document almost equally as low proportion. Do topics get over partitioned?
+
+mob_lda.k200@alpha
+[1] 57.13212
+mob_lda@alpha
+[1] 0.05702499
+
+that's interesting. Might be interesting to see how alpha trends with K, and how this trends with perplexity..
+
+```{r}
+
+hist(apply(mob_lda.theta, 1, max), breaks = 30, main = "k30 theta: max topic proportion in each doc")
+hist(apply(mob_lda.k200.theta, 1, max), breaks = 30, main = "k200 theta: max topic proportion in each doc")
+
+hist(apply(mob_lda.beta, 1, max), breaks = 30, main = "k30 beta: max gene proportion in each topic")
+hist(apply(mob_lda.k200.beta, 1, max), breaks = 30, main = "k200 beta: max gene proportion in each topic")
+
+```
+
+## -- IGNORE all topics
+
+too many topics such that the borders and lines of the piechart, which are now gray, just cover everything up and thus why you can't see anything. Will need to group topics into clusters
+
+```{r, fig.height=7, fig.width=8}
+
+# vizAllTopics(theta = mob_lda.k200.theta,
+#              pos = posMob,
+#              topicOrder = mob_lda.k200.clust$order,
+#              cluster_cols = mobClusterColorsk200,
+#              r = 0.4,
+#              showLegend = FALSE)
+
+# vizTopicClusters(theta = mob_lda.k200.theta,
+#                 pos = posMob,
+#                 topicOrder = mob_lda.k200.clust$order,
+#                 clusters = mobClusterColorsk200,
+#                 sharedCol = FALSE,
+#                 r = 0.4)
+
+```
+
+## -- clustered topics
+
+```{r}
+
+mob_lda.k200.thetaCombined <- t(combineTopics(mtx = t(mob_lda.k200.theta), clusters = mobClusterColorsk200, mtxType = "t"))
+
+```
+
+```{r, fig.height=5, fig.width=8}
+
+vizAllTopics(theta = mob_lda.k200.thetaCombined,
+             pos = posMob,
+             topicOrder = seq_len(length(colnames(mob_lda.k200.thetaCombined))),
+             cluster_cols = colnames(mob_lda.k200.thetaCombined),
+             r = 0.4,
+             lwd = 0.01)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+k200thetaCombinedClusters <- as.factor(colnames(mob_lda.k200.thetaCombined))
+names(k200thetaCombinedClusters) <- colnames(mob_lda.k200.thetaCombined)
+vizTopicClusters(theta = mob_lda.k200.thetaCombined,
+                pos = posMob,
+                topicOrder = seq_len(length(colnames(mob_lda.k200.thetaCombined))),
+                clusters = k200thetaCombinedClusters,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+
+So based on the beta, the topic clusters seem to represent the true layers in terms of the topic-term betas. But in terms of the doc-topic proportions, the model fails. Its essentially uniform everywhere. So the beta is good but the theta is not. Why?
+
+# ---------------------------------------------
+# Correlation - theta
+
+## proxy theta
+
+Because the resolution is at the spot level, will have each spot 100% of a particular cell layer
+
+```{r}
+
+# annot = factor of cell layer values with spot IDs as the labels
+cellLayerTheta <- model.matrix(~ 0 + annot)
+rownames(cellLayerTheta) <- names(annot)
+
+layerNames <- unlist(lapply(colnames(cellLayerTheta), function(x) {
+  unlist(strsplit(x, ": "))[2]
+}))
+colnames(cellLayerTheta) <- layerNames
+
+```
+
+## k30
+
+```{r}
+
+mob_lda.thetaGTcorMtx <- correlationBetweenThetas(theta1 = mob_lda.theta,
+                                                theta2 = cellLayerTheta,
+                                                thresh = NULL)
+
+mob_lda.thetaCombinedGTcorMtx <- correlationBetweenThetas(theta1 = mob_lda.thetaCombined,
+                                                theta2 = cellLayerTheta,
+                                                thresh = NULL)
+
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.thetaGTcorMtx,
+          Rowv = mob_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk30),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_ldak30.theta.betaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.thetaCombinedGTcorMtx,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = rownames(mob_lda.thetaCombinedGTcorMtx),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.7,cexCol=0.7,margins=c(6,3),
+          main = "mob_ldak30.betaCombinedCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+## k200
+
+```{r}
+
+mob_lda.k200.thetaGTcorMtx <- correlationBetweenThetas(theta1 = mob_lda.k200.theta,
+                                                theta2 = cellLayerTheta,
+                                                thresh = NULL)
+
+mob_lda.k200.thetaCombinedGTcorMtx <- correlationBetweenThetas(theta1 = mob_lda.k200.thetaCombined,
+                                                theta2 = cellLayerTheta,
+                                                thresh = NULL)
+
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.k200.thetaGTcorMtx,
+          Rowv = mob_lda.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk200),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_lda.k200.thetaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.k200.thetaCombinedGTcorMtx,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = rownames(mob_lda.k200.thetaCombinedGTcorMtx),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_lda.k200.thetaCombinedGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+interestingly, the correlations between topics and cell layers are distinct! Even though visualizing the proportions, shows the proportion of a given topic to be nearly the same across documents. Even when combining into clusters. I don't see patterns.
+
+But actually there are patterns wrt the distribution of the proportion of a topic cluster across the documents.
+
+This is confusing. I guess it may correlate with actual cell layers by some small fluctuations in the topic proportion across docs, but it really doesn't seem representative when assessing the actual topic proportion across the spots.
+
+### topic distribution across spots
+
+```{r}
+
+# theta topic cluster proportions across documents
+
+for (i in seq(ncol(mob_lda.k200.thetaCombined))) {
+  hist(mob_lda.k200.thetaCombined[,i], breaks = 30, main = paste0("k200 theta Topic Cluster: ", i))
+}
+
+```
+
+```{r}
+
+# theta topic cluster proportions across documents
+
+for (i in seq(ncol(mob_lda.thetaCombined))) {
+  hist(mob_lda.thetaCombined[,i], breaks = 30, main = paste0("k30 theta Topic Cluster: ", i))
+}
+
+```
+
+for the K30 topic clusters, we see a highly skewed distribution of topic-cluster proportions across the documents. Which would be expected if one were to assume distinct cell layers in each spot with tissue strucural patterns in which some cell layers would be organized distinctly from other layers.
+
+# ---------------------------------------------
+# IGNORE
+# Measure topic term corr pvals
+
+Curious about some of the k200 topics specifically since the perplexity actually did increase this time when k was in excess.
+
+The lone topic in its own cluster?
+
+## Generate Null
+
+randomly sampled genes from the actual corpus and took their cross correlation to form the null. By chance you will pick up genes that are in fact correlated with each other. So do the topics have terms that correlate together on average more than random chance?
+
+This null should also be applicable to any LDA model topics...
+
+Randomly sampling term sets and testing correlation wrt gene counts in actual documents:
+
+```{r}
+
+totalTerms <- 50
+
+
+termCorrNullsMOB <- do.call(rbind, lapply((2:totalTerms), function(numTerms) {
+  
+  # get correlations 100 times for each amount of randomly sampled topic terms
+  corrs <- do.call(rbind, lapply(seq(1000), function(x) {
+    
+    random_genes <- sample(colnames(as.matrix(mob_corpus_slamMtx)))[1:numTerms]
+    cor_mtx <- cor(as.matrix(mob_corpus_slamMtx)[,random_genes], as.matrix(mob_corpus_slamMtx)[,random_genes])
+    total_cor <- (sum(cor_mtx) - nrow(cor_mtx)) / (nrow(cor_mtx)**2 - nrow(cor_mtx))
+    total_cor
+    
+  }))
+  as.vector(corrs)
+}))
+
+termCorrNullsMOB
+
+boxplot(termCorrNullsMOB, use.cols = FALSE, xlab = "number of terms", ylab = "average correlation")
+
+```
+
+## k30 topic term-cor
+
+```{r, fig.height=7, fig.width=8}
+
+topicTermCorrsMobK30 <- topicTermCorrelationMats(beta = mob_lda.beta,
+                                           corpus = as.matrix(mob_corpus_slamMtx),
+                                           correlation = "corpus",
+                                           thresh = 0.01,
+                                           plots = TRUE)
+
+mob_k30_termCor <- topicTermCorrelation(topicTermCorrsMobK30)
+
+```
+
+## k200 topic term-cor
+
+```{r, fig.height=7, fig.width=8}
+
+topicTermCorrsMobK200 <- topicTermCorrelationMats(beta = mob_lda.k200.beta,
+                                           corpus = as.matrix(mob_corpus_slamMtx),
+                                           correlation = "corpus",
+                                           thresh = 0.01,
+                                           plots = FALSE)
+
+mob_k200_termCor <- topicTermCorrelation(topicTermCorrsMobK200)
+
+```
+
+## visualize
+
+```{r}
+
+# matrix to df compatible with ggplot:
+dat <- data.frame(draw = factor(rep(1:dim(termCorrNullsMOB)[2], dim(termCorrNullsMOB)[1])),
+                  numTerms = factor(rep(2:(dim(termCorrNullsMOB)[1]+1), each = dim(termCorrNullsMOB)[2])),
+                  corrs = as.vector(t(termCorrNullsMOB)))
+# dat
+
+ggplot() +
+  geom_boxplot(data = dat, aes(x = numTerms, y = corrs)) +
+  geom_point(data = mob_k30_termCor, aes(x = numTerms-1, y = cor, color = "K30")) +
+  scale_color_manual(values = c("K200" = "dodgerblue4", "K30" = "red")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+
+ggplot() +
+  geom_boxplot(data = dat,
+               aes(x = numTerms, y = corrs), alpha = 0.5) +
+  geom_point(data = mob_k200_termCor,
+             aes(x = numTerms-1, y = cor, color="K200"), alpha = 0.7) +
+  geom_point(data = mob_k30_termCor,
+             aes(x = numTerms-1, y = cor, color = "K30"), alpha = 0.7) +
+  # geom_point(data = LDA.k3.termCor.geneCounts,
+  #            aes(x = numTerms-1, y = cor, color = "K3"), alpha = 1) +
+  scale_color_manual(values = c("K200" = "dodgerblue4", "K30" = "red")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+## pvals and sig topics
+
+```{r}
+
+mob_k30_termCor$pval <- computeCorrPval(null = dat,
+                                        predictions = mob_k30_termCor,
+                                        densityPlots = TRUE)
+
+mob_k30_termCor$p.adj.fdr <- p.adjust(mob_k30_termCor$pval, method = "fdr")
+
+```
+
+```{r}
+
+mob_k200_termCor$pval <- computeCorrPval(null = dat,
+                                        predictions = mob_k200_termCor,
+                                        densityPlots = FALSE)
+
+mob_k200_termCor$p.adj.fdr <- p.adjust(mob_k200_termCor$pval, method = "fdr")
+
+```
+
+```{r}
+
+mob_k200_SigTopics <- mob_k30_termCor[mob_k30_termCor$p.adj.fdr < 0.05,]
+mob_k30_SigTopics_ix <- as.numeric(rownames(mob_k30_SigTopics))
+
+mob_k200_SigTopics <- mob_k200_termCor[mob_k200_termCor$p.adj.fdr < 0.05,]
+mob_k200_SigTopics_ix <- as.numeric(rownames(mob_k200_SigTopics))
+
+```
+
+## compare filtering
+
+## k30
+
+### theta
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.thetaGTcorMtx[mob_k30_SigTopics_ix,],
+          # Rowv = mob_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk30)[mob_k30_SigTopics_ix],
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_ldak30.theta.GTcorMtx sig topics",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.thetaGTcorMtx,
+          Rowv = mob_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk30),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_ldak30.thetaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+I lose topic 12 and 29, which are highly correlated with the olfactory nerve layer. So it seems filtering by significance once again isn't really helping.
+
+### beta
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.betaGTcorMtx[mob_k30_SigTopics_ix,],
+          # Rowv = mob_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk30)[mob_k30_SigTopics_ix],
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_ldak30.beta.GTcorMtx sig topics",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.betaGTcorMtx,
+          Rowv = mob_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk30),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_ldak30.betaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+## k200
+
+### theta
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.k200.thetaGTcorMtx[mob_k200_SigTopics_ix,],
+          # Rowv = mob_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk200)[mob_k200_SigTopics_ix],
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_ldak200.theta.GTcorMtx sig topics",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.k200.thetaGTcorMtx,
+          Rowv = mob_lda.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk200),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_ldak200.thetaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+### beta
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.k200.betaGTcorMtx[mob_k200_SigTopics_ix,],
+          # Rowv = mob_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk200)[mob_k200_SigTopics_ix],
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_lda.k200.beta.GTcorMtx sig topics",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.k200.betaGTcorMtx,
+          Rowv = mob_lda.k200.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk200),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_lda.k200.betaGTcorMtx",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+# Reclustering after removing insig topics?
+
+```{r}
+
+mob_lda.k30sig.clust <- clusterTopics(beta = mob_lda.beta[mob_k30_SigTopics_ix,],
+                               distance = "euclidean",
+                               clustering = "ward.D",
+                               dynamic = "hybrid",
+                               deepSplit = 4,
+                               plotDendro = TRUE)
+
+mob_lda.k200sig.clust <- clusterTopics(beta = mob_lda.k200.beta[mob_k200_SigTopics_ix,],
+                               distance = "euclidean",
+                               clustering = "ward.D",
+                               dynamic = "hybrid",
+                               deepSplit = 4,
+                               plotDendro = TRUE)
+
+```
+
+```{r}
+
+mobClusterColorsk30sig <- mob_lda.k30sig.clust$clusters
+levels(mobClusterColorsk30sig) <- gg_color_hue(length(levels(mobClusterColorsk30sig)))
+
+mobClusterColorsk200sig <- mob_lda.k200sig.clust$clusters
+levels(mobClusterColorsk200sig) <- gg_color_hue(length(levels(mobClusterColorsk200sig)))
+
+```
+
+## beta sig
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.betaGTcorMtx[mob_k30_SigTopics_ix,],
+          Rowv = mob_lda.k30sig.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk30sig),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_ldak30.beta.GTcorMtx sig topics reclustered",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.k200.betaGTcorMtx[mob_k200_SigTopics_ix,],
+          Rowv = mob_lda.k200sig.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk200sig),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_ldak200.beta.GTcorMtx sig topics reclustered",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+## theta sig
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.thetaGTcorMtx[mob_k30_SigTopics_ix,],
+          Rowv = mob_lda.k30sig.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk30sig),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_ldak30.theta.GTcorMtx sig topics reclustered",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.k200.thetaGTcorMtx[mob_k200_SigTopics_ix,],
+          Rowv = mob_lda.k200sig.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk200sig),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_ldak200.theta.GTcorMtx sig topics reclustered",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+# ---------------------------------------------
+
+# 1. example: Olfactory Nerve Layer
+
+k30
+topics 8, 12, 26, 29. Cluster "#00C094"
+
+```{r}
+
+# "#F8766D" "#C49A00" "#53B400" "#00C094" "#00B6EB" "#A58AFF" "#FB61D7"
+
+# specify the specific colors of the clusters of interest and gray out others
+# make sure order and colors matches order in the theta matrix
+cols <- c("gray", "gray", "gray", "#00C094", "gray", "gray", "gray")
+clust_order <- seq_len(length(colnames(mob_lda.thetaCombined)))
+
+vizAllTopics(theta = mob_lda.thetaCombined,
+             pos = posMob,
+             topicOrder = clust_order,
+             cluster_cols = cols,
+             groups = NA,
+             group_cols = NA,
+             r = 0.4,
+             lwd = 0.2,
+             plotTitle = "Olfactory Nerve Layer Topic Clusters")
+
+vizAllTopics(theta = mob_lda.thetaCombined,
+             pos = posMob,
+             topicOrder = clust_order,
+             cluster_cols = cols,
+             groups = as.character(cellLayerTheta[,"Olfactory Nerve Layer"]),
+             group_cols = c("0" = "gray", "1" = "white"),
+             r = 0.4,
+             lwd = 0.4,
+             plotTitle = "Olfactory Nerve Layer Topic Clusters")
+
+```
+
+
+# 2. example: Granule Cell Layer
+
+Appears to be 3 topic clusters from k30 that correlate positively with the center granule cell layer.
+
+"#C49A00"
+"#53B400"
+"#00B6EB"
+
+combine these topic clusters for visualization purposes:
+
+```{r}
+
+# specify the specific colors of the clusters of interest and gray out others
+# make sure order and colors matches order in the theta matrix
+cols <- c("gray", "#C49A00", "#53B400", "gray", "#00B6EB", "gray", "gray")
+clust_order <- seq_len(length(colnames(mob_lda.thetaCombined)))
+
+vizAllTopics(theta = mob_lda.thetaCombined,
+             pos = posMob,
+             topicOrder = clust_order,
+             cluster_cols = cols,
+             groups = NA,
+             group_cols = NA,
+             r = 0.4,
+             lwd = 0.3,
+             plotTitle = "Granule Layer Topic Clusters")
+
+vizAllTopics(theta = mob_lda.thetaCombined,
+             pos = posMob,
+             topicOrder = clust_order,
+             cluster_cols = cols,
+             groups = as.character(cellLayerTheta[,"Granule Cell Layer"]),
+             group_cols = c("0" = "gray", "1" = "white"),
+             r = 0.4,
+             lwd = 0.3,
+             plotTitle = "Granule Layer Topic Clusters")
+
+```
+
+If I recluster the granule cell layer spots transcriptionally, do I get additional txn clusters that correspond to any of these topic clusters? Further, are there specific individual clusters in these topics that correspond to anything interesting?
+
+## recluster txn spots
+
+```{r}
+
+# original matrix for PCA and embedding of the original clusters:
+# `mat` is also CPM normalized, and cleaned gene matrix
+# log transform and pseudo count, and transpose, for PCA input
+# 260 x 7365
+mobCounts <- t(log10(as.matrix(mat)+1))
+
+# recall `cellLayerTheta` is doc x topic matrix of original mob txn clusters.
+# get spots that were originally clustered as "Granule Cell Layer" and recluster
+granuleSpots <- rownames(cellLayerTheta[which(cellLayerTheta[,"Granule Cell Layer"] == 1),])
+mobCountsGranule <- mobCounts[granuleSpots,]
+# 66 x 7365
+
+```
+
+```{r, fig.height=7, fig.width=5}
+
+# using the overdispersed genes (derived from the CPM counts) and the values of the the CPM count matrix
+
+pcs.info <- prcomp(mobCountsGranule, center=TRUE)
+nPcs <- 5
+pcs <- pcs.info$x[,1:nPcs]
+
+# 2D embedding by tSNE
+emb <- Rtsne::Rtsne(pcs,
+             is_distance=FALSE,
+             perplexity=20,
+             num_threads=1,
+             verbose=FALSE)$Y
+rownames(emb) <- rownames(pcs)
+
+# Graph-based cluster detection
+k <- 30
+com3 <- getClusters(pcs, k, weight=TRUE)
+
+par(mfrow=c(2,1), mar=rep(1,4))
+plotEmbedding(emb, groups=com3, 
+              show.legend=TRUE, xlab=NA, ylab=NA,
+              verbose=FALSE)
+plotEmbedding(posMob, groups=com3, 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+
+```
+
+the embedding stays approximately the same with perplexities 5-20. Just keep 20 for now to be as close to the original 30.
+
+for graph based clustering:
+k=5 = 7 clusters
+k=10 = 4 clusters
+k=15 = 3 clusters
+k=20 3 clusters
+k=30 3 cluster.
+
+keep it at k=30 for consistency.
+
+## sub cluster beta and theta
+
+make new theta and beta for these cluster subsets and compare to the 3 topic clusters
+
+### proxy beta
+
+```{r}
+
+granuleBetaProxy <- do.call(rbind, lapply(levels(com3), function(cell_layer){
+  
+  layerCounts <- colSums(mob_corpus[names(com3[which(com3 == cell_layer)]),])
+  layerProportions <- layerCounts / sum(layerCounts)
+  layerProportions
+  
+}))
+
+rownames(granuleBetaProxy) <- levels(com3)
+
+```
+
+```{r}
+
+mob_lda.betaGranuleCor <- correlationBetweenBetas(beta1 = mob_lda.beta,
+                                                beta2 = granuleBetaProxy,
+                                                thresh = NULL)
+
+mob_lda.betaCombinedGranuleCor <- correlationBetweenBetas(beta1 = mob_lda.betaCombined,
+                                                beta2 = granuleBetaProxy,
+                                                thresh = NULL)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.betaGranuleCor,
+          Rowv = mob_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk30),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_lda.betaGranuleCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.betaCombinedGranuleCor,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = rownames(mob_lda.betaCombinedGranuleCor),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.7,cexCol=0.7,margins=c(6,3),
+          main = "mob_lda.betaCombinedGranuleCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+just the specific subsets:
+
+```{r}
+
+mob_lda.betaCombGranule <- mob_lda.betaCombined[c("#C49A00", "#53B400", "#00B6EB"),]
+
+topics <- labels(mobClusterColorsk30[which(mobClusterColorsk30 %in% c("#C49A00", "#53B400", "#00B6EB"))])
+topicClustCols <- mobClusterColorsk30[topics]
+mob_lda.betaGranuleTopics <- mob_lda.beta[topics,]
+
+```
+
+```{r}
+
+mob_lda.betaGranuleOnlyCor <- correlationBetweenBetas(beta1 = mob_lda.betaGranuleTopics,
+                                                beta2 = granuleBetaProxy,
+                                                thresh = NULL)
+
+mob_lda.betaCombinedGranuleOnlyCor <- correlationBetweenBetas(beta1 = mob_lda.betaCombGranule,
+                                                beta2 = granuleBetaProxy,
+                                                thresh = NULL)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.betaGranuleOnlyCor,
+          # Rowv = mob_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(topicClustCols),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_lda.betaGranuleOnlyCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.betaCombinedGranuleOnlyCor,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = rownames(mob_lda.betaCombinedGranuleOnlyCor),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.7,cexCol=0.7,margins=c(6,3),
+          main = "mob_lda.betaCombinedGranuleOnlyCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+### proxy theta
+
+```{r}
+
+# annot = factor of cell layer values with spot IDs as the labels
+granuleThetaProxy <- model.matrix(~ 0 + com3)
+rownames(granuleThetaProxy) <- names(com3)
+colnames(granuleThetaProxy) <- levels(com3)
+
+# merge with original theta
+granuleThetaProxy <- merge(cellLayerTheta, granuleThetaProxy, by=0, all = TRUE)
+# cleanup
+granuleThetaProxy[is.na(granuleThetaProxy)] <- 0
+rownames(granuleThetaProxy) <- granuleThetaProxy$Row.names
+
+granuleThetaProxy <- granuleThetaProxy[,2:ncol(granuleThetaProxy)]
+
+```
+
+```{r}
+
+mob_lda.thetaGranuleCor <- correlationBetweenThetas(theta1 = mob_lda.theta,
+                                                theta2 = granuleThetaProxy,
+                                                thresh = NULL)
+
+mob_lda.thetaCombinedGranuleCor <- correlationBetweenThetas(theta1 = mob_lda.thetaCombined,
+                                                theta2 = granuleThetaProxy,
+                                                thresh = NULL)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.thetaGranuleCor,
+          Rowv = mob_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mobClusterColorsk30),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_lda.thetaGranuleCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.thetaCombinedGranuleCor,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = rownames(mob_lda.thetaCombinedGranuleCor),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.7,cexCol=0.7,margins=c(6,3),
+          main = "mob_lda.thetaCombinedGranuleCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+just the specific subsets:
+
+```{r}
+
+granuleThetaOnly <- granuleThetaProxy[,c("1", "2", "3")]
+
+mob_lda.thetaCombGranule <- mob_lda.thetaCombined[,c("#C49A00", "#53B400", "#00B6EB")]
+
+topics <- labels(mobClusterColorsk30[which(mobClusterColorsk30 %in% c("#C49A00", "#53B400", "#00B6EB"))])
+topicClustCols <- mobClusterColorsk30[topics]
+mob_lda.thetaGranuleTopics <- mob_lda.theta[,topics]
+
+```
+
+```{r}
+
+mob_lda.thetaGranuleOnlyCor <- correlationBetweenThetas(theta1 = mob_lda.thetaGranuleTopics,
+                                                theta2 = granuleThetaOnly,
+                                                thresh = NULL)
+
+mob_lda.thetaCombinedGranuleOnlyCor <- correlationBetweenThetas(theta1 = mob_lda.thetaCombGranule,
+                                                theta2 = granuleThetaOnly,
+                                                thresh = NULL)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.thetaGranuleOnlyCor,
+          # Rowv = mob_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(topicClustCols),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mob_lda.thetaGranuleOnlyCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_lda.thetaCombinedGranuleOnlyCor,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = rownames(mob_lda.thetaCombinedGranuleOnlyCor),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.7,cexCol=0.7,margins=c(6,3),
+          main = "mob_lda.thetaCombinedGranuleOnlyCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+## viz topics with txn clusters
+
+```{r}
+
+# specify the specific colors of the clusters of interest and gray out others
+# make sure order and colors matches order in the theta matrix
+cols <- c("gray", "#C49A00", "#53B400", "gray", "#00B6EB", "gray", "gray")
+clust_order <- seq_len(length(colnames(mob_lda.thetaCombined)))
+
+vizAllTopics(theta = mob_lda.thetaCombined,
+             pos = posMob,
+             topicOrder = clust_order,
+             cluster_cols = cols,
+             groups = NA,
+             group_cols = NA,
+             r = 0.4,
+             lwd = 0.1,
+             plotTitle = "Granular Layer Topic Clusters")
+
+vizAllTopics(theta = mob_lda.thetaCombined,
+             pos = posMob,
+             topicOrder = clust_order,
+             cluster_cols = cols,
+             groups = as.character(granuleThetaOnly[,"1"]),
+             group_cols = c("0" = "gray", "1" = "white"),
+             r = 0.4,
+             lwd = 0.4,
+             plotTitle = "Granule C1 Topic Clusters")
+
+vizAllTopics(theta = mob_lda.thetaCombined,
+             pos = posMob,
+             topicOrder = clust_order,
+             cluster_cols = cols,
+             groups = as.character(granuleThetaOnly[,"2"]),
+             group_cols = c("0" = "gray", "1" = "white"),
+             r = 0.4,
+             lwd = 0.4,
+             plotTitle = "Granule C2 Topic Clusters")
+
+vizAllTopics(theta = mob_lda.thetaCombined,
+             pos = posMob,
+             topicOrder = clust_order,
+             cluster_cols = cols,
+             groups = as.character(granuleThetaOnly[,"3"]),
+             group_cols = c("0" = "gray", "1" = "white"),
+             r = 0.4,
+             lwd = 0.4,
+             plotTitle = "Granule C3 Topic Clusters")
+
+```
+
+## viz top genes
+
+### blue topic cluster
+
+Check out blue topic cluster "#00B6EB", and in particular, topic 23 (17 and 24 also part of topic cluster)
+
+```{r}
+
+# mob_lda.beta
+# mob_lda.betaCombined
+
+head(mob_lda.beta["23",order(mob_lda.beta["23",], decreasing = TRUE)], n=10)
+head(mob_lda.beta["17",order(mob_lda.beta["17",], decreasing = TRUE)], n=10)
+head(mob_lda.beta["24",order(mob_lda.beta["24",], decreasing = TRUE)], n=10)
+head(mob_lda.betaCombined["#00B6EB",order(mob_lda.betaCombined["#00B6EB",], decreasing = TRUE)], n=10)
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+genes <- c("Tmsb10", "Plp1", "Cnp")
+genecounts <-mob_corpus[,genes]
+mobExp <- merge(as.data.frame(posMob), as.data.frame(genecounts), by=0)
+rownames(mobExp) <- mobExp$Row.names
+mobExp <- mobExp[,2:ncol(mobExp)]
+mobExp <- merge(mobExp, as.data.frame(granuleThetaProxy), by=0)
+
+group_cols <- c("0" = "white", "1" = "black")
+
+# ---------------------------------------------------------------------------
+groups <- as.character(granuleThetaProxy[,"1"])
+
+for (gene in genes) {
+  mainTitle <- paste0("Granule txn C1 and ", gene)
+  vizGeneCounts(df = mobExp, gene = gene,
+                groups = groups, group_cols = group_cols,
+                plotTitle = mainTitle)
+}
+
+# ---------------------------------------------------------------------------
+groups <- as.character(granuleThetaProxy[,"Granule Cell Layer"])
+
+for (gene in genes) {
+  mainTitle <- paste0("Granule Cell Layer and ", gene)
+  vizGeneCounts(df = mobExp, gene = gene,
+                groups = groups, group_cols = group_cols,
+                plotTitle = mainTitle)
+}
+
+```
+Tmsb10 seems to be a particular anomaly driving topic 23. Blue correlates with C1 txn cluster
+
+Combining all topics of Blue, Plp1 and Cnp top marker genes. Plp1 not that specific but Cnp actually pretty specific to Granule Layer.
+
+### yellow topic cluster
+
+The Yellow cluster "#C49A00" seems to correlate even more with txn cluster 1 of Granule Layer than the blue
+Topics: 4, 19, 22, 2, 3, 6, and 4 and 19 look particularly interesting
+
+```{r}
+
+# mob_lda.beta
+# mob_lda.betaCombined
+
+head(mob_lda.beta["4",order(mob_lda.beta["4",], decreasing = TRUE)], n=10)
+head(mob_lda.beta["19",order(mob_lda.beta["19",], decreasing = TRUE)], n=10)
+head(mob_lda.beta["22",order(mob_lda.beta["22",], decreasing = TRUE)], n=10)
+head(mob_lda.beta["2",order(mob_lda.beta["2",], decreasing = TRUE)], n=10)
+head(mob_lda.beta["3",order(mob_lda.beta["3",], decreasing = TRUE)], n=10)
+head(mob_lda.beta["6",order(mob_lda.beta["6",], decreasing = TRUE)], n=10)
+head(mob_lda.betaCombined["#C49A00",order(mob_lda.betaCombined["#C49A00",], decreasing = TRUE)], n=10)
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+genes <- c("Penk", "Nrgn", "Atp1a1", "Egr1")
+genecounts <-mob_corpus[,genes]
+mobExp <- merge(as.data.frame(posMob), as.data.frame(genecounts), by=0)
+rownames(mobExp) <- mobExp$Row.names
+mobExp <- mobExp[,2:ncol(mobExp)]
+mobExp <- merge(mobExp, as.data.frame(granuleThetaProxy), by=0)
+
+group_cols <- c("0" = "gray", "1" = "black")
+
+# ---------------------------------------------------------------------------
+groups <- as.character(granuleThetaProxy[,"1"])
+
+for (gene in genes) {
+  mainTitle <- paste0("Granule txn C1 and ", gene)
+  vizGeneCounts(df = mobExp, gene = gene,
+                groups = groups, group_cols = group_cols,
+                plotTitle = mainTitle)
+}
+
+# ---------------------------------------------------------------------------
+groups <- as.character(granuleThetaProxy[,"2"])
+
+for (gene in genes) {
+  mainTitle <- paste0("Granule txn C2 and ", gene)
+  vizGeneCounts(df = mobExp, gene = gene,
+                groups = groups, group_cols = group_cols,
+                plotTitle = mainTitle)
+}
+
+# ---------------------------------------------------------------------------
+groups <- as.character(granuleThetaProxy[,"Granule Cell Layer"])
+
+for (gene in genes) {
+  mainTitle <- paste0("Granule Cell Layer and ", gene)
+  vizGeneCounts(df = mobExp, gene = gene,
+                groups = groups, group_cols = group_cols,
+                plotTitle = mainTitle)
+}
+
+```
+Yellow cluster correlates really with the entire granule layer in general. Especially when looking at the top genes. 
+Penk, Nrgn, which are top in topics 4 and 19. Atp1a1 and Egr1 also look great. Part of other topics in cluster. Combines the entire topic cluster corresponds with the granule cell layer as a whole quite well.
+
+```{r}
+
+head(granuleBetaProxy["1",order(granuleBetaProxy["1",], decreasing = TRUE)], n=10)
+head(granuleBetaProxy["2",order(granuleBetaProxy["2",], decreasing = TRUE)], n=10)
+head(granuleBetaProxy["3",order(granuleBetaProxy["3",], decreasing = TRUE)], n=10)
+
+```
+For the actual "beta proxy" for the Granule C1 txn clusters, Nrgn, Tmsb10, Penk the top. Penk and Nrgn the top for Yellow, Tmsb10 top for Blue. 
+
+
+Note that C2 has Atp1a1 as a top gene. This was also same for one of the topics in the yellow cluster. Note again that yellow cluster correlates with all C1-3 txn clusters.
+
+### green topic cluster
+
+The green topic cluster "#53B400" correlates well with txn C2.
+Topics: 7, 5, 13, 9, 16. 7 and 5 are more on the outskirts of the tissue. The others seem to follow the actual shape. Kinda of interesting
+
+```{r}
+
+# mob_lda.beta
+# mob_lda.betaCombined
+
+head(mob_lda.beta["7",order(mob_lda.beta["7",], decreasing = TRUE)], n=10)
+head(mob_lda.beta["5",order(mob_lda.beta["5",], decreasing = TRUE)], n=10)
+head(mob_lda.beta["13",order(mob_lda.beta["13",], decreasing = TRUE)], n=10)
+head(mob_lda.beta["9",order(mob_lda.beta["9",], decreasing = TRUE)], n=10)
+head(mob_lda.beta["16",order(mob_lda.beta["16",], decreasing = TRUE)], n=10)
+head(mob_lda.betaCombined["#53B400",order(mob_lda.betaCombined["#53B400",], decreasing = TRUE)], n=10)
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+genes <- c("Ppm1e", "Mef2c", "Atp1a1")
+genecounts <-mob_corpus[,genes]
+mobExp <- merge(as.data.frame(posMob), as.data.frame(genecounts), by=0)
+rownames(mobExp) <- mobExp$Row.names
+mobExp <- mobExp[,2:ncol(mobExp)]
+mobExp <- merge(mobExp, as.data.frame(granuleThetaProxy), by=0)
+
+group_cols <- c("0" = "gray", "1" = "black")
+
+# ---------------------------------------------------------------------------
+groups <- as.character(granuleThetaProxy[,"1"])
+
+for (gene in genes) {
+  mainTitle <- paste0("Granule txn C1 and ", gene)
+  vizGeneCounts(df = mobExp, gene = gene,
+                groups = groups, group_cols = group_cols,
+                plotTitle = mainTitle)
+}
+
+# ---------------------------------------------------------------------------
+groups <- as.character(granuleThetaProxy[,"2"])
+
+for (gene in genes) {
+  mainTitle <- paste0("Granule txn C2 and ", gene)
+  vizGeneCounts(df = mobExp, gene = gene,
+                groups = groups, group_cols = group_cols,
+                plotTitle = mainTitle)
+}
+
+# ---------------------------------------------------------------------------
+groups <- as.character(granuleThetaProxy[,"Granule Cell Layer"])
+
+for (gene in genes) {
+  mainTitle <- paste0("Granule Cell Layer and ", gene)
+  vizGeneCounts(df = mobExp, gene = gene,
+                groups = groups, group_cols = group_cols,
+                plotTitle = mainTitle)
+}
+
+```
+
+Ppm1e and Mef2c correspond with Granule layer in general. Perhaps also higher on the edges and less so in the middle? 
+
+txn cluster 3 is like a mix of topic clusters yellow and green
+
+
+Blue might be an anomoly..but yellow and gree definitely correspond. Maybe green does correspond to more of the egde, looking at genes lie Mef2c and Ppm1e.
+
+## ** Yellow has genes like Nrgn and Penk that are more concentrated in the middle. Atp1a1 is kind of all over Granule.
+
+
+
+
+
+
+
+
+
+
