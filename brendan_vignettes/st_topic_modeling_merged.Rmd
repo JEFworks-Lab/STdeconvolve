@@ -1,0 +1,1400 @@
+---
+title: "ST Topic Modeling"
+author: "Brendan F. Miller"
+date: "2/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# MERFISH
+
+# Data
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/merfish_FN7_2_M22_M26_hash.RData")
+
+# bregmas: [1] "-0.04" "-0.09" "-0.14" "-0.19" "-0.24" "-0.29"
+# 
+# h[[bregma_key]] <- list(bregmaFullDf = selected_bregma, # use with cellGeneCounts to get topic-word proportions
+#                             cellTypeTable = selected_bregma_patch_cells, # gt document-topic proportions
+#                             totalCells = bregma_cell_counts,
+#                             cellTypeCount = unique_types_per_patch,
+#                             cellGeneCounts = cellGeneCounts, # use to get gt topic-word proportions
+#                             patchGeneCounts = patchGeneCounts) # the simulation
+# 
+# For each bregma, organized cells into patches of 100x100um.
+# Have cell types, and gene counts for each cell and summed for each patch. 
+# 
+# Can use to assess models. Check perplexity, but also compare to ground truth.
+# See if certain topics can be traced back to a cell type.
+#
+# Note that because only 130 genes, don't need to select features (these were already selected; but will need to figure this out for other data sets)
+
+```
+
+# Corpus
+
+```{r}
+
+bregma04 <- extractBregmaCorpus(FN7_2_M22_M26_hash, "-0.04")
+
+```
+
+```{r}
+
+# keep cells that are in patches
+df <- FN7_2_M22_M26_hash[["-0.04"]][["bregmaFullDf"]]
+df <- df[which(df$patch_id != ""),]
+
+# -----------------------------------------------------------------------------
+# reformat `gtDocTopic` proportions into data frame with spot coordinates
+cellClassProportions <- bregma04$gtDocTopics
+tmp_positions <- do.call(rbind, lapply(rownames(cellClassProportions), function(x){
+  coords <- strsplit(x, "_")[[1]]
+  as.numeric(coords)
+}))
+colnames(tmp_positions) <- c("x", "y")
+rownames(tmp_positions) <- rownames(cellClassProportions)
+tmp_proportions <- lapply(colnames(cellClassProportions), function(i) {
+  cellClassProportions[,i]
+})
+names(tmp_proportions) <- colnames(cellClassProportions)
+cellClassProportions <- merge(tmp_positions, as.data.frame(tmp_proportions), by="row.names")
+
+# -----------------------------------------------------------------------------
+# colors for each cell class
+classColors <- gg_color_hue(length(unique(df$Cell_class)))
+names(classColors) <- names(tmp_proportions)
+
+# -----------------------------------------------------------------------------
+# number of total cells in each spot
+cell_counts <- FN7_2_M22_M26_hash[["-0.04"]]$totalCells
+count_df <- do.call(rbind, lapply(names(cell_counts), function(x){
+  coords <- strsplit(x, "_")[[1]]
+  as.numeric(coords)
+}))
+colnames(count_df) <- c("x", "y")
+rownames(count_df) <- names(cell_counts)
+count_df <- as.data.frame(count_df)
+count_df$counts <- cell_counts
+
+```
+
+# LDA models
+
+```{r}
+
+k_ <- seq(from = 2, to = 10, by = 1)
+k_[1] <- 2
+k_ <- append(k_, seq(from = 15, to = 50, by = 5))
+# [1]  2  3  4  5  6  7  8  9 10 15 20 25 30 35 40 45 50
+
+k_ <- append(k_, seq(from = 75, to = 250, by = 25))
+# [1]   2   3   4   5   6   7   8   9  10  15  20  25  30  35  40  45  50  75 100 125 150 175 200 225
+# [25] 250
+
+```
+
+about 45 minutes to do k=250
+
+```{r}
+
+merLDAs <- fitLDA(bregma04$sim, k_, seed = 0)
+
+```
+
+```{r}
+
+merLDA_alphas <- sapply(merLDAs$models, slot, "alpha")
+
+```
+
+```{r}
+
+dat <- data.frame(k = as.character(k_),
+                  alpha = merLDA_alphas,
+                  perplexities = merLDAs$perplexities,
+                  pos = seq(length(k_)))
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = perplexities)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("perplexity") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = alpha)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("alpha") +
+  theme_classic()
+
+```
+
+```{r}
+
+mer04.k250 <- getBetaTheta(merLDAs$models[[25]]) # k=250
+clust <- clusterTopics(beta = mer04.k250$beta,
+                                  deepSplit = 4)
+mer04.k250$clusters <- clust$clusters
+mer04.k250$dendro <- clust$dendro
+
+cols <- mer04.k250$clusters
+levels(cols) <- rainbow(length(levels(cols)))
+mer04.k250$cols <- cols
+
+mer04.k250$betaCombn <- combineTopics(mer04.k250$beta, clusters = mer04.k250$clusters, mtxType = "b")
+mer04.k250$thetaCombn <- combineTopics(mer04.k250$theta, clusters = mer04.k250$clusters, mtxType = "t")
+
+clusterCols <- as.factor(colnames(mer04.k250$thetaCombn))
+names(clusterCols) <- colnames(mer04.k250$thetaCombn)
+levels(clusterCols) <- levels(mer04.k250$cols)
+mer04.k250$clustCols <- clusterCols
+
+```
+
+# --------------------------------
+# Other merfish Bregmas
+
+
+
+# ==========================
+# MOB
+
+# merignue mOB
+
+```{r}
+
+data(mOB)
+pos <- mOB$pos
+cd <- mOB$counts
+
+# Remove poor datasets and genes
+# countsMob <- MERINGUE::cleanCounts(counts = cd, 
+#                       min.reads = 100, 
+#                       min.lib.size = 100, 
+#                       plot=TRUE,
+#                       verbose=TRUE)
+
+# posMob <- pos[colnames(countsMob),]
+
+```
+
+```{r}
+
+mob <- preprocess(t(cd), extractPos = FALSE, alignFile = NA, nTopGenes = 5, remove = c("mt-"))
+mob$pos <- mOB$pos[rownames(mob$corpus),]
+
+```
+
+```{r}
+
+mobLDAs <- fitLDA(mob$slm, k_, seed = 0)
+
+```
+
+```{r}
+
+mobLDA_alphas <- sapply(mobLDAs$models, slot, "alpha")
+
+dat <- data.frame(k = as.character(k_),
+                  alpha = mobLDA_alphas,
+                  perplexities = mobLDAs$perplexities,
+                  pos = seq(length(k_)))
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = perplexities)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("perplexity") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = alpha)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("alpha") +
+  theme_classic()
+
+```
+
+## beta and theta
+## clusters and colors
+
+```{r}
+
+mob.k30 <- getBetaTheta(mobLDAs$models[[13]]) # k=30
+clust <- clusterTopics(beta = mob.k30$beta,
+                                  deepSplit = 3)
+mob.k30$clusters <- clust$clusters
+mob.k30$dendro <- clust$dendro
+
+cols <- clust$clusters
+levels(cols) <- rainbow(length(levels(cols)))
+mob.k30$cols <- cols
+
+mob.k30$betaCombn <- combineTopics(mob.k30$beta, clusters = mob.k30$clusters, mtxType = "b")
+mob.k30$thetaCombn <- combineTopics(mob.k30$theta, clusters = mob.k30$clusters, mtxType = "t")
+
+clusterCols <- as.factor(colnames(mob.k30$thetaCombn))
+names(clusterCols) <- colnames(mob.k30$thetaCombn)
+levels(clusterCols) <- levels(mob.k30$cols)
+mob.k30$clustCols <- clusterCols
+
+```
+
+# --------------------------------
+# Other mob datasets
+
+## -- Rep1
+
+```{r}
+
+mob1path <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep1_MOB_count_matrix-1.tsv"
+
+mobRep1 <- preprocess(mob1path, alignFile = NA, nTopGenes = 5, remove = c("mt-"))
+
+```
+
+```{r}
+
+mobRep1LDAs <- fitLDA(mobRep1$slm, k_, seed = 0)
+
+```
+
+```{r}
+
+mobRep1LDAs_alphas <- sapply(mobRep1LDAs$models, slot, "alpha")
+
+dat <- data.frame(k = as.character(k_),
+                  alpha = mobRep1LDAs_alphas,
+                  perplexities = mobRep1LDAs$perplexities,
+                  pos = seq(length(k_)))
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = perplexities)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("perplexity") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = alpha)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("alpha") +
+  theme_classic()
+
+```
+
+```{r}
+
+mobR1.k250 <- getBetaTheta(mobRep1LDAs$models[[25]]) # k =250
+clust <- clusterTopics(beta = mobR1.k250$beta,
+                                  deepSplit = 3)
+mobR1.k250$clusters <- clust$clusters
+mobR1.k250$dendro <- clust$dendro
+
+cols <- mobR1.k250$clusters
+levels(cols) <- rainbow(length(levels(cols)))
+mobR1.k250$cols <- cols
+
+mobR1.k250$betaCombn <- combineTopics(mobR1.k250$beta, clusters = mobR1.k250$clusters, mtxType = "b")
+mobR1.k250$thetaCombn <- combineTopics(mobR1.k250$theta, clusters = mobR1.k250$clusters, mtxType = "t")
+
+clusterCols <- as.factor(colnames(mobR1.k250$thetaCombn))
+names(clusterCols) <- colnames(mobR1.k250$thetaCombn)
+levels(clusterCols) <- levels(mobR1.k250$cols)
+mobR1.k250$clustCols <- clusterCols
+
+```
+
+## -- Rep2
+
+```{r}
+
+mob2path <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep2_MOB_count_matrix-1.tsv"
+
+mobRep2 <- preprocess(mob2path, alignFile = NA, nTopGenes = 5, remove = c("mt-"))
+
+```
+
+about an hour and 25 min. some initial slowdown in cpu output in the beginning
+```{r}
+
+mobRep2_LDAs <- fitLDA(mobRep2$slm, k_, seed = 0)
+
+```
+
+```{r}
+
+mobRep2_LDAs_alphas <- sapply(mobRep2_LDAs$models, slot, "alpha")
+
+dat <- data.frame(k = as.character(k_),
+                  alpha = mobRep2_LDAs_alphas,
+                  perplexities = mobRep2_LDAs$perplexities,
+                  pos = seq(length(k_)))
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = perplexities)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("perplexity") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = alpha)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("alpha") +
+  theme_classic()
+
+```
+
+```{r}
+
+mobR2.k200 <- getBetaTheta(mobRep2_LDAs$models[[23]]) # k = 200
+clust <- clusterTopics(beta = mobR2.k200$beta,
+                                  deepSplit = 3)
+mobR2.k200$clusters <- clust$clusters
+mobR2.k200$dendro <- clust$dendro
+
+cols <- mobR2.k200$clusters
+levels(cols) <- rainbow(length(levels(cols)))
+mobR2.k200$cols <- cols
+
+mobR2.k200$betaCombn <- combineTopics(mobR2.k200$beta, clusters = mobR2.k200$clusters, mtxType = "b")
+mobR2.k200$thetaCombn <- combineTopics(mobR2.k200$theta, clusters = mobR2.k200$clusters, mtxType = "t")
+
+clusterCols <- as.factor(colnames(mobR2.k200$thetaCombn))
+names(clusterCols) <- colnames(mobR2.k200$thetaCombn)
+levels(clusterCols) <- levels(mobR2.k200$cols)
+mobR2.k200$clustCols <- clusterCols
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = mobR2.k200$thetaCombn,
+             pos = mobRep2$pos,
+             topicOrder = seq_len(length(colnames(mobR2.k200$thetaCombn))),
+             cluster_cols = levels(mobR2.k200$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mobR2.k200 combined")
+
+vizTopicClusters(theta = mobR2.k200$thetaCombn,
+                pos = mobRep2$pos,
+                topicOrder = seq_len(length(colnames(mobR2.k200$thetaCombn))),
+                clusters = mobR2.k200$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+# --------------------------------
+# Compare Dataset LDAs
+
+NOTE: right now each dataset formed into a corpus but the genes used differ.
+original has 220 genes but Rep 1 has 551 genes...
+
+so can't compare based on betas. Can only compare with thetas.
+
+for topics that are similar, can look at the top genes and maybe there will also be consistent patterns of top genes or genes have similar functions. 
+
+Could get intersection of genes?
+
+ALSO the documents (spots) are different. So need to "align spots such that spots in similar regions are spatially matched.
+
+# 1. mob vs Rep1
+
+## genes
+
+```{r}
+
+sharedGenes <- intersect(colnames(mob.k30$beta), colnames(mobR1.k250$beta))
+
+# all topics
+mobVsR1BetaCor <- correlationBetweenBetas(beta1 = mob.k30$beta[,sharedGenes],
+                                           beta2 = mobR1.k250$beta[,sharedGenes])
+
+# combined topics
+mobVsR1BetaCombnCor <- correlationBetweenBetas(beta1 = mob.k30$betaCombn[,sharedGenes],
+                                               beta2 = mobR1.k250$betaCombn[,sharedGenes])
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mobVsR1BetaCor,
+          Rowv = mob.k30$dendro,
+          Colv = mobR1.k250$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mob.k30$cols),
+          ColSideColors = as.vector(mobR1.k250$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mobVsR1BetaCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mobVsR1BetaCombnCor,
+          # Rowv = NULL,
+          # Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = levels(mob.k30$cols),
+          ColSideColors = levels(mobR1.k250$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=2, cexCol=2, margins=c(3,3),
+          main = "mobVsR1BetaCombnCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+## theta distr
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = mob.k30$thetaCombn,
+             pos = posMob,
+             topicOrder = seq_len(length(colnames(mob.k30$thetaCombn))),
+             cluster_cols = levels(mob.k30$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mob.k30 combined")
+
+vizTopicClusters(theta = mob.k30$thetaCombn,
+                pos = posMob,
+                topicOrder = seq_len(length(colnames(mob.k30$thetaCombn))),
+                clusters = mob.k30$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = mobR1.k250$thetaCombn,
+             pos = mobRep1$pos,
+             topicOrder = seq_len(length(colnames(mobR1.k250$thetaCombn))),
+             cluster_cols = levels(mobR1.k250$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mobR1.k250 combined",
+             showLegend = FALSE)
+
+vizTopicClusters(theta = mobR1.k250$thetaCombn,
+                pos = mobRep1$pos,
+                topicOrder = seq_len(length(colnames(mobR1.k250$thetaCombn))),
+                clusters = mobR1.k250$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+```{r}
+
+ggplot() +
+  geom_point(data = as.data.frame(posMob), aes(x=x, y=y, fill = "1"), alpha = 0.5) +
+  geom_point(data = as.data.frame(mobRep1$pos), aes(x=x, y=y, fill = "2"), alpha = 0.5)
+
+```
+
+```{r}
+
+posLayers <- list(posMob, mobRep1$pos)
+
+spotNeighbors <- getCrossLayerNeighbors(posLayers, k=1)
+
+plotNetwork(rbind(posMob, mobRep1$pos), spotNeighbors)
+
+```
+
+```{r}
+
+matches <- do.call(rbind, lapply(rownames(mobRep1$pos), function(x) {
+  neighbor <- which(spotNeighbors[x,] == 1)
+  if (length(neighbor) == 1) {
+    y <- labels(neighbor)
+  } else {
+    y <- NA
+  }
+  y
+}))
+
+rownames(matches) <- rownames(mobRep1$pos)
+matches <- matches[which(!is.na(matches)),]
+
+labels(matches)
+as.vector(matches)
+
+```
+
+```{r}
+
+# all topics
+mobVsR1ThetaCor <- correlationBetweenThetas(theta1 = mob.k30$theta[as.vector(matches),],
+                                            theta2 = mobR1.k250$theta[labels(matches),])
+
+# combined topics
+mobVsR1ThetaCombnCor <- correlationBetweenThetas(theta1 = mob.k30$thetaCombn[as.vector(matches),],
+                                                 theta2 = mobR1.k250$thetaCombn[labels(matches),])
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mobVsR1ThetaCor,
+          Rowv = mob.k30$dendro,
+          Colv = mobR1.k250$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mob.k30$cols),
+          ColSideColors = as.vector(mobR1.k250$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mobVsR1BetaCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mobVsR1ThetaCombnCor,
+          # Rowv = NULL,
+          # Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = levels(mob.k30$cols),
+          ColSideColors = levels(mobR1.k250$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=2, cexCol=2, margins=c(3,3),
+          main = "mobVsR1BetaCombnCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+maybe the spots that matched aren't entirely correct? need to be rotated perhaps?
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = mob.k30$thetaCombn[as.vector(matches),],
+             pos = posMob[as.vector(matches),],
+             topicOrder = seq_len(length(colnames(mob.k30$thetaCombn))),
+             cluster_cols = levels(mob.k30$cols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mob.k30 combined",
+             showLegend = FALSE)
+
+vizAllTopics(theta = mobR1.k250$thetaCombn[labels(matches),],
+             pos = mobRep1$pos[labels(matches),],
+             topicOrder = seq_len(length(colnames(mobR1.k250$thetaCombn))),
+             cluster_cols = levels(mobR1.k250$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mobR1.k250 combined",
+             showLegend = FALSE)
+
+```
+
+
+# ==========================
+# PDAC
+
+# pdac A st1 filtered
+
+```{r}
+
+pdacPath <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/moncada_pdac_GSE111672/GSE111672_RAW/GSM3036911_PDAC-A-ST1-filtered.txt"
+pdacAraw <- read.table(pdacPath, header = TRUE, sep = "\t")
+pdacAraw
+
+```
+
+input should be spot (row) x gene (columns) mtx with raw gene counts
+```{r}
+
+pdacSpotIDs <- unlist(lapply(colnames(pdacAraw)[2:ncol(pdacAraw)], function(i) {
+  ix <- strsplit(i, "X")[[1]][2]
+  ix
+}))
+
+pdacAraw.t <- t(pdacAraw)
+colnames(pdacAraw.t) <- pdacAraw$Genes
+pdacAraw.t <- pdacAraw.t[2:nrow(pdacAraw.t),]
+pdacAraw <- apply(pdacAraw.t, 2,FUN = as.numeric)
+rownames(pdacAraw) <- pdacSpotIDs
+pdacAraw[1:10,1:10]
+
+```
+
+```{r}
+
+pdacA <- preprocess(pdacAraw, nTopGenes = 5, remove = c("^MT", "^RPL", "^MRPL"))
+# note, MTOR is removed...maybe other non MT genes...?
+
+```
+
+```{r}
+
+pdacLDAs <- fitLDA(pdacA$slm, k_, seed = 0)
+
+```
+
+```{r}
+
+pdacLDA_alphas <- sapply(pdacLDAs$models, slot, "alpha")
+
+dat <- data.frame(k = as.character(k_),
+                  alpha = pdacLDA_alphas,
+                  perplexities = pdacLDAs$perplexities,
+                  pos = seq(length(k_)))
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = perplexities)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("perplexity") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = alpha)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("alpha") +
+  theme_classic()
+
+```
+
+## beta and theta
+## clusters and colors
+
+```{r}
+
+pdacA.k175 <- getBetaTheta(pdacLDAs$models[[22]]) #k=175
+clust <- clusterTopics(beta = pdacA.k175$beta,
+                                  deepSplit = 4)
+pdacA.k175$clusters <- clust$clusters
+pdacA.k175$dendro <- clust$dendro
+
+cols <- pdacA.k175$clusters
+levels(cols) <- rainbow(length(levels(cols)))
+pdacA.k175$cols <- cols
+
+pdacA.k175$betaCombn <- combineTopics(pdacA.k175$beta, clusters = pdacA.k175$clusters, mtxType = "b")
+pdacA.k175$thetaCombn <- combineTopics(pdacA.k175$theta, clusters = pdacA.k175$clusters, mtxType = "t")
+
+clusterCols <- as.factor(colnames(pdacA.k175$thetaCombn))
+names(clusterCols) <- colnames(pdacA.k175$thetaCombn)
+levels(clusterCols) <- levels(pdacA.k175$cols)
+pdacA.k175$clustCols <- clusterCols
+
+```
+
+# --------------------------------
+# Other pdac datasets
+
+## -- pdac B st1 filtered
+
+```{r}
+
+pdacBpath <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/moncada_pdac_GSE111672/GSE111672_RAW/GSM3405534_PDAC-B-ST1-filtered.txt"
+
+# reformat the data before preprocessing
+# need a matrix in which:
+pdacBraw <- read.table(pdacBpath, header = TRUE, sep = "\t")
+pdacBraw
+
+```
+input should be spot (row) x gene (columns) mtx with raw gene counts
+```{r}
+
+pdacSpotIDs <- unlist(lapply(colnames(pdacBraw)[2:ncol(pdacBraw)], function(i) {
+  ix <- strsplit(i, "X")[[1]][2]
+  ix
+}))
+
+pdacBraw.t <- t(pdacBraw)
+colnames(pdacBraw.t) <- pdacBraw$Genes
+pdacBraw.t <- pdacBraw.t[2:nrow(pdacBraw.t),]
+pdacBraw <- apply(pdacBraw.t, 2,FUN = as.numeric)
+rownames(pdacBraw) <- pdacSpotIDs
+pdacBraw[1:10,1:10]
+
+```
+
+```{r}
+
+pdacB <- preprocess(pdacBraw, nTopGenes = 5, remove = c("^MT", "^RPL", "^MRPL"))
+# note, MTOR is removed...maybe other non MT genes...?
+
+```
+
+about 8:30 minutes to complete
+```{r}
+
+pdacB_LDAs <- fitLDA(pdacB$slm, k_, seed = 0)
+
+```
+
+```{r}
+
+pdacB_LDAs_alphas <- sapply(pdacB_LDAs$models, slot, "alpha")
+
+dat <- data.frame(k = as.character(k_),
+                  alpha = pdacB_LDAs_alphas,
+                  perplexities = pdacB_LDAs$perplexities,
+                  pos = seq(length(k_)))
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = perplexities)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("perplexity") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = alpha)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("alpha") +
+  theme_classic()
+
+```
+
+```{r}
+
+pdacB.k50 <- getBetaTheta(pdacB_LDAs$models[[17]]) #k=50
+clust <- clusterTopics(beta = pdacB.k50$beta,
+                                  deepSplit = 4)
+pdacB.k50$clusters <- clust$clusters
+pdacB.k50$dendro <- clust$dendro
+
+cols <- pdacB.k50$clusters
+levels(cols) <- rainbow(length(levels(cols)))
+pdacB.k50$cols <- cols
+
+pdacB.k50$betaCombn <- combineTopics(pdacB.k50$beta, clusters = pdacB.k50$clusters, mtxType = "b")
+pdacB.k50$thetaCombn <- combineTopics(pdacB.k50$theta, clusters = pdacB.k50$clusters, mtxType = "t")
+
+clusterCols <- as.factor(colnames(pdacB.k50$thetaCombn))
+names(clusterCols) <- colnames(pdacB.k50$thetaCombn)
+levels(clusterCols) <- levels(pdacB.k50$cols)
+pdacB.k50$clustCols <- clusterCols
+
+```
+
+note that there is also pdac b st2...make sure you know what these are. Maybe technical rep of PDAC B. could be useful to use to compare and test variability. Maybe way to get a handle on overfitting of topics to corpus?
+
+## -- pdac A st2
+
+these may be unfiltered?
+
+```{r}
+
+pdacA2path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/moncada_pdac_GSE111672/GSE111672_RAW/GSM4100721_PDAC-A-st2.tsv"
+
+# reformat the data before preprocessing
+# need a matrix in which:
+pdacA2raw <- read.table(pdacA2path, header = TRUE, sep = "\t")
+pdacA2raw
+
+```
+
+input should be spot (row) x gene (columns) mtx with raw gene counts
+```{r}
+
+pdacSpotIDs <- unlist(lapply(colnames(pdacA2raw)[2:ncol(pdacA2raw)], function(i) {
+  ix <- strsplit(i, "X")[[1]][2]
+  ix
+}))
+
+pdacA2raw.t <- t(pdacA2raw)
+colnames(pdacA2raw.t) <- pdacA2raw$Genes
+pdacA2raw.t <- pdacA2raw.t[2:nrow(pdacA2raw.t),]
+pdacA2raw <- apply(pdacA2raw.t, 2,FUN = as.numeric)
+rownames(pdacA2raw) <- pdacSpotIDs
+pdacA2raw[1:10,1:10]
+
+```
+
+```{r}
+
+pdacA2 <- preprocess(pdacA2raw, nTopGenes = 5, remove = c("^MT", "^RPL", "^MRPL"))
+# note, MTOR is removed...maybe other non MT genes...?
+
+```
+
+completed in about 3.5 minutes
+```{r}
+
+pdacA2_LDAs <- fitLDA(pdacA2$slm, k_, seed = 0)
+
+```
+
+```{r}
+
+pdacA2_LDAs_alphas <- sapply(pdacA2_LDAs$models, slot, "alpha")
+
+dat <- data.frame(k = as.character(k_),
+                  alpha = pdacA2_LDAs_alphas,
+                  perplexities = pdacA2_LDAs$perplexities,
+                  pos = seq(length(k_)))
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = perplexities)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("perplexity") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = alpha)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("alpha") +
+  theme_classic()
+
+```
+
+```{r}
+
+pdacA2.k25 <- getBetaTheta(pdacA2_LDAs$models[[12]]) #k=25
+clust <- clusterTopics(beta = pdacA2.k25$beta,
+                                  deepSplit = 4)
+pdacA2.k25$clusters <- clust$clusters
+pdacA2.k25$dendro <- clust$dendro
+
+cols <- pdacA2.k25$clusters
+levels(cols) <- rainbow(length(levels(cols)))
+pdacA2.k25$cols <- cols
+
+pdacA2.k25$betaCombn <- combineTopics(pdacA2.k25$beta, clusters = pdacA2.k25$clusters, mtxType = "b")
+pdacA2.k25$thetaCombn <- combineTopics(pdacA2.k25$theta, clusters = pdacA2.k25$clusters, mtxType = "t")
+
+clusterCols <- as.factor(colnames(pdacA2.k25$thetaCombn))
+names(clusterCols) <- colnames(pdacA2.k25$thetaCombn)
+levels(clusterCols) <- levels(pdacA2.k25$cols)
+pdacA2.k25$clustCols <- clusterCols
+
+```
+
+# --------------------------------
+# Compare Dataset LDAs
+
+# 1. pdacA versus pdacB
+
+## genes
+
+```{r}
+
+sharedGenes <- intersect(colnames(pdacA.k175$beta), colnames(pdacB.k50$beta))
+
+# all topics
+pdacAvsBbetaCor <- correlationBetweenBetas(beta1 = pdacA.k175$beta[,sharedGenes],
+                                           beta2 = pdacB.k50$beta[,sharedGenes])
+
+# combined topics
+pdacAvsBbetaCombnCor <- correlationBetweenBetas(beta1 = pdacA.k175$betaCombn[,sharedGenes],
+                                               beta2 = pdacB.k50$betaCombn[,sharedGenes])
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(pdacAvsBbetaCor,
+          Rowv = pdacA.k175$dendro,
+          Colv = pdacB.k50$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(pdacA.k175$cols),
+          ColSideColors = as.vector(pdacB.k50$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "pdacAvsBbetaCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(pdacAvsBbetaCombnCor,
+          # Rowv = NULL,
+          # Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = levels(pdacA.k175$cols),
+          ColSideColors = levels(pdacB.k50$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=2, cexCol=2, margins=c(3,3),
+          main = "pdacAvsBbetaCombnCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+## theta distr
+
+```{r}
+
+vizAllTopics(theta = pdacA.k175$thetaCombn,
+             pos = pdacPos,
+             topicOrder = seq_len(length(colnames(pdacA.k175$thetaCombn))),
+             cluster_cols = levels(pdacA.k175$cols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "pdacA.k175 combined")
+
+vizTopicClusters(theta = pdacA.k175$thetaCombn,
+                pos = pdacPos,
+                topicOrder = seq_len(length(colnames(pdacA.k175$thetaCombn))),
+                clusters = pdacA.k175$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+```{r}
+
+vizAllTopics(theta = pdacB.k50$thetaCombn,
+             pos = pdacB$pos,
+             topicOrder = seq_len(length(colnames(pdacB.k50$thetaCombn))),
+             cluster_cols = levels(pdacB.k50$cols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "pdacB.k50 combined")
+
+vizTopicClusters(theta = pdacB.k50$thetaCombn,
+                pos = pdacB$pos,
+                topicOrder = seq_len(length(colnames(pdacB.k50$thetaCombn))),
+                clusters = pdacB.k50$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+
+```{r}
+
+vizAllTopics(theta = pdacA2.k25$thetaCombn,
+             pos = pdacA2$pos,
+             topicOrder = seq_len(length(colnames(pdacA2.k25$thetaCombn))),
+             cluster_cols = levels(pdacA2.k25$cols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "pdacA2.k25 combined")
+
+vizTopicClusters(theta = pdacA2.k25$thetaCombn,
+                pos = pdacA2$pos,
+                topicOrder = seq_len(length(colnames(pdacA2.k25$thetaCombn))),
+                clusters = pdacA2.k25$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+```{r}
+
+head(pdacA2.k25$betaCombn["1",order(pdacA2.k25$betaCombn["1",], decreasing = TRUE)], n=10)
+
+```
+
+
+# ==========================
+# Compare to other methods
+
+# -- SPOTlight
+
+It was made specifically for ST data so best direct comparison
+
+
+# -- Stereoscope
+
+
+
+
+
+
+# ==========================
+# NOTES:
+
+## K vs Corpus vs Speed
+
+Note:
+The fitting went really fast! Maybe about 5-10 minutes for 250 topics. Whereas the MERFISH took 45 minutes to do 250 topics. Strang because 220 genes in mob and 130 in merfish. 439 genes in pdac. But what are the "n"s (total gene counts in each corpus). pdac took about 45 minutes for 250 topics
+
+mob rep1 from stahl et all about 62 minutes for 250 topics. 550 genes here. 265 spots
+
+
+Probably is number fo words, and perhaps I should try to reduce? Trade off between accuracy and speed. With more words also comes more topics. So perhaps more chances for co-occurrences between genes and thus different "patterns of gene counts"?
+
+could binning genes into 20 bins and converting the assigned bin to a count work to speed things up if it were to reduce the size of n?
+
+```{r}
+
+print("merfish breg04")
+merLDAs$models[[1]]@n
+merLDAs$models[[1]]@Dim
+print("mobs")
+mobLDAs$models[[1]]@n
+mobLDAs$models[[1]]@Dim
+
+mobRep1LDAs$models[[1]]@n
+mobRep1LDAs$models[[1]]@Dim
+print("pdac")
+pdacLDAs$models[[1]]@n
+pdacLDAs$models[[1]]@Dim
+
+print("document gene counts")
+summary(rowSums(as.matrix(bregma04$sim)))
+summary(rowSums(mob$corpus))
+summary(rowSums(mobRep1$corpus))
+summary(rowSums(pdacA$corpus))
+
+plot.new()
+hist(rowSums(as.matrix(bregma04$sim)), breaks = 30)
+hist(rowSums(mob$corpus), breaks = 30)
+hist(rowSums(mobRep1$corpus), breaks = 30)
+hist(rowSums(pdacA$corpus), breaks = 30)
+
+print("gene counts")
+summary(colSums(as.matrix(bregma04$sim)))
+summary(colSums(mob$corpus))
+summary(colSums(mobRep1$corpus))
+summary(colSums(pdacA$corpus))
+
+hist(colSums(as.matrix(bregma04$sim)), breaks = 30)
+hist(colSums(mob$corpus), breaks = 30)
+hist(colSums(mobRep1$corpus), breaks = 30)
+hist(colSums(pdacA$corpus), breaks = 30)
+
+```
+
+## idea: bin data and use bin number as the "word counts"
+
+could be way to shrink the corpus and perhaps speed up the model. Will it maintain similar accuracy?
+
+
+```{r}
+
+# mob_corpus <- t(as.matrix(countsMobFilt[countsMobFiltOD$ods,]))
+# mob_corpus_slm <- slam::as.simple_triplet_matrix(mob_corpus)
+
+mob_corpus_binned <- binnedCorpus(mob$corpus)
+mob_corpus_binned_slm <- slam::as.simple_triplet_matrix(mob_corpus_binned)
+
+```
+
+```{r}
+
+mobLDAs_binned <- fitLDA(mob_corpus_binned_slm, k_, seed = 0)
+
+```
+
+with nbins = 50, took 2 minutes to go through 250 topics. But optimal K is 4. Too small based on original. So binning isnt straight forward. But might be useful for larger corpus? maybe the nbins should scale or shrink in some way wrt the size of the starting corpus?
+
+is the same variation in gene counts maintained using the binning?
+
+```{r}
+
+# mob_corpus
+# mob_corpus_binned
+
+
+mobLDAs$models[[1]]@n
+mobLDAs$models[[1]]@Dim
+
+mobLDAs_binned$models[[3]]@n
+mobLDAs_binned$models[[3]]@Dim
+
+summary(rowSums(mob$corpus))
+summary(rowSums(mob_corpus_binned))
+
+hist(rowVars(mob$corpus), breaks = 30)
+hist(rowVars(mob_corpus_binned), breaks = 30)
+
+hist(rowSums(mob$corpus), breaks = 30)
+hist(rowSums(mob_corpus_binned), breaks = 30)
+
+summary(colSums(mob$corpus))
+summary(colSums(mob_corpus_binned))
+
+hist(colVars(mob$corpus), breaks = 30)
+hist(colVars(mob_corpus_binned), breaks = 30)
+
+hist(colSums(mob$corpus), breaks = 30)
+hist(colSums(mob_corpus_binned), breaks = 30)
+
+plot(rowVars(mob$corpus), rowVars(mob_corpus_binned))
+plot(colVars(mob$corpus), colVars(mob_corpus_binned))
+
+```
+
+similar variation captured just at different folds. Using binned counts reduced variation by 10 fold, but same pattern captured
+
+
+what about the mobRep1 that had 250 topics? Does binning maintain core topic clusters but with the advantage of being faster?
+
+```{r}
+
+mobRep1$binned <- binnedCorpus(mobRep1$corpus)
+mobRep1$binned_slm <- slam::as.simple_triplet_matrix(mobRep1$corpus)
+
+```
+
+```{r}
+
+mobRep1BinLDAs <- fitLDA(mobRep1$binned_slm, k_, seed = 0)
+
+```
+
+```{r}
+
+mobRep1BinLDAs_alphas <- sapply(mobRep1BinLDAs$models, slot, "alpha")
+
+dat <- data.frame(k = as.character(k_),
+                  alpha = mobRep1BinLDAs_alphas,
+                  perplexities = mobRep1BinLDAs$perplexities,
+                  pos = seq(length(k_)))
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = perplexities)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("perplexity") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = alpha)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("alpha") +
+  theme_classic()
+
+```
+
+6.5 minutes versus 1 hour with 50 bins
+
+is the same variation in gene counts maintained using the binning?
+
+```{r}
+
+plot(rowVars(mobRep1$corpus), rowVars(mobRep1$binned))
+plot(colVars(mobRep1$corpus), colVars(mobRep1$binned))
+
+```
+
+same deal. Same pattern but huge reduction in variation. 200-fold
+
+
+compare with and without binning
+
+```{r}
+
+
+mobRep1Bin_mtxs <- getBetaTheta(mobRep1BinLDAs$models[[11]])
+mobRep1_mtxs <- getBetaTheta(mobRep1LDAs$models[[25]])
+
+
+```
+
+get correlations:
+
+```{r}
+
+mobRep1BetaCor <- correlationBetweenBetas(beta1 = mobRep1_mtxs$beta,
+                        beta2 = mobRep1Bin_mtxs$beta)
+
+mobRep1ThetaCor <- correlationBetweenThetas(theta1 = mobRep1_mtxs$theta,
+                        theta2 = mobRep1Bin_mtxs$theta)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mobRep1BetaCor,
+          # Rowv = pdac_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(clusterColorsk50),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mobRep1BetaCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mobRep1ThetaCor,
+          # Rowv = pdac_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(clusterColorsk50),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mobRep1ThetaCor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+cluster the larger set of topics and compare these clusters to the binned corpus topics
+
+```{r}
+
+mobRep1Bin_cluster <- clusterTopics(mobRep1Bin_mtxs$beta)
+mobRep1_mtxs_cluster <- clusterTopics(mobRep1_mtxs$beta)
+
+mobRep1_mtxs$betaCombn <- combineTopics(mobRep1_mtxs$beta, clusters = mobRep1_mtxs_cluster$clusters, mtxType = "b")
+mobRep1_mtxs$thetaCombn <- combineTopics(mobRep1_mtxs$theta, clusters = mobRep1_mtxs_cluster$clusters, mtxType = "t")
+
+```
+
+```{r}
+
+mobRep1BetaCorCombn <- correlationBetweenBetas(beta1 = mobRep1_mtxs$betaCombn,
+                        beta2 = mobRep1Bin_mtxs$beta)
+
+mobRep1ThetaCorCombn <- correlationBetweenThetas(theta1 = mobRep1_mtxs$thetaCombn,
+                        theta2 = mobRep1Bin_mtxs$theta)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mobRep1BetaCorCombn,
+          # Rowv = pdac_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(clusterColorsk50),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mobRep1BetaCorCombn",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mobRep1ThetaCorCombn,
+          # Rowv = pdac_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(clusterColorsk50),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.7,margins=c(6,3),
+          main = "mobRep1ThetaCorCombn",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+```{r}
+
+lsatPairsBeta <- clue::solve_LSAP(scale0_1(mobRep1BetaCorCombn), maximum = TRUE)
+rowsorted <- seq_along(lsatPairsBeta)
+colsorted <- as.numeric(lsatPairsBeta)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mobRep1BetaCorCombn[rowsorted,colsorted],
+          Rowv = FALSE,
+          Colv = FALSE,
+          # Rowv = pdac_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(clusterColorsk50),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.7,cexCol=0.7,margins=c(6,3),
+          main = "mobRep1BetaCorCombn lsat",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+lsatPairsTheta <- clue::solve_LSAP(scale0_1(mobRep1ThetaCorCombn), maximum = TRUE)
+rowsorted <- seq_along(lsatPairsTheta)
+colsorted <- as.numeric(lsatPairsTheta)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mobRep1ThetaCorCombn[rowsorted,colsorted],
+          Rowv = FALSE,
+          Colv = FALSE,
+          # Rowv = pdac_lda.clust$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(clusterColorsk50),
+          # ColSideColors = as.vector(classColors),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.7,cexCol=0.7,margins=c(6,3),
+          main = "mobRep1ThetaCorCombn lsat",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+It seems that in the end, binning definitely changes the word occurrences which the model picks up on. I will say though that even with 250 topics, collapsing into clusters still seems viable. 
+
+
+
+# thoughts
+
+Maybe worth thinking about the model as a gaussian mixture model where each document is a mixture of topics. This is basically true in how it can be described.
+
+So maybe too many topics you have overfitting of the data. As in topics are guassian models/distributions and now you have models that are being fit to specific "bumps" in the data. These can be noise for instance or specific trends in the data and not necesarily biology. So this is over fitting. The perplexity decreases in some cases when topics get very high, but likely overfitting.
+
+So how to trim topics? Collapsing them into clusters seems effective. But maybe worth using biology to guide. For instance, given number of cells in spot, cannot have more topics than that...or can you? Esp if topics can represent other gene co-occurrences, like "inflammation" expression program. But can maybe set a limit that way.
+
+Or because in each document the theta is a multinomial of topics and each topic weighted, for each document, remove topics that are below a certain weight. Actually I do this for visualization purposes. But maybe do this in general and use these as final measurements. I likely should still cluster after this.
+
+The clustering is also an interesting idea to capture biology above the level of cell type.
+
+
+
+
+
+It would be useful to go back to simulated corpuses and test the model using different K's and see what happens. Introduce noise. Do certain K's pick up on it. Correlations between models
+
+
+
