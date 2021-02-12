@@ -297,7 +297,7 @@ vizAllTopics <- function(theta, pos, topicOrder, cluster_cols,
 #'     
 #' lwd = width of lines of the pie charts
 #' 
-vizTopicClusters <- function(theta, pos, topicOrder, clusters,
+vizTopicClusters <- function(theta, pos, clusters,
                              groups = NA,
                              group_cols = NA,
                              sharedCol = FALSE,
@@ -305,46 +305,44 @@ vizTopicClusters <- function(theta, pos, topicOrder, clusters,
                              lwd = 0.5,
                              plotTitle = NA) {
   
-  # reorder factor wrt the dendrogram
-  clusters_ordered <- clusters[topicOrder]
-  
   print("Topic cluster members:")
   # produce a plot for each topic cluster:
   for (cluster in levels(clusters)) {
     
     # select the topics in the cluster in the same order of the dendrogram
-    topics <- labels(clusters_ordered[which(clusters_ordered == cluster)])
+    topics <- labels(clusters[which(clusters == cluster)])
     
     cat(cluster, ":", topics, "\n")
     
     # doc-topic distribution reordered based on topicOrder and selected cluster topics
-    theta_ordered <- theta[, topics]
+    theta_ <- theta[, topics]
     
     # get percentage of other topics not in cluster
-    if (is.null(dim(theta_ordered))) {
-      other <- 1 - theta_ordered
+    if (is.null(dim(theta_))) {
+      other <- 1 - theta_
     } else {
-      other <- 1 - rowSums(theta_ordered)
+      other <- 1 - rowSums(theta_)
     }
     
-    theta_ordered <- as.data.frame(theta_ordered)
-    colnames(theta_ordered) <- paste0("Topic.", topics)
-    theta_ordered$other <- other
+    theta_ <- as.data.frame(theta_)
+    colnames(theta_) <- paste0("Topic.", topics)
+    theta_$other <- other
     
     # if any topics not represented at all, drop them
     # Apparently if a topic is 0 for all pie charts, it is not plotted
     # and doesn't appear in the legend. So it messes with the colors.
     # "other" takes one of the colors of the topics and is not gray
-    theta_ordered <- theta_ordered[,which(!colSums(theta_ordered) == 0)]
-    
+    theta_ <- theta_[,which(!colSums(theta_) == 0)]
+    # theta_ <- as.data.frame(theta_)
+    # print(theta_)
     # add columns with document positions
-    rownames(theta_ordered) <- rownames(pos)
-    theta_ordered_pos <- merge(data.frame(theta_ordered),
+    # rownames(theta_) <- rownames(pos)
+    theta_pos <- merge(data.frame(theta_),
                                    data.frame(pos), by=0)
     
     # first column after merge is "Row.names", last two are "x" and "y"
     # problem is that data frame will replace "-" and " " with "."
-    topicColumns <- colnames(theta_ordered_pos)[2:(dim(theta_ordered_pos)[2]-2)]
+    topicColumns <- colnames(theta_pos)[2:(dim(theta_pos)[2]-2)]
     
     # get a hue of colors representing the cluster color
     if (sharedCol){
@@ -354,15 +352,15 @@ vizTopicClusters <- function(theta, pos, topicOrder, clusters,
     }
     
     # topic_colors <- viridis_pal(option = "C")(length(blue_cluster))
-    topic_colors <- color_ramp(ncol(theta_ordered) - 1) # don't count "other"
+    topic_colors <- color_ramp(ncol(theta_) - 1) # don't count "other"
     topic_colors <- append(topic_colors, c("gray"))
     
     # color of piechart groups (lines of piechart):
     if (is.na(groups) == TRUE) {
-      groups <- rep("0", dim(theta_ordered_pos)[1])
-      theta_ordered_pos$groups <- groups
+      groups <- rep("0", dim(theta_pos)[1])
+      theta_pos$groups <- groups
     } else {
-      theta_ordered_pos$groups <- as.character(groups)
+      theta_pos$groups <- as.character(groups)
     }
     if (is.na(group_cols) == TRUE) {
       group_cols <- c("0" = "gray")
@@ -374,7 +372,7 @@ vizTopicClusters <- function(theta, pos, topicOrder, clusters,
       # theme_classic() +
       geom_scatterpie(aes(x=x, y=y, group=Row.names, r = r, color = groups), # r=40 for MERFISH 0.4 mOB
                       lwd = lwd,
-                      data=theta_ordered_pos,
+                      data=theta_pos,
                       cols = topicColumns,
                       legend_name = "Topics") +
       coord_equal() +

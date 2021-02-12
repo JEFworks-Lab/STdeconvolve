@@ -226,7 +226,7 @@ ggplot() +
 
 mob.k30 <- getBetaTheta(mobLDAs$models[[13]]) # k=30
 clust <- clusterTopics(beta = mob.k30$beta,
-                                  deepSplit = 3)
+                                  deepSplit = 4)
 mob.k30$clusters <- clust$clusters
 mob.k30$dendro <- clust$dendro
 
@@ -241,6 +241,34 @@ clusterCols <- as.factor(colnames(mob.k30$thetaCombn))
 names(clusterCols) <- colnames(mob.k30$thetaCombn)
 levels(clusterCols) <- levels(mob.k30$cols)
 mob.k30$clustCols <- clusterCols
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = mob.k30$thetaCombn,
+             pos = mob$pos,
+             topicOrder = seq_len(length(colnames(mob.k30$thetaCombn))),
+             cluster_cols = levels(mob.k30$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mob.k30 combined")
+
+vizTopicClusters(theta = mob.k30$thetaCombn,
+                pos = mob$pos,
+                clusters = mob.k30$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+vizTopicClusters(theta = mob.k30$theta,
+                pos = mob$pos,
+                clusters = mob.k30$cols,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
 
 ```
 
@@ -384,8 +412,92 @@ vizAllTopics(theta = mobR2.k200$thetaCombn,
 
 vizTopicClusters(theta = mobR2.k200$thetaCombn,
                 pos = mobRep2$pos,
-                topicOrder = seq_len(length(colnames(mobR2.k200$thetaCombn))),
+                # topicOrder = seq_len(length(colnames(mobR2.k200$thetaCombn))),
                 clusters = mobR2.k200$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+## -- Rep3
+
+```{r}
+
+path <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep3_MOB_count_matrix-1.tsv"
+
+mobRep3 <- preprocess(path, alignFile = NA, nTopGenes = 5, remove = c("mt-"))
+
+```
+
+35 min approx
+```{r}
+
+mobRep3_LDAs <- fitLDA(mobRep3$slm, k_, seed = 0)
+
+```
+
+```{r}
+
+mobRep3_LDAs_alphas <- sapply(mobRep3_LDAs$models, slot, "alpha")
+
+dat <- data.frame(k = as.character(k_),
+                  alpha = mobRep3_LDAs_alphas,
+                  perplexities = mobRep3_LDAs$perplexities,
+                  pos = seq(length(k_)))
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = perplexities)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("perplexity") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = alpha)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("alpha") +
+  theme_classic()
+
+```
+
+```{r}
+
+mobR3.k125 <- getBetaTheta(mobRep3_LDAs$models[[20]]) # k = 125
+clust <- clusterTopics(beta = mobR3.k125$beta,
+                                  deepSplit = 3)
+mobR3.k125$clusters <- clust$clusters
+mobR3.k125$dendro <- clust$dendro
+
+cols <- mobR3.k125$clusters
+levels(cols) <- rainbow(length(levels(cols)))
+mobR3.k125$cols <- cols
+
+mobR3.k125$betaCombn <- combineTopics(mobR3.k125$beta, clusters = mobR3.k125$clusters, mtxType = "b")
+mobR3.k125$thetaCombn <- combineTopics(mobR3.k125$theta, clusters = mobR3.k125$clusters, mtxType = "t")
+
+clusterCols <- as.factor(colnames(mobR3.k125$thetaCombn))
+names(clusterCols) <- colnames(mobR3.k125$thetaCombn)
+levels(clusterCols) <- levels(mobR3.k125$cols)
+mobR3.k125$clustCols <- clusterCols
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = mobR3.k125$thetaCombn,
+             pos = mobRep3$pos,
+             topicOrder = seq_len(length(colnames(mobR3.k125$thetaCombn))),
+             cluster_cols = levels(mobR3.k125$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mobR3.k125 combined")
+
+vizTopicClusters(theta = mobR3.k125$thetaCombn,
+                pos = mobRep3$pos,
+                # topicOrder = seq_len(length(colnames(mobR3.k125$thetaCombn))),
+                clusters = mobR3.k125$clustCols,
                 sharedCol = TRUE,
                 r = 0.4,
                 lwd = 0.01)
@@ -476,7 +588,7 @@ vizAllTopics(theta = mob.k30$thetaCombn,
 
 vizTopicClusters(theta = mob.k30$thetaCombn,
                 pos = posMob,
-                topicOrder = seq_len(length(colnames(mob.k30$thetaCombn))),
+                # topicOrder = seq_len(length(colnames(mob.k30$thetaCombn))),
                 clusters = mob.k30$clustCols,
                 sharedCol = TRUE,
                 r = 0.4,
@@ -499,7 +611,7 @@ vizAllTopics(theta = mobR1.k250$thetaCombn,
 
 vizTopicClusters(theta = mobR1.k250$thetaCombn,
                 pos = mobRep1$pos,
-                topicOrder = seq_len(length(colnames(mobR1.k250$thetaCombn))),
+                # topicOrder = seq_len(length(colnames(mobR1.k250$thetaCombn))),
                 clusters = mobR1.k250$clustCols,
                 sharedCol = TRUE,
                 r = 0.4,
@@ -610,7 +722,7 @@ vizAllTopics(theta = mob.k30$thetaCombn[as.vector(matches),],
 
 vizAllTopics(theta = mobR1.k250$thetaCombn[labels(matches),],
              pos = mobRep1$pos[labels(matches),],
-             topicOrder = seq_len(length(colnames(mobR1.k250$thetaCombn))),
+             # topicOrder = seq_len(length(colnames(mobR1.k250$thetaCombn))),
              cluster_cols = levels(mobR1.k250$clustCols),
              groups = NA,
              group_cols = NA, 
@@ -970,7 +1082,7 @@ vizAllTopics(theta = pdacA.k175$thetaCombn,
 
 vizTopicClusters(theta = pdacA.k175$thetaCombn,
                 pos = pdacPos,
-                topicOrder = seq_len(length(colnames(pdacA.k175$thetaCombn))),
+                # topicOrder = seq_len(length(colnames(pdacA.k175$thetaCombn))),
                 clusters = pdacA.k175$clustCols,
                 sharedCol = TRUE,
                 r = 0.4,
@@ -992,7 +1104,7 @@ vizAllTopics(theta = pdacB.k50$thetaCombn,
 
 vizTopicClusters(theta = pdacB.k50$thetaCombn,
                 pos = pdacB$pos,
-                topicOrder = seq_len(length(colnames(pdacB.k50$thetaCombn))),
+                # topicOrder = seq_len(length(colnames(pdacB.k50$thetaCombn))),
                 clusters = pdacB.k50$clustCols,
                 sharedCol = TRUE,
                 r = 0.4,
@@ -1015,7 +1127,7 @@ vizAllTopics(theta = pdacA2.k25$thetaCombn,
 
 vizTopicClusters(theta = pdacA2.k25$thetaCombn,
                 pos = pdacA2$pos,
-                topicOrder = seq_len(length(colnames(pdacA2.k25$thetaCombn))),
+                # topicOrder = seq_len(length(colnames(pdacA2.k25$thetaCombn))),
                 clusters = pdacA2.k25$clustCols,
                 sharedCol = TRUE,
                 r = 0.4,
@@ -1035,14 +1147,1181 @@ head(pdacA2.k25$betaCombn["1",order(pdacA2.k25$betaCombn["1",], decreasing = TRU
 
 # -- SPOTlight
 
-It was made specifically for ST data so best direct comparison
+Strategy:
+
+mOB
+
+get some scRNAseq reference sets that could be used for the mOB. 
+get W [topic x gene] and predict_mtx [spot x topic] matrices. Also deconv [spot x cell type]
+
+Can check the correlation between LDA topics and NMF topics via topic beta/W
+Then spot proportion correlation theta/predict_mtx (remember LDA topics could be mixtures of cell types but you dont know, conversely NMF topics can also be mixtures, but you do know based on your reference from H [cell x topic])
+
+To quantitative, maybe some simulations where you do know the truth? Or MERFISH?
+
+
+multiple references with spotlight?? I have the cortex data from the tutorial ready to go. But I found some scRNAseq from mOB. Will need to transform into seurat object properly and extract markers and subtypes for subsampling...
+
+
+## A. mOB scRNAseq data:
+
+### ** starting from processed:
+
+```{r}
+
+# mob_se <- read.csv2("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_6_runs_processed_seurat.dge.csv", sep = ",")
+# 
+# mob_se <- as.sparse(mob_se)
+
+```
+
+```{r}
+
+# load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/mob_processed_sparseMatrix.RData")
+# mob_se
+
+```
+
+```{r}
+
+# mob_meta <- read.csv2("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_metaData_seurat.csv", sep = ",")
+
+```
+
+Use metadata to just get the WT cells and the associated clusters from the metadata.
+Make sure the metadata cell labels selected and the cells in the count matrix match.
+Then make the seurat object. Might have to change some settings in the object to get the variable genes. And a way to get the variable features out of the seurat object.
+
+```{r}
+
+# wt_cells <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$"X"
+# print(length(wt_cells))
+
+```
+
+```{r}
+
+# mob_se_wt <- mob_se[,wt_cells]
+
+```
+
+```{r}
+
+# mob_se_wt <- CreateSeuratObject(counts = mob_se_wt, project = "mob",
+                                meta.data = mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),])
+
+```
+
+```{r}
+
+# a lot of metadata info not being added...? try doing manually:
+# mob_se_wt[["ClusterName"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$ClusterName
+# mob_se_wt[["percent.mito"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$percent.mito
+
+```
+
+based on the paper methods and the values, it looks already log normalized and filtered.
+
+the spotlight pipeline is looking for "assay = RNA" and "slot = counts" so make sure these are part of the seurat object.
+
+For PCA and UMAP, idea is to get clusters. But I already have clusters in the meta data file. So can skip this.
+
+If I wanted to do PCA, this is looking for "scale.data" slot, and to get this I can do:
+ScaleData,
+
+or alternatively, I can do SCTransform, which is an alternative to: 1. Normalize, 2. Find Variable Features, 3. Scale data.
+
+Results are saved in a new assay (named SCT by default) with counts being (corrected) counts, data being log1p(counts), and scale.data is the pearson residuals.
+
+But because this data has already been log transformed, and I'm not sure how SCTransform is transforming the data, I should just stick to finding the variable features and then scaling.
+
+But scaling takes time, and again, I already have clusters for cells from metadata. So skip for now.
+
+```{r}
+
+# mob_se_wt <- FindVariableFeatures(mob_se_wt, selection.method = "vst", nfeatures = 3000)
+# mob_se_wt <- ScaleData(mob_se_wt, vars.to.regress = c("percent.mito", "nCount_RNA"))
+
+```
+
+```{r}
+
+# mob_se_wt <- RunPCA(mob_se_wt, verbose = FALSE)
+# mob_se_wt <- RunUMAP(mob_se_wt, dims = 1:30, verbose = FALSE)
+# 
+# Seurat::DimPlot(cortex_sc,
+#                 group.by = "ClusterName",
+#                 label = TRUE) + Seurat::NoLegend()
+
+```
+
+Set the known clusters as the "active.indent"
+
+Then get the markers for each of these clusters. In this case, using the already normalized data.
+
+It looks like under the only assay I have so far, RNA, there is counts and data. But by the looks of it both are the same values so doesnt matter which one is used. In the future, data is probably transformed and counts could be adjusted or maybe raw counts.
+
+```{r}
+
+# Seurat::Idents(object = mob_se_wt) <- mob_se_wt@meta.data$ClusterName
+# 
+# cluster_markers_mob_se_wt <- Seurat::FindAllMarkers(object = mob_se_wt, 
+#                                               assay = "RNA",
+#                                               slot = "data",
+#                                               verbose = TRUE, 
+#                                               only.pos = TRUE)
+
+```
+
+Now we can train the NMF model:
+
+```{r}
+
+# se_sc_down <- downsample_se_obj(se_obj = mob_se_wt,
+#                                 clust_vr = "ClusterName",
+#                                 cluster_markers = cluster_markers_mob_se_wt,
+#                                 cl_n = 100, # size to sample from each cluster. Cluster types determine from meta.data in se object via clust_vr 
+#                                 hvg = 3000) # number or NULL. choose num of highly variable genes
+
+```
+
+```{r}
+
+# start_time <- Sys.time()
+# nmf_mod_mob_wt_ls <- train_nmf(cluster_markers = cluster_markers_mob_se_wt, 
+#                         se_sc = se_sc_down, 
+#                         mtrx_spatial = cd, # the original mob st data
+#                         clust_vr = "subclass",
+#                         ntop = NULL,
+#                         hvg = 3000, # number of highly variable genes that is used in addition to the marker genes
+#                         transf = "uv",
+#                         method = "nsNMF")
+# 
+# nmf_mod_mob_wt <- nmf_mod_mob_wt_ls[[1]]
+
+# [1] "Preparing Gene set"
+# [1] "Normalizing count matrix"
+# [1] "Seeding initial matrices"
+# [1] "Training..."
+# [1] "Time to train NMF model was 255.28mins"
+
+```
+
+```{r}
+
+# load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/modeling_merged.20210209.image.RData")
+# load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/spotlight_nmf_train_with_mob.RData")
+# 
+# nmf_mod_mob_wt <- nmf_mod_mob_wt_ls[[1]]
+
+
+# this should have all the previous variables and outputs from the LDA models
+# plus the SPOTlight NMF outputs after training
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/modeling_merged.20210211.image.RData")
+
+```
+
+
+```{r}
+
+# get basis matrix W (genes x topic)
+w <- basis(nmf_mod_mob_wt)
+dim(w)
+
+# get coefficient matrix H (cells x topic)
+h <- coef(nmf_mod_mob_wt)
+dim(h)
+
+```
+
+```{r}
+
+# reference for which cell type(s) a topic represents
+ct_topic_profiles <- topic_profile_per_cluster_nmf(h = h,
+                              train_cell_clust = nmf_mod_mob_wt_ls[[2]])
+
+```
+
+adjust the counts of the mob data:
+```{r, mob-qc, fig.width=8, fig.height=3}
+
+# Remove poor datasets and genes
+# cd_clean <- MERINGUE::cleanCounts(counts = cd, 
+#                       min.reads = 100, 
+#                       min.lib.size = 100, 
+#                       plot=TRUE,
+#                       verbose=TRUE)
+# posMob <- pos[colnames(cd_clean),]
+
+# CPM normalize
+cd_cpm_log <- MERINGUE::normalizeCounts(counts = cd, 
+                       log=TRUE,
+                       verbose=TRUE)
+
+# NOTE: because the NMF model was built using the starting cd, if filtering it, it won't work if some genes are removed. Because the matrix W was made with the set of genes that was the intersection of `cd` and also the seurat downsampled object. If this changes, then can't do the nnls step. Matrices will be incomparable sizes
+
+# however, should likely make sure the counts are normalized similarly to how the single cell data was when determining cluster marker genes.
+
+```
+
+```{r}
+
+mixture_transcriptome <- cd_cpm_log
+transf <- "uv" # normalization for the st data. note same as what was done for the scRNAseq data
+
+profile_mtrx <- predict_spatial_mixtures_nmf(nmf_mod = nmf_mod_mob_wt,
+                               mixture_transcriptome = mixture_transcriptome,
+                               transf = transf)
+
+```
+
+#### With raw 'cd'
+
+NOTE:
+if I use the `cd` with raw counts, 23 topics are kept when visualizing.
+HOWEVER, most are just a couple spots. So maybe suggests that noise is being picked up because data wasn't normalized and log scaled.
+
+If I use the cpm log normalized data, then only 11 topics are kept and look like layers. But I will note that the LDA actually looks like it's capturing more information...
+
+```{r}
+
+decon_mtrx <- mixture_deconvolution_nmf(nmf_mod = nmf_mod_mob_wt,
+                          mixture_transcriptome = cd,
+                          transf = "uv", 
+                          reference_profiles = ct_topic_profiles, 
+                          min_cont = 0.09)
+
+rownames(decon_mtrx) <- colnames(mixture_transcriptome)
+spotlightPredictions_1 <- decon_mtrx[,1:(ncol(decon_mtrx)-1)] # last column is residuals
+
+# drop any clusters that were not detected at all in the ST data
+filtPredictions_1 <- spotlightPredictions_1[,which(!colSums(spotlightPredictions_1) == 0)]
+
+# assign colors for the remaining spotlight predicted clusters that are present
+deconClusterCols_1 <- as.factor(colnames(filtPredictions_1))
+names(deconClusterCols_1) <- colnames(filtPredictions_1)
+levels(deconClusterCols_1) <- rainbow(length(colnames(filtPredictions_1)))
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = filtPredictions_1,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(filtPredictions_1))),
+             cluster_cols = levels(deconClusterCols_1),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "decon_mtrx mob sc ref")
+
+vizTopicClusters(theta = filtPredictions_1,
+                pos = pos,
+                clusters = deconClusterCols_1,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# cols <- rep("gray", length(levels(deconClusterCols)))
+# cols[c(1,2,6,13)] <- levels(deconClusterCols)[c(1,2,6,13)]
+# vizAllTopics(theta = filtPredictions,
+#              pos = pos,
+#              topicOrder = seq_len(length(colnames(filtPredictions))),
+#              cluster_cols = cols,
+#              groups = NA,
+#              group_cols = NA,
+#              r = 0.4,
+#              lwd = 0.01,
+#              plotTitle = "decon_mtrx cortex ref")
+
+# cols <- rep("gray", length(levels(deconClusterCols)))
+# cols[c(2,13)] <- levels(deconClusterCols)[c(2,13)]
+# vizAllTopics(theta = filtPredictions,
+#              pos = pos,
+#              topicOrder = seq_len(length(colnames(filtPredictions))),
+#              cluster_cols = cols,
+#              groups = NA,
+#              group_cols = NA,
+#              r = 0.4,
+#              lwd = 0.01,
+#              plotTitle = "decon_mtrx cortex ref")
+
+```
+
+```{r}
+
+# note that some topic like 'EC2' were present in only one spot that was actually filtered out when making the mob corpus.
+# so make sure the spots are the same in each theta/beta matrix being compared.
+# then make sure there are no clusters that are not present in any spots
+spotlight_samePos_1 <- filtPredictions_1[rownames(mob.k30$theta),]
+spotlight_samePos_1 <- spotlight_samePos_1[,which(!colSums(spotlight_samePos_1) == 0)]
+
+# theta comparison
+mob_ldaVsSPOT_thetas_cdraw <- correlationBetweenThetas(theta1 = mob.k30$theta,
+                         theta2 = spotlight_samePos_1)
+
+mob_ldaVsSPOT_thetasCombn_cdraw <- correlationBetweenThetas(theta1 = mob.k30$thetaCombn,
+                         theta2 = spotlight_samePos_1)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_ldaVsSPOT_thetas_cdraw,
+          Rowv = mob.k30$dendro,
+          # Colv = mobR1.k250$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mob.k30$cols),
+          # ColSideColors = as.vector(deconClusterCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "mob_ldaVsSPOT_thetas",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_ldaVsSPOT_thetasCombn_cdraw,
+          # Rowv = mob.k30$dendro,
+          # Colv = mobR1.k250$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mob.k30$clustCols),
+          # ColSideColors = as.vector(deconClusterCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "mob_ldaVsSPOT_thetasCombn",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+```{r}
+
+spotlight_beta_1 <- w
+colnames(spotlight_beta_1) <- colnames(spotlightPredictions_1)
+spotlight_beta_1 <- t(spotlight_beta_1)
+
+```
+
+```{r}
+
+spotlight_beta_compare_1 <- spotlight_beta_1[colnames(spotlight_samePos_1),which(colnames(spotlight_beta_1) %in% colnames(mob.k30$beta))]
+
+mob_beta_compare_1 <- mob.k30$beta[,colnames(spotlight_beta_compare_1)]
+
+mob_beta_compareCombn_1 <- mob.k30$betaCombn[,colnames(spotlight_beta_compare_1)]
+
+```
+
+taking subsets of the genes from each beta (the ones on both betas)
+So adjust probabilities such that they add up to 1 relative to the subset of genes
+
+```{r}
+
+spotlight_beta_compare_adj_1 <- base::do.call(rbind, (lapply(rownames(spotlight_beta_compare_1), function(x){
+  v <- spotlight_beta_compare_1[x,]
+  adj <- v/sum(v)
+  adj
+})))
+rownames(spotlight_beta_compare_adj_1) <- rownames(spotlight_beta_compare_1)
+
+
+mob_beta_compare_adj_1 <- base::do.call(rbind, (lapply(rownames(mob_beta_compare_1), function(x){
+  v <- mob_beta_compare_1[x,]
+  adj <- v/sum(v)
+  adj
+})))
+rownames(mob_beta_compare_adj_1) <- rownames(mob_beta_compare_1)
+
+
+mob_beta_compareCombn_adj_1 <- base::do.call(rbind, (lapply(rownames(mob_beta_compareCombn_1), function(x){
+  v <- mob_beta_compareCombn_1[x,]
+  adj <- v/sum(v)
+  adj
+})))
+rownames(mob_beta_compareCombn_adj_1) <- rownames(mob_beta_compareCombn_1)
+
+```
+
+```{r}
+
+mob_ldaVsSPOT_betas_1 <- correlationBetweenBetas(beta1 = mob_beta_compare_adj_1,
+                         beta2 = spotlight_beta_compare_adj_1)
+
+mob_ldaVsSPOT_betasCombn_1 <- correlationBetweenBetas(beta1 = mob_beta_compareCombn_adj_1,
+                         beta2 = spotlight_beta_compare_adj_1)
+
+```
+
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_ldaVsSPOT_betas_1,
+          Rowv = mob.k30$dendro,
+          # Colv = mobR1.k250$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mob.k30$cols),
+          # ColSideColors = as.vector(deconClusterCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "mob_ldaVsSPOT_betas",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+# here I am using all 38 SPOT topics
+lsatPairs <- clue::solve_LSAP(scale0_1(t(mob_ldaVsSPOT_betas_1)), maximum = TRUE)
+rows_ix <- seq_along(lsatPairs)
+cols_ix <- as.numeric(lsatPairs)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(t(mob_ldaVsSPOT_betas_1)[rows_ix,cols_ix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(mob.k30$cols),
+          # ColSideColors = as.vector(deconClusterCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "mob_ldaVsSPOT_betas",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_ldaVsSPOT_betasCombn_1,
+          # Rowv = mob.k30$dendro,
+          # Colv = mobR1.k250$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mob.k30$clustCols),
+          # ColSideColors = as.vector(deconClusterCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "mob_ldaVsSPOT_betasCombn",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+#### CPM log cd `cd_cpm_log`
+
+```{r}
+
+decon_mtrx <- mixture_deconvolution_nmf(nmf_mod = nmf_mod_mob_wt,
+                          mixture_transcriptome = cd_cpm_log,
+                          transf = "uv", 
+                          reference_profiles = ct_topic_profiles, 
+                          min_cont = 0.09)
+
+rownames(decon_mtrx) <- colnames(mixture_transcriptome)
+spotlightPredictions <- decon_mtrx[,1:(ncol(decon_mtrx)-1)] # last column is residuals
+
+# drop any clusters that were not detected at all in the ST data
+filtPredictions <- spotlightPredictions[,which(!colSums(spotlightPredictions) == 0)]
+
+# assign colors for the remaining spotlight predicted clusters that are present
+deconClusterCols <- as.factor(colnames(filtPredictions))
+names(deconClusterCols) <- colnames(filtPredictions)
+levels(deconClusterCols) <- rainbow(length(colnames(filtPredictions)))
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = filtPredictions,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(filtPredictions))),
+             cluster_cols = levels(deconClusterCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "decon_mtrx mob sc ref")
+
+vizTopicClusters(theta = filtPredictions,
+                pos = pos,
+                clusters = deconClusterCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# cols <- rep("gray", length(levels(deconClusterCols)))
+# cols[c(1,2,6,13)] <- levels(deconClusterCols)[c(1,2,6,13)]
+# vizAllTopics(theta = filtPredictions,
+#              pos = pos,
+#              topicOrder = seq_len(length(colnames(filtPredictions))),
+#              cluster_cols = cols,
+#              groups = NA,
+#              group_cols = NA,
+#              r = 0.4,
+#              lwd = 0.01,
+#              plotTitle = "decon_mtrx cortex ref")
+
+# cols <- rep("gray", length(levels(deconClusterCols)))
+# cols[c(2,13)] <- levels(deconClusterCols)[c(2,13)]
+# vizAllTopics(theta = filtPredictions,
+#              pos = pos,
+#              topicOrder = seq_len(length(colnames(filtPredictions))),
+#              cluster_cols = cols,
+#              groups = NA,
+#              group_cols = NA,
+#              r = 0.4,
+#              lwd = 0.01,
+#              plotTitle = "decon_mtrx cortex ref")
+
+```
+
+```{r}
+
+# note that some topic like 'EC2' were present in only one spot that was actually filtered out when making the mob corpus.
+# so make sure the spots are the same in each theta/beta matrix being compared.
+# then make sure there are no clusters that are not present in any spots
+spotlight_samePos <- filtPredictions[rownames(mob.k30$theta),]
+spotlight_samePos <- spotlight_samePos[,which(!colSums(spotlight_samePos) == 0)]
+
+# theta comparison
+mob_ldaVsSPOT_thetas <- correlationBetweenThetas(theta1 = mob.k30$theta,
+                         theta2 = spotlight_samePos)
+
+mob_ldaVsSPOT_thetasCombn <- correlationBetweenThetas(theta1 = mob.k30$thetaCombn,
+                         theta2 = spotlight_samePos)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_ldaVsSPOT_thetas,
+          Rowv = mob.k30$dendro,
+          # Colv = mobR1.k250$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mob.k30$cols),
+          # ColSideColors = as.vector(deconClusterCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "mob_ldaVsSPOT_thetas",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_ldaVsSPOT_thetasCombn,
+          # Rowv = mob.k30$dendro,
+          # Colv = mobR1.k250$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mob.k30$clustCols),
+          # ColSideColors = as.vector(deconClusterCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "mob_ldaVsSPOT_thetasCombn",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+the topic-cell type proportions in ct_topic_profiles are essentially a cell type is exclusively enriched for each topic.
+
+```{r}
+
+spotlight_beta <- w
+colnames(spotlight_beta) <- colnames(spotlightPredictions)
+spotlight_beta <- t(spotlight_beta)
+
+```
+
+```{r}
+
+spotlight_beta_compare <- spotlight_beta[colnames(spotlight_samePos),which(colnames(spotlight_beta) %in% colnames(mob.k30$beta))]
+
+mob_beta_compare <- mob.k30$beta[,colnames(spotlight_beta_compare)]
+
+mob_beta_compareCombn <- mob.k30$betaCombn[,colnames(spotlight_beta_compare)]
+
+```
+
+taking subsets of the genes from each beta (the ones on both betas)
+So adjust probabilities such that they add up to 1 relative to the subset of genes
+
+```{r}
+
+spotlight_beta_compare_adj <- base::do.call(rbind, (lapply(rownames(spotlight_beta_compare), function(x){
+  v <- spotlight_beta_compare[x,]
+  adj <- v/sum(v)
+  adj
+})))
+rownames(spotlight_beta_compare_adj) <- rownames(spotlight_beta_compare)
+
+
+mob_beta_compare_adj <- base::do.call(rbind, (lapply(rownames(mob_beta_compare), function(x){
+  v <- mob_beta_compare[x,]
+  adj <- v/sum(v)
+  adj
+})))
+rownames(mob_beta_compare_adj) <- rownames(mob_beta_compare)
+
+
+mob_beta_compareCombn_adj <- base::do.call(rbind, (lapply(rownames(mob_beta_compareCombn), function(x){
+  v <- mob_beta_compareCombn[x,]
+  adj <- v/sum(v)
+  adj
+})))
+rownames(mob_beta_compareCombn_adj) <- rownames(mob_beta_compareCombn)
+
+```
+
+```{r}
+
+mob_ldaVsSPOT_betas <- correlationBetweenBetas(beta1 = mob_beta_compare_adj,
+                         beta2 = spotlight_beta_compare_adj)
+
+mob_ldaVsSPOT_betasCombn <- correlationBetweenBetas(beta1 = mob_beta_compareCombn_adj,
+                         beta2 = spotlight_beta_compare_adj)
+
+```
+
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_ldaVsSPOT_betas,
+          Rowv = mob.k30$dendro,
+          # Colv = mobR1.k250$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mob.k30$cols),
+          # ColSideColors = as.vector(deconClusterCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "mob_ldaVsSPOT_betas",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+# here I am using all 38 SPOT topics
+lsatPairs <- clue::solve_LSAP(scale0_1(t(mob_ldaVsSPOT_betas)), maximum = TRUE)
+rows_ix <- seq_along(lsatPairs)
+cols_ix <- as.numeric(lsatPairs)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(t(mob_ldaVsSPOT_betas)[rows_ix,cols_ix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(mob.k30$cols),
+          # ColSideColors = as.vector(deconClusterCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "mob_ldaVsSPOT_betas",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mob_ldaVsSPOT_betasCombn,
+          # Rowv = mob.k30$dendro,
+          # Colv = mobR1.k250$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mob.k30$clustCols),
+          # ColSideColors = as.vector(deconClusterCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "mob_ldaVsSPOT_betasCombn",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+```{r}
+
+SPOT_beta <- correlationBetweenBetas(beta1 = spotlight_beta_compare,
+                         beta2 = spotlight_beta_compare)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(SPOT_beta,
+          # Rowv = mob.k30$dendro,
+          # Colv = mobR1.k250$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(mob.k30$cols),
+          # ColSideColors = as.vector(deconClusterCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "SPOT_beta",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# par(mfrow=c(1,1), mar=c(8,8,3,2))
+# heatmap.2(mobVsR1BetaCombnCor,
+#           # Rowv = NULL,
+#           # Colv = NULL,
+#           density.info = "none",
+#           trace = "none",
+#           RowSideColors = levels(mob.k30$cols),
+#           ColSideColors = levels(mobR1.k250$cols),
+#           col = correlation_palette,
+#           breaks = correlation_breaks,
+#           cexRow=2, cexCol=2, margins=c(3,3),
+#           main = "mobVsR1BetaCombnCor",
+#           lhei = c(1,5),
+#           key.xlab = "Correlation",
+#           key.title = NA)
+
+```
+
+```{r}
+
+mobk30betaSelf <- correlationBetweenBetas(beta1 = mob.k30$beta,
+                                          beta2 = mob.k30$beta)
+
+mobk30thetaSelf <- correlationBetweenThetas(theta1 = mob.k30$theta,
+                                          theta2 = mob.k30$theta)
+
+```
+
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mobk30betaSelf,
+          Rowv = mob.k30$dendro,
+          Colv = mob.k30$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mob.k30$cols),
+          ColSideColors = as.vector(mob.k30$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "mobk30betaSelf",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(mobk30thetaSelf,
+          Rowv = mob.k30$dendro,
+          Colv = mob.k30$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(mob.k30$cols),
+          ColSideColors = as.vector(mob.k30$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "mobk30thetaSelf",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = mob.k30$thetaCombn,
+             pos = mob$pos,
+             topicOrder = seq_len(length(colnames(mob.k30$thetaCombn))),
+             cluster_cols = levels(mob.k30$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mob.k30 combined")
+
+vizTopicClusters(theta = mob.k30$thetaCombn,
+                pos = mob$pos,
+                clusters = mob.k30$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+vizTopicClusters(theta = mob.k30$theta,
+                pos = mob$pos,
+                clusters = mob.k30$cols,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+light blue, topic 5 of center granule cell layer
+```{r}
+
+head(mob.k30$beta["23",order(mob.k30$beta["23",], decreasing = TRUE)], n=10)
+
+head(mob.k30$betaCombn["5",order(mob.k30$betaCombn["5",], decreasing = TRUE)], n=10)
+
+```
+
+other topic cluster of granule cell layer
+```{r}
+
+head(mob.k30$betaCombn["2",order(mob.k30$betaCombn["2",], decreasing = TRUE)], n=10)
+
+head(mob.k30$betaCombn["3",order(mob.k30$betaCombn["3",], decreasing = TRUE)], n=10)
+
+```
+
+```{r}
+
+# matching lime green, yellow, blue; granule cell layer
+head(spotlight_beta["N7",order(spotlight_beta["N7",], decreasing = TRUE)], n=10)
+head(spotlight_beta["N10",order(spotlight_beta["N10",], decreasing = TRUE)], n=10)
+
+```
+recall for spotlight, I had to take subset of genes. There are 211 genes out of 9850. So it's not going to sum to 1. Perhaps worth adjusting range to 0-1 so probabilities relative to the subset and not entire set. The betas are based on different sets...
+
+
+```{r}
+#FF0000
+# red, outer plexiform layer
+head(mob.k30$betaCombn["1",order(mob.k30$betaCombn["1",], decreasing = TRUE)], n=10)
+
+```
+
+
+```{r}
+
+# matches mob.k30 red; outer plexiform layer
+head(spotlight_beta["N15",order(spotlight_beta["N15",], decreasing = TRUE)], n=10)
+
+```
+
+
+```{r}
+
+head(spotlight_beta["Astro3",order(spotlight_beta["Astro3",], decreasing = TRUE)], n=10)
+
+```
+
+```{r}
+
+head(mob.k30$betaCombn["4",order(mob.k30$betaCombn["4",], decreasing = TRUE)], n=10)
+
+```
+
+
+
+### -------------------
+### IGNORE: starting from raw:
+
+
+```{r}
+
+# mob_se_raw <- read.csv2("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_6_runs.raw.dge.csv", sep = ",")
+
+```
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/mob_raw_sparseMatrix.RData")
+# mob_se_raw
+
+```
+
+```{r}
+
+mob_seur <- CreateSeuratObject(counts = mob_se_raw, project = "mob", min.cells = 3, min.features = 200)
+mob_seur[["percent.mt"]] <- PercentageFeatureSet(mob_seur, pattern = "^mt-")
+
+```
+
+```{r, fig.height=5, fig.width=12}
+
+plot1 <- FeatureScatter(mob_seur, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(mob_seur, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+CombinePlots(plots = list(plot1, plot2))
+
+```
+
+```{r}
+
+mob_seur <- subset(mob_seur, subset = nFeature_RNA > 200 & nFeature_RNA < 5000 & percent.mt < 30)
+
+```
+
+```{r}
+
+# mob_seur <- NormalizeData(mob_seur, normalization.method = "LogNormalize", scale.factor = 10000)
+# mob_seur <- FindVariableFeatures(mob_seur, selection.method = "vst", nfeatures = 2000)
+# mob_seur <- ScaleData(mob_seur, vars.to.regress = c("percent.mt", "nCount_RNA"))
+
+# apparently this replaces the above commands
+mob_seur <- SCTransform(mob_seur, vars.to.regress = c("percent.mt", "nCount_RNA"), verbose = FALSE)
+
+```
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/mob_raw_to_seurat_SCTassay.RData")
+
+```
+
+```{r}
+
+mob_seur <- RunPCA(mob_seur, verbose = FALSE)
+mob_seur <- RunUMAP(mob_seur, dims = 1:30, verbose = FALSE)
+
+mob_seur <- FindNeighbors(mob_seur, dims = 1:30, verbose = FALSE)
+mob_seur <- FindClusters(mob_seur, verbose = FALSE)
+DimPlot(mob_seur, label = TRUE) + NoLegend()
+
+```
+
+I have clusters but I think it would be better to have the clusters and labels from the processed data from this source.
+
+```{r}
+
+cluster_markers_all <- Seurat::FindAllMarkers(object = mob_seur, 
+                                              assay = "SCT",
+                                              slot = "data",
+                                              verbose = TRUE, 
+                                              only.pos = TRUE)
+
+```
+
+### -------------------
+
+## B. spotlight tutorial data
+
+Cortex data. I find that this does a poor job detecting layers in the mOB. Shows that the correct reference is really important.
+
+NOTE:
+saved the `nmf_mod_ls` output from train_nmf with seurat_sc and the mob spatial data cd. Also saved the initial `cortex_sc` object after SCTransform and adding in metadata:
+save(nmf_mod_ls, cortex_sc, file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/spotlight_cortex_with_mob_nmf_mod_ls.RData")
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/spotlight_cortex_with_mob_nmf_mod_ls.RData")
+
+nmf_mod_cortex <- nmf_mod_ls[[1]]
+
+```
+
+
+```{r}
+
+# path_to_data <- system.file(package = "SPOTlight")
+# cortex_sc <- readRDS(glue::glue("{path_to_data}/allen_cortex_dwn.rds"))
+# 
+# if (! "stxBrain" %in% SeuratData::AvailableData()[, "Dataset"]) {
+#   # If dataset not downloaded proceed to download it
+#   SeuratData::InstallData("stxBrain")
+# }
+# 
+# # Load spatial data
+# # anterior <- SeuratData::LoadData("stxBrain", type = "anterior1")
+# 
+# set.seed(123)
+# cortex_sc <- Seurat::SCTransform(cortex_sc, verbose = FALSE) %>%
+#   Seurat::RunPCA(., verbose = FALSE) %>%
+#   Seurat::RunUMAP(., dims = 1:30, verbose = FALSE)
+
+```
+
+```{r}
+
+Seurat::DimPlot(cortex_sc,
+                group.by = "subclass",
+                label = TRUE) + Seurat::NoLegend()
+
+```
+
+```{r}
+
+# cortex_sc@meta.data %>%
+#   dplyr::count(subclass) %>%
+#   gt::gt(.[-1, ]) %>%
+#   gt::tab_header(
+#     title = "Cell types present in the reference dataset",
+#   ) %>%
+#   gt::cols_label(
+#     subclass = gt::html("Cell Type")
+#   )
+
+```
+
+```{r}
+
+# Seurat::Idents(object = cortex_sc) <- cortex_sc@meta.data$subclass
+# cluster_markers_cortex <- Seurat::FindAllMarkers(object = cortex_sc, 
+#                                               assay = "SCT",
+#                                               slot = "data",
+#                                               verbose = TRUE, 
+#                                               only.pos = TRUE)
+
+```
+
+```{r}
+
+# se_sc_down <- downsample_se_obj(se_obj = cortex_sc,
+#                                 clust_vr = "subclass",
+#                                 cluster_markers = cluster_markers_all,
+#                                 cl_n = 100, # size to sample from each cluster. Cluster types determine from meta.data in se object via clust_vr 
+#                                 hvg = 3000) # number or NULL. choose num of highly variable genes
+
+```
+
+```{r}
+
+# start_time <- Sys.time()
+# nmf_mod_ls <- train_nmf(cluster_markers = cluster_markers_all, 
+#                         se_sc = se_sc_down, 
+#                         mtrx_spatial = cd, # the original mob st data
+#                         clust_vr = "subclass",
+#                         ntop = NULL,
+#                         hvg = 3000, # number of highly variable genes that is used in addition to the marker genes
+#                         transf = "uv",
+#                         method = "nsNMF")
+# 
+# nmf_mod <- nmf_mod_ls[[1]]
+
+```
+
+```{r}
+
+# get basis matrix W
+w_cortex <- basis(nmf_mod_cortex)
+dim(w_cortex)
+
+# get coefficient matrix H
+h_cortex <- coef(nmf_mod_cortex)
+dim(h_cortex)
+
+```
+
+```{r}
+
+ct_topic_profiles_cortex <- topic_profile_per_cluster_nmf(h = h_cortex,
+                              train_cell_clust = nmf_mod_ls[[2]])
+
+```
+
+```{r}
+
+nmf_mod <- nmf_mod_cortex
+mixture_transcriptome <- cd_cpm_log
+transf <- "uv"
+
+profile_mtrx_cortex <- predict_spatial_mixtures_nmf(nmf_mod = nmf_mod,
+                               mixture_transcriptome = mixture_transcriptome,
+                               transf = transf)
+
+```
+
+```{r}
+
+decon_mtrx_cortex <- mixture_deconvolution_nmf(nmf_mod = nmf_mod,
+                          mixture_transcriptome = cd_cpm_log,
+                          transf = "uv", # normalization for the st data. note same as what was done for the scRNAseq data
+                          reference_profiles = ct_topic_profiles_cortex, 
+                          min_cont = 0.09)
+
+```
+
+```{r}
+
+rownames(decon_mtrx_cortex) <- colnames(mixture_transcriptome)
+spotlightPredictions <- decon_mtrx_cortex[,1:(ncol(decon_mtrx_cortex) - 1)]
+
+```
+
+```{r}
+
+
+filtPredictions <- spotlightPredictions[,which(!colSums(spotlightPredictions) == 0)]
+
+deconClusterCols <- as.factor(colnames(filtPredictions))
+names(deconClusterCols) <- colnames(filtPredictions)
+levels(deconClusterCols) <- rainbow(length(colnames(filtPredictions)))
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = filtPredictions,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(filtPredictions))),
+             cluster_cols = levels(deconClusterCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "decon_mtrx cortex ref")
+
+vizTopicClusters(theta = filtPredictions,
+                pos = pos,
+                clusters = deconClusterCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# cols <- rep("gray", length(levels(deconClusterCols)))
+# cols[c(1,2,6,13)] <- levels(deconClusterCols)[c(1,2,6,13)]
+# vizAllTopics(theta = filtPredictions,
+#              pos = pos,
+#              topicOrder = seq_len(length(colnames(filtPredictions))),
+#              cluster_cols = cols,
+#              groups = NA,
+#              group_cols = NA,
+#              r = 0.4,
+#              lwd = 0.01,
+#              plotTitle = "decon_mtrx cortex ref")
+# 
+# cols <- rep("gray", length(levels(deconClusterCols)))
+# cols[c(2,13)] <- levels(deconClusterCols)[c(2,13)]
+# vizAllTopics(theta = filtPredictions,
+#              pos = pos,
+#              topicOrder = seq_len(length(colnames(filtPredictions))),
+#              cluster_cols = cols,
+#              groups = NA,
+#              group_cols = NA,
+#              r = 0.4,
+#              lwd = 0.01,
+#              plotTitle = "decon_mtrx cortex ref")
+
+```
+
+using the cortex reference is clearly bad. So lets try to get the mOB data working properly.
 
 
 # -- Stereoscope
-
-
-
-
 
 
 # ==========================
@@ -1395,6 +2674,25 @@ The clustering is also an interesting idea to capture biology above the level of
 
 
 It would be useful to go back to simulated corpuses and test the model using different K's and see what happens. Introduce noise. Do certain K's pick up on it. Correlations between models
+
+
+
+given the sparsity of ST data, you would be expected to have better resolution using a matched or paired reference dataset using a method like SPOTlight. But what about datasets where there is no matched reference and you must rely on another? Would this potentially hurt the performance of SPOTlight? And LDA maybe will do better?
+
+Can test SPOTlight versus LDA using a variety of different references. Potential result: SPOTlight does best with correct reference but lower performance with other references. LDA decent overall - not as good as well matched SPOTlight, but better than using other references.
+
+Still potential option of adding reference info to LDA as well...future direction
+
+
+
+
+
+
+
+While I use most over dispersed genes, should still try to filter for "noisy genes" because the LDA models are likely being overfitted to each corpus. ANd so certain topics are also probably being formed around inherent noise in the data. So how to find noisy genes?
+
+Look at the betas for strange topics and see what genes they are and if they are "noisy"? PLay around with the OD gene thresholds?
+
 
 
 
