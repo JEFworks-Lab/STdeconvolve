@@ -1,15 +1,15 @@
 #' Collection of functions for STDeconvolve with Topic Modeling
-#' 
-#' 
-#' 
+#'
+#'
+#'
 
 #' convert a matrix to a long form data frame for easy plotting via ggplot2
-#' 
+#'
 #' mtx = the matrix to be converted
 #' colLab = df column label for the mtx columns, whatever they may represent
 #' rowLab = df row label for the row labels, whatever they may represent
 #' cellLab = label for the cell values, whatever they may represent
-#' 
+#'
 #' example:
 #'        [,1] [,2] [,3]
 #' [1,]    6    9    1
@@ -30,26 +30,26 @@
 #'  10       1    4     4
 #'  11       2    4    11
 #'  12       3    4     5
-#' 
+#'
 mtx2ggplotDf <- function(mtx,
                          colLab = "columns", rowLab = "rows", cellLab = "cells") {
-  
+
   if (is.null(colnames(mtx))) {
     colvals <- 1:ncol(mtx)
-  } else { 
+  } else {
     colvals <- colnames(mtx)
   }
-  
+
   if (is.null(rownames(mtx))) {
     rowvals <- 1:nrow(mtx)
-  } else { 
+  } else {
     rowvals <- rownames(mtx)
   }
-  
+
   dat <- data.frame(columns = factor(rep(colvals, dim(mtx)[1])), # columns
                     rows = factor(rep(rowvals, each = dim(mtx)[2])), # rows
                     cells = as.vector(t(mtx))) # cell values
-  
+
   colnames(dat) <- c(as.character(colLab),
                      as.character(rowLab),
                      as.character(cellLab))
@@ -70,7 +70,7 @@ clusterTopics <- function(beta,
                           distance = "euclidean", clustering = "ward.D", dynamic = "hybrid",
                           deepSplit = 4,
                           plotDendro = TRUE) {
-  
+
   if (deepSplit == 4) {
     maxCoreScatter = 0.95
     minGap = (1 - maxCoreScatter) * 3/4
@@ -87,14 +87,14 @@ clusterTopics <- function(beta,
     maxCoreScatter = 0.64
     minGap = (1 - maxCoreScatter) * 3/4
   }
-  
+
   d_ <- dist(beta, method = distance)
   hc_ <- hclust(d_, method = clustering)
-  
+
   if (plotDendro) {
     plot(hc_)
   }
-  
+
   groups <- cutreeDynamic(hc_,
                           method = dynamic,
                           distM = as.matrix(d_),
@@ -104,10 +104,10 @@ clusterTopics <- function(beta,
                           minGap = minGap,
                           maxAbsCoreScatter=NULL,
                           minAbsGap=NULL)
-  
+
   names(groups) <- hc_$labels
   groups <- factor(groups)
-  
+
   return(list(clusters = groups,
               order = hc_$order,
               dendro = as.dendrogram(hc_)))
@@ -116,31 +116,31 @@ clusterTopics <- function(beta,
 
 
 #' Train vanilla LDA model from `topicmodels`
-#' 
+#'
 #` corpus - slam::as.simple_triplet_matrix; docs x words
 #` Ks - vector of K parameters to search
 #'
 #' returns list of each fitted LDA model, the optimal K
 #' perplexity scores for each model, and the corpus
 #' that was used to fit them.
-#' 
+#'
 #' Note:
 #' access given model via: lda$models[[k]][1]
 #' models are objects from the library `topicmodels`
 #' LDA models have slots with additional information.
-#' 
-fitLDA <- function(corpus, Ks, seed = 0) {
+#'
+fitLDA <- function(corpus, Ks, seed = 0, ncores = detectCores(logical = TRUE) - 1) {
 
   controls <- list(seed = seed,
                    verbose = 1, keep = 1,
                    alpha = 1, estimate.alpha = TRUE)
-  
-  fitted_models <- mclapply(Ks, function(k) {
+
+  fitted_models <- parallel::mclapply(Ks, function(k) {
     topicmodels::LDA(corpus, k=k, control = controls)
   },
-  mc.cores = detectCores(logical = TRUE) - 1
+  mc.cores = ncores
   )
-  
+
   pScores <- c()
   for (k in seq(length(Ks))) {
     p <- topicmodels::perplexity(fitted_models[[k]], corpus)
@@ -148,14 +148,14 @@ fitLDA <- function(corpus, Ks, seed = 0) {
   }
   names(pScores) <- Ks
   pScoresNorm <- (pScores-min(pScores))/(max(pScores)-min(pScores))
-  
-  par(mfrow=c(2,1), mar=c(3,5,1,1))
-  barplot(pScores)
-  barplot(pScoresNorm)
-  
+
+  #par(mfrow=c(2,1), mar=c(3,5,1,1))
+  #barplot(pScores)
+  #barplot(pScoresNorm)
+
   kOpt <- Ks[which(pScores == min(pScores))]
   # lda_model <- topicmodels::LDA(corpus, k=kOpt, control = controls)
-  
+
   return(list(models = fitted_models,
               kOpt = kOpt,
               perplexities = pScores,
@@ -194,7 +194,7 @@ gg_color_hue <- function(n) {
 
 
 #' Visualize topic proportions across spots with `scatterpie`
-#' 
+#'
 #` theta = document x topic proportion matrix
 #` pos = position of documents, x and y columns
 #` topicOrder = order of topics based on dendrogram; a numeric vector
@@ -203,7 +203,7 @@ gg_color_hue <- function(n) {
 #` cluster_cols = vector of colors for each of the topics
 #'     can use factor of clusters for each topic (via clusterTopics$clusters)
 #'     as long as the cluster levels/values have been converted to colors.
-#'     This gets reordered wrt the topicOrder fyi. 
+#'     This gets reordered wrt the topicOrder fyi.
 #'
 #' groups = color spot piecharts based on a group or cell layer they belong to.
 #'          Needs to be a character vector. Ex: c("0", "1", "0", ...).
@@ -211,7 +211,7 @@ gg_color_hue <- function(n) {
 #'
 #' r = radius of the circles. Adjust based on size of spots.
 #'     40 = merfish; 0.4 = mOB
-#'     
+#'
 #' lwd = width of lines of the pie charts
 #'
 vizAllTopics <- function(theta, pos, topicOrder, cluster_cols,
@@ -221,28 +221,28 @@ vizAllTopics <- function(theta, pos, topicOrder, cluster_cols,
                          lwd = 0.5,
                          showLegend = TRUE,
                          plotTitle = NA) {
-  
+
   # reorder colors of topics wrt the dendrogram
   colors_ordered <- as.vector(cluster_cols[topicOrder])
-  
+
   # doc-topic distribution reordered based on topicOrder
   theta_ordered <- theta[, topicOrder]
   theta_ordered <- as.data.frame(theta_ordered)
   # colnames(theta_ordered) <- paste0("Topic.", topicOrder)
   colnames(theta_ordered) <- paste0("Topic.", colnames(theta_ordered))
-  
+
   # add columns with document positions
   # colnames(pos) <- c("x", "y")
   theta_ordered_pos <- merge(data.frame(theta_ordered),
                                  data.frame(pos), by=0)
-  
+
   # column names of topics in DF, in order of topicOrder
   # topicColumns <- paste0("Topic.", topicOrder)
-  
+
   # first column after merge is "Row.names", last two are "x" and "y"
   # problem is that data frame will replace "-" and " " with "."
   topicColumns <- colnames(theta_ordered_pos)[2:(dim(theta_ordered_pos)[2]-2)]
-  
+
   # color of piechart groups (lines of piechart):
   if (is.na(groups) == TRUE) {
     groups <- rep("0", dim(theta_ordered_pos)[1])
@@ -253,7 +253,7 @@ vizAllTopics <- function(theta, pos, topicOrder, cluster_cols,
   if (is.na(group_cols) == TRUE) {
     group_cols <- c("0" = "gray")
   }
-  
+
   p <- ggplot() +
     theme(panel.background = element_rect(fill = "black"),
           panel.grid = element_blank()) +
@@ -266,37 +266,37 @@ vizAllTopics <- function(theta, pos, topicOrder, cluster_cols,
     scale_fill_manual(values=colors_ordered) +
     scale_color_manual(values = group_cols)
     coord_equal()
-  
+
   if (showLegend == FALSE) {
     p <- p + guides(fill=FALSE)
   }
-    
+
   if (is.na(plotTitle) == FALSE) {
     p <- p + ggtitle(plotTitle)
   }
-  
+
   print(p)
 }
 
 
 #' Visualize proportions of topic clusters separately
-#' 
+#'
 #` theta - document topic proportion matrix
 #` pos - position of documents, x and y columns
 #` topicOrder - order of topics based on dendrogram; a numeric vector
 #` clusters - factor of the color (topic cluster) each cluster is assigned to
 #'            In this case, the levels should be colors. In `vizAllTopics`,
 #'            clusters is "cluster_cols" and can just be a vector of colors.
-#'            
+#'
 #' groups = color spot piecharts based on a group or cell layer they belong to.
 #'          Needs to be a character vector. Ex: c("0", "1", "0", ...).
 #' group_cols = color labels for the groups. Ex: c("0" = "gray", "1" = "red")
-#' 
+#'
 #' r = radius of the circles. Adjust based on size of spots.
 #'     40 = merfish; 0.4 = mOB
-#'     
+#'
 #' lwd = width of lines of the pie charts
-#' 
+#'
 vizTopicClusters <- function(theta, pos, topicOrder, clusters,
                              groups = NA,
                              group_cols = NA,
@@ -304,59 +304,59 @@ vizTopicClusters <- function(theta, pos, topicOrder, clusters,
                              r = 40,
                              lwd = 0.5,
                              plotTitle = NA) {
-  
+
   # reorder factor wrt the dendrogram
   clusters_ordered <- clusters[topicOrder]
-  
+
   print("Topic cluster members:")
   # produce a plot for each topic cluster:
   for (cluster in levels(clusters)) {
-    
+
     # select the topics in the cluster in the same order of the dendrogram
     topics <- labels(clusters_ordered[which(clusters_ordered == cluster)])
-    
+
     cat(cluster, ":", topics, "\n")
-    
+
     # doc-topic distribution reordered based on topicOrder and selected cluster topics
     theta_ordered <- theta[, topics]
-    
+
     # get percentage of other topics not in cluster
     if (is.null(dim(theta_ordered))) {
       other <- 1 - theta_ordered
     } else {
       other <- 1 - rowSums(theta_ordered)
     }
-    
+
     theta_ordered <- as.data.frame(theta_ordered)
     colnames(theta_ordered) <- paste0("Topic.", topics)
     theta_ordered$other <- other
-    
+
     # if any topics not represented at all, drop them
     # Apparently if a topic is 0 for all pie charts, it is not plotted
     # and doesn't appear in the legend. So it messes with the colors.
     # "other" takes one of the colors of the topics and is not gray
     theta_ordered <- theta_ordered[,which(!colSums(theta_ordered) == 0)]
-    
+
     # add columns with document positions
     rownames(theta_ordered) <- rownames(pos)
     theta_ordered_pos <- merge(data.frame(theta_ordered),
                                    data.frame(pos), by=0)
-    
+
     # first column after merge is "Row.names", last two are "x" and "y"
     # problem is that data frame will replace "-" and " " with "."
     topicColumns <- colnames(theta_ordered_pos)[2:(dim(theta_ordered_pos)[2]-2)]
-    
+
     # get a hue of colors representing the cluster color
     if (sharedCol){
       color_ramp <- colorRampPalette(c(cluster, cluster))
     } else {
       color_ramp <- colorRampPalette(c(lighten(cluster, factor = 0.8), darken(cluster, factor = 1)))
     }
-    
+
     # topic_colors <- viridis_pal(option = "C")(length(blue_cluster))
     topic_colors <- color_ramp(ncol(theta_ordered) - 1) # don't count "other"
     topic_colors <- append(topic_colors, c("gray"))
-    
+
     # color of piechart groups (lines of piechart):
     if (is.na(groups) == TRUE) {
       groups <- rep("0", dim(theta_ordered_pos)[1])
@@ -367,7 +367,7 @@ vizTopicClusters <- function(theta, pos, topicOrder, clusters,
     if (is.na(group_cols) == TRUE) {
       group_cols <- c("0" = "gray")
     }
-    
+
     p <- ggplot() +
       theme(panel.background = element_rect(fill = "black"),
             panel.grid = element_blank()) +
@@ -380,11 +380,11 @@ vizTopicClusters <- function(theta, pos, topicOrder, clusters,
       coord_equal() +
       scale_fill_manual(values=topic_colors) +
       scale_color_manual(values = group_cols)
-    
+
     if (is.na(plotTitle) == FALSE) {
       p <- p + ggtitle(plotTitle)
     }
-    
+
     print(p)
   }
 }
@@ -396,18 +396,18 @@ vizTopicClusters <- function(theta, pos, topicOrder, clusters,
 #' beta = topic-term distribution matrix
 #' corpus = document x term matrix. Counts of terms in each document
 #' thresh = the probability of the topic generating the term
-#' 
+#'
 #' correlation = either "corpus" or "beta"
 #'        Choose which matrix to perform the correlation on.
 #'        Either wrt gene counts across the docs (corpus)
 #'        or the term probability for each topic (beta)
-#' 
+#'
 #' returns:
 #' list of the resulting term cross correlation matrices for each topic
 #' also returns the correlation heat maps (optional)
-#' 
+#'
 topicTermCorrelationMats <- function(beta, corpus, thresh = 0.05, correlation = "corpus", plots = TRUE) {
-  
+
   # get the top terms for each topic based on threshold
   top_topic_terms <- apply(beta, 1, function(x) {
     ordered_terms <- x[order(x, decreasing = TRUE)]
@@ -417,7 +417,7 @@ topicTermCorrelationMats <- function(beta, corpus, thresh = 0.05, correlation = 
     }
     top_terms
   })
-  
+
   termCorrelations <- lapply(1:length(top_topic_terms), function(topic) {
     topic_terms <- top_topic_terms[[topic]]
     if (correlation == "corpus") {
@@ -427,8 +427,8 @@ topicTermCorrelationMats <- function(beta, corpus, thresh = 0.05, correlation = 
     } else {
       stop("correlation must equal either `corpus` or `beta`.")
     }
-    
-    
+
+
     if (plots) {
       par(mfrow=c(1,1), mar=c(8,8,2,2))
       h <- heatmap.2(term_corr,
@@ -442,7 +442,7 @@ topicTermCorrelationMats <- function(beta, corpus, thresh = 0.05, correlation = 
                      key.xlab = "Correlation",
                      key.title = NA)
     }
-    
+
     term_corr
   })
   return(termCorrelations)
@@ -460,32 +460,32 @@ topicTermCorrelationMats <- function(beta, corpus, thresh = 0.05, correlation = 
 #' topic terms used (numTerms)
 #'
 topicTermCorrelation <- function(topicCorrList) {
-  
+
   results <- lapply(topicCorrList, function(cor_mtx) {
-    
+
     # sum the correlations, but subtract the auto-correlations (b/c all 1 and not interesting)
     # then divide by total correlations added
     num_terms <- nrow(cor_mtx)
     total_cor <- (sum(cor_mtx) - num_terms) / (num_terms**2 - num_terms)
     c(total_cor, num_terms)
-    
+
   })
-  
+
   df <- data.frame(matrix(unlist(results), nrow=length(results), byrow=T))
   colnames(df) <- c("cor", "numTerms")
   return(df)
-  
+
 }
 
 
 
-#' Extract corpus and ground truth doc-topic/topic-term matrices from a 
+#' Extract corpus and ground truth doc-topic/topic-term matrices from a
 #' MERFISH bregma in the hash table
 #'
 #' For FN7_2_M22_M26_hash[["-0.04"]] specifically:
-#' 
+#'
 #' bregmas: [1] "-0.04" "-0.09" "-0.14" "-0.19" "-0.24" "-0.29"
-#' 
+#'
 #' what is in the hash table:
 #' h[[bregma_key]] <- list(bregmaFullDf = selected_bregma, # use with cellGeneCounts to get topic-word proportions
 #'                             cellTypeTable = selected_bregma_patch_cells, # gt document-topic proportions
@@ -495,51 +495,51 @@ topicTermCorrelation <- function(topicCorrList) {
 # '                            patchGeneCounts = patchGeneCounts) # the simulation
 #'
 extractBregmaCorpus <- function (hashTable, bregmaID) {
-  
+
   bregmaID <- as.character(bregmaID)
-  
+
   sim <- hashTable[[bregmaID]][["patchGeneCounts"]]
   sim <- sim[order(rownames(sim)),]
   sim <- slam::as.simple_triplet_matrix(sim)
-  
+
   gtDocTopics <- hashTable[[bregmaID]][["cellTypeTable"]]/rowSums(hashTable[[bregmaID]][["cellTypeTable"]])
   gtDocTopics <- gtDocTopics[order(rownames(sim)),]
-  
+
   df <- hashTable[[bregmaID]][["bregmaFullDf"]]
   df <- df[which(df$patch_id != ""),]
   cellTypes <- df[,c("Cell_class")]
   cells <- rownames(df)
-  
+
   mat <- hashTable[[bregmaID]][["cellGeneCounts"]][cells,]
-  
+
   mm <- model.matrix(~ 0 + factor(cellTypes))
   colnames(mm) <- levels(factor(cellTypes))
-  
+
   gtTopicWords <- t(t(as.matrix(mat)) %*% mm)
   gtTopicWords <- gtTopicWords/rowSums(gtTopicWords)
-  
+
   bregma <- list(sim = sim,
                  gtDocTopics = gtDocTopics,
                  gtTopicWords = gtTopicWords)
-  
+
   return(bregma)
-  
+
 }
 
 
 #' compute pvalue for topic correlation
 #' based on a null distribution of randomly sampled sets of terms
-#' 
+#'
 #' null = ggplot transformed (long) dataframe
 #' ex:
 #' dat <- data.frame(draw = factor(rep(1:dim(termCorrNulls)[2], dim(termCorrNulls)[1])),
 #'            numTerms = factor(rep(2:(dim(termCorrNulls)[1]+1), each = dim(termCorrNulls)[2])),
 #'            corrs = as.vector(t(termCorrNulls)))
-#' 
+#'
 #' was a matrix (numTerms x samples)
 #' so for 2:50 sizes of term sets, and 1000 random pairings to compute correlation on
 #' based on gene counts across documents in corpus
-#'            
+#'
 #'     draw numTerms         corrs
 #' 1      1        2  0.0590920266
 #' 2      2        2 -0.4093004872
@@ -548,28 +548,28 @@ extractBregmaCorpus <- function (hashTable, bregmaID) {
 #' 5      5        2  0.0127734074
 #'
 #' predictions = `topicTermCorrelation()` output data frame
-#' 
+#'
 #'            cor numTerms      zscore topic         pval
 #' 1   0.25002099       21  2.93820765     1 0.0074220276
 #' 2   0.29238589       27  4.83558037     2 0.0006501404
 #' 3   0.16600159       34  0.96881060     3 0.1725689210
 #' 4   0.27238757       30  4.71473737     4 0.0008689495
 #' 5   0.11743073       21 -0.66700411     5 0.7307249799
-#' 
+#'
 #' procedure:
 #' gets the null distribution terms for a given term set size
 #' typically 1000 correlation values long.
 #' Computes a probability density distribution
 #' and integrates from the predicted correlation value
 #' from the predictions data frame.
-#' 
+#'
 #' Thus returning a p-value for each predicted topic correlation
 #' based on the null distribution of randomly sampled gene set correlations.
 #'
 computeCorrPval <- function(null, predictions, densityPlots = TRUE) {
   # null <- `dat`
   # predictions <- `LDA.k50.termCor.geneCounts`
-  
+
   # zscores <- lapply((1:nrow(predictions)), function(i) {
   #   nterms <- predictions[i,"numTerms"]
   #   corr <- predictions[i,"cor"]
@@ -579,22 +579,22 @@ computeCorrPval <- function(null, predictions, densityPlots = TRUE) {
   #   z <- (corr - u)/s
   #   z
   # })
-  
+
   probs <- lapply((1:nrow(predictions)), function(i) {
     nterms <- predictions[i,"numTerms"]
     corr <- predictions[i,"cor"]
     nullsVals <- null[null$numTerms == nterms,]$corrs
     PDF <- approxfun(density(nullsVals), rule=2)
-    
+
     if (densityPlots) {
       plot(PDF)
       points(corr, PDF(corr))
     }
-    
+
     p <- integrate(PDF, lower=corr, upper=1)
     p$value
   })
-  
+
   return(unlist(probs))
 }
 
@@ -611,9 +611,9 @@ computeCorrPval <- function(null, predictions, densityPlots = TRUE) {
 #' genes (i.e., terms) in the first beta.
 #' If a numeric fraction (0.01, let's say), then will be applied to only use
 #' genes with a probability in each given topic above that threshold.
-#' 
+#'
 correlationBetweenBetas <- function(beta1, beta2, thresh = NULL) {
-  
+
   betaCorMtx <- do.call(rbind, lapply(1:nrow(beta1), function(i) {
     # if choosing top genes for a topic
     if (is.null(thresh)) {
@@ -628,7 +628,7 @@ correlationBetweenBetas <- function(beta1, beta2, thresh = NULL) {
       cor(beta1[i,genes], beta2[j,genes])
     })
   }))
-  
+
   rownames(betaCorMtx) <- rownames(beta1)
   colnames(betaCorMtx) <- rownames(beta2)
   return(betaCorMtx)
@@ -637,9 +637,9 @@ correlationBetweenBetas <- function(beta1, beta2, thresh = NULL) {
 
 #' similar to `correlationBetweenBetas` but for the theta (doc-topic proportions)
 #' for the thetas the topics are the columns instead of the rows like in the betas
-#' 
+#'
 correlationBetweenThetas <- function(theta1, theta2, thresh = NULL) {
-  
+
   thetaCorMtx <- do.call(rbind, lapply(1:ncol(theta1), function(i) {
     # # if choosing top genes for a topic
     # if (is.null(thresh)) {
@@ -654,7 +654,7 @@ correlationBetweenThetas <- function(theta1, theta2, thresh = NULL) {
       cor(theta1[,i], theta2[,j])
     })
   }))
-  
+
   rownames(thetaCorMtx) <- colnames(theta1)
   colnames(thetaCorMtx) <- colnames(theta2)
   return(thetaCorMtx)
@@ -663,7 +663,7 @@ correlationBetweenThetas <- function(theta1, theta2, thresh = NULL) {
 
 #' adjust values to 0-1 range
 #' x = can be vector or matrix
-#' 
+#'
 scale0_1 <- function(x) {
   xAdj <- (x - min(x)) / diff(range(x))
   return(xAdj)
@@ -689,62 +689,62 @@ computeDistance <- function(mtx1, mtx2, normType = "F") {
 #'
 #' mtx = needs to be topic (row) x feature (term or document) (column) format
 #' clusters = factor of the topics (names) and their assigned cluster (levels)
-#' 
+#'
 #' mtxType = either "b" (beta) or "t" (theta). Affects the adjustment to the
 #'           combined topic vectors. "b" divides summed topic vectors by number
 #'           of combined topics.
 #'
 combineTopics <- function(mtx, clusters, mtxType) {
-  
+
   if (mtxType == "t") {
     mtx <- t(mtx)
   }
-  
+
   combinedTopics <- do.call(rbind, lapply(levels(clusters), function(cluster) {
     # select the topics in the cluster in the same order of the dendrogram
     topics <- labels(clusters[which(clusters == cluster)])
-    
+
     print(cluster)
     print(length(topics))
-    
+
     # topic-term distribution reordered based on dendro and selected cluster topics
     mtx_slice <- mtx[topics,]
-    
+
     if (length(topics) == 1) {
       topicVector <- mtx_slice
     } else if (length(topics) > 1) {
       mtx_slice <- as.data.frame(mtx_slice)
-      
+
       # for the beta matrix, each row is a topic, each column is a gene.
       # The topic row is a distribution of terms that sums to 1.
       # So combining topic row vectors, these should be adjusted such that the
       # rowSum == 1. As in, take average of the terms after combining.
-      
+
       # However, the theta matrix (after inversion) will have topic rows
       # and each column is a document. Because the topic can be represented
       # at various proportions in each doc and these will not necessarily add
       # to 1, should not take average. Just sum topic row vectors together.
       # This way, each document column still adds to 1 when considering the
       # proportion of each topic-cluster that makes up each the document.
-      
+
       if (mtxType == "b") {
         topicVector <- colSums(mtx_slice) / length(topics)
       } else if (mtxType == "t") {
         topicVector <- colSums(mtx_slice)
       }
-      
+
     }
     topicVector
-    
+
   }))
   rownames(combinedTopics) <- levels(clusters)
   colnames(combinedTopics) <- colnames(mtx)
   print("topics combined.")
-  
+
   if (mtxType == "t") {
     combinedTopics <- t(combinedTopics)
   }
-  
+
   return(combinedTopics)
 }
 
@@ -757,9 +757,9 @@ combineTopics <- function(mtx, clusters, mtxType) {
 #'      "gene" counts of a gene for each spot
 #'
 #' gene = column name of the gene counts in df to be visualized
-#' 
+#'
 #' groups = a character vector of labels assigning spots to different groups.
-#'          Ex: c("0", "1", "0", ...). 
+#'          Ex: c("0", "1", "0", ...).
 #' group_cols = a vector designating the spot border color to be used for
 #'              group assignment. Ex: c("0" = "gray", "1" = "red").
 #'
@@ -768,9 +768,9 @@ vizGeneCounts <- function(df, gene,
                            size = 7, stroke = 2,
                            plotTitle = NA,
                            showLegend = TRUE) {
-  
+
   counts <- df[,gene]
-  
+
   # color spots by group:
   if (is.na(groups[1]) == TRUE) {
     groups <- " "
@@ -781,7 +781,7 @@ vizGeneCounts <- function(df, gene,
   if (is.na(group_cols[1]) == TRUE) {
     group_cols <- c(" " = "gray")
   }
-  
+
   p <- ggplot() +
     geom_point(data = df, aes(x=x, y=y, fill=counts, color = groups),
                shape = 21,
@@ -789,41 +789,41 @@ vizGeneCounts <- function(df, gene,
     scale_fill_viridis(option = "A", direction = -1) +
     scale_color_manual(values = group_cols) +
     ggtitle("Granule txn C1")
-  
+
   if (showLegend == FALSE) {
     p <- p + guides(fill=FALSE)
   }
   if (is.na(plotTitle) == FALSE) {
     p <- p + ggtitle(plotTitle)
   }
-  
+
   p <- p + theme_classic()
   print(p)
 }
 
 
 #' preprocess ST count matrices
-#' 
+#'
 #' input should be spot (row) x gene (columns) mtx with raw gene counts
-#' 
+#'
 #' align = optional 3x3 alignment file to adjust spot coordinates to match
 #'         image pixels in order to properly align spots with image
 #' nTopGenes = number of top expressed genes to remove
-#' 
+#'
 #' if the spot IDs are the positional information, extract:
 #'  ex: "31x20" extracted as 31, 20 for x and y
 #' extractPos = TRUE determines if this is done
-#' 
+#'
 #' returns list with corpus (docs x genes) matrix,
 #' corpus in slm format, and spot positions.
-#' 
+#'
 #' positions can be adjusted by the alignment matrices supplied if desired.
 #'
 #' remove = character vector of gene names to remove, based on grepl regular expression
 #'          ex: c("^mt-") or c("^MT", "^RPL", "^MRPL")
 #'
 preprocess <- function(dat, alignFile = NA, extractPos = TRUE, nTopGenes = 5, remove = NA) {
-  
+
   # if dat is a path to a file, read it, else assume matrix
   # definitely clean this up later..
   if (typeof(dat) == "character") {
@@ -831,15 +831,15 @@ preprocess <- function(dat, alignFile = NA, extractPos = TRUE, nTopGenes = 5, re
   } else {
     counts <- dat
   }
-  
-  
+
+
   # remove poor spots and genes
-  countsClean <- MERINGUE::cleanCounts(counts = t(counts), 
-                                       min.reads = 100, 
-                                       min.lib.size = 100, 
+  countsClean <- MERINGUE::cleanCounts(counts = t(counts),
+                                       min.reads = 100,
+                                       min.lib.size = 100,
                                        plot=TRUE,
                                        verbose=TRUE)
-  
+
   # get spot positions
   if (extractPos) {
     positions <- do.call(rbind, lapply(colnames(countsClean), function(spotID) {
@@ -851,45 +851,45 @@ preprocess <- function(dat, alignFile = NA, extractPos = TRUE, nTopGenes = 5, re
   } else {
     positions <- NULL
   }
-  
+
   # adjust spot coordinates, optional
   if (is.na(alignFile) == FALSE) {
     align <- matrix(unlist(read.table(alignFile)), nrow = 3, ncol = 3)
     (positions[,"x"] * align[1,1]) - 290
     (positions[,"y"] * align[2,2]) - 290
   }
-  
+
   # remove top expressed genes and mt genes
   top_expressed <- names(rowSums(countsClean)[order(rowSums(countsClean),
                                                     decreasing = TRUE)][1:nTopGenes])
   countsCleanFilt <- countsClean[rownames(countsClean) %in% top_expressed == FALSE,]
   print(paste("after removing top genes:", dim(countsCleanFilt)[1], dim(countsCleanFilt)[2]))
-  
+
   # remove specific genes (if there are any)
   if (is.na(remove) == FALSE) {
     countsCleanFilt <- countsCleanFilt[!grepl(paste(remove, collapse="|"), rownames(countsCleanFilt)),]
     print(paste("after removing selected genes:", dim(countsCleanFilt)[1], dim(countsCleanFilt)[2]))
   }
-  
+
   # remove genes that appear in every document
   countsCleanFilt_ <- countsCleanFilt
   countsCleanFilt_[which(countsCleanFilt_ > 0)] <- 1
   countsCleanFilt <- countsCleanFilt[which(rowSums(countsCleanFilt_) < 260),]
   print(paste("after removing genes present in every spot:", dim(countsCleanFilt)[1], dim(countsCleanFilt)[2]))
-  
+
   # get variable genes
   par(mfrow=c(4,2), mar=c(1,1,1,1))
   countsCleanFiltOD <- getOverdispersedGenes(countsCleanFilt,
                                              plot = TRUE,
                                              details = TRUE)
-  
+
   corpus <- t(as.matrix(countsCleanFilt[countsCleanFiltOD$ods,]))
   corpus_slm <- slam::as.simple_triplet_matrix(corpus)
-  
+
   return(list(corpus = corpus,
               slm = corpus_slm,
               pos = positions))
-  
+
 }
 
 
@@ -898,35 +898,35 @@ preprocess <- function(dat, alignFile = NA, extractPos = TRUE, nTopGenes = 5, re
 #' and the bin is used as the new gene count value
 #'
 binnedCorpus <- function(corpus, nbins = 50) {
-  
+
   lin <- as.vector(corpus)
-  
+
   b <- seq(from = min(lin), to = max(lin), by=max(lin)/nbins)
   b <- append(c(-Inf), b)
-  
+
   l <- append(c(0), seq(nbins))
-  
+
   binnedCorpus <- matrix(as.numeric(as.vector(cut(corpus, breaks = b, labels = l))),
                                     nrow = dim(corpus)[1],
                                     ncol = dim(corpus)[2])
-  
+
   rownames(binnedCorpus) <- rownames(corpus)
   colnames(binnedCorpus) <- colnames(corpus)
-  
+
   return(binnedCorpus)
 }
 
 #' return the beta and theta matrices for a given lda model
 #'
 getBetaTheta <- function(lda) {
-  
+
   lda.tmResult <- posterior(lda)
   theta <- lda.tmResult$topics
   beta <- lda.tmResult$terms
   topicFreqsOverall <- colSums(theta) / length(lda@documents)
-  
+
   return(list(beta = beta,
               theta = theta,
               topicFreq = topicFreqsOverall))
-  
+
 }
