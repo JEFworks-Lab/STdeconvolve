@@ -1,0 +1,951 @@
+---
+title: "merged_wrokflow"
+author: "Brendan F. Miller"
+date: "2/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+
+k_ <- seq(from = 10, to = 75, by = 5)
+k_
+
+```
+
+
+get datasets first, then come up with a commen gene set for all corpuses before running models
+
+# ==========================
+# MOB
+
+# mOB merignue data
+
+```{r}
+
+data(mOB)
+cd <- mOB$counts
+
+```
+
+```{r}
+
+mob <- preprocess(t(cd),
+                  alignFile = NA, extractPos = FALSE,
+                  nTopGenes = 5,
+                  genes.to.remove = c("mt-"),
+                  perc.spots = .95,
+                  min.reads = 100,
+                  min.lib.size = 100,
+                  od.genes.alpha = 0.10)
+
+mob$pos <- mOB$pos[rownames(mob$corpus),]
+
+```
+
+approx 5 minutes for 20-75 using corpus of 196 OD genes
+
+```{r}
+
+start_time <- Sys.time()
+
+mob_LDAs <- fitLDA(mob$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+could test out different corpus's and how they affect K and perplexity...
+
+```{r}
+
+mobLDA_alphas <- sapply(mob_LDAs$models, slot, "alpha")
+dat <- data.frame(k = as.character(k_),
+                  alpha = mobLDA_alphas,
+                  perplexities = mob_LDAs$perplexities,
+                  pos = seq(length(k_)))
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = perplexities)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("perplexity") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = alpha)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("alpha") +
+  theme_classic()
+
+```
+
+```{r}
+
+mob_opt <- buildLDAobject(LDAmodel = optimalModel(mob_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = mob_opt$thetaCombn,
+             pos = mob$pos,
+             topicOrder = seq_len(length(colnames(mob_opt$thetaCombn))),
+             cluster_cols = levels(mob_opt$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mob_opt combined")
+
+vizTopicClusters(theta = mob_opt$thetaCombn,
+                pos = mob$pos,
+                clusters = mob_opt$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+vizTopicClusters(theta = mob_opt$theta,
+                pos = mob$pos,
+                clusters = mob_opt$cols,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+# Rep1 Stahl data
+
+```{r}
+
+path <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep1_MOB_count_matrix-1.tsv"
+
+mob_rep1 <- preprocess(path,
+                  alignFile = NA, extractPos = TRUE,
+                  nTopGenes = 5,
+                  genes.to.remove = c("mt-"),
+                  perc.spots = .95,
+                  min.reads = 100,
+                  min.lib.size = 100,
+                  od.genes.alpha = 0.10)
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+mob_rep1_LDAs <- fitLDA(mob_rep1$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+mob_rep1_opt <- buildLDAobject(LDAmodel = optimalModel(mob_rep1_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+```
+
+# Rep2 Stahl data
+
+```{r}
+
+path <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep2_MOB_count_matrix-1.tsv"
+
+mob_rep2 <- preprocess(path,
+                  alignFile = NA, extractPos = TRUE,
+                  nTopGenes = 5,
+                  genes.to.remove = c("mt-"),
+                  perc.spots = .95,
+                  min.reads = 100,
+                  min.lib.size = 100,
+                  od.genes.alpha = 0.10)
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+mob_rep2_LDAs <- fitLDA(mob_rep2$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+mob_rep2_opt <- buildLDAobject(LDAmodel = optimalModel(mob_rep2_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+```
+
+# Rep3 Stahl data
+
+```{r}
+
+path <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep3_MOB_count_matrix-1.tsv"
+
+mob_rep3 <- preprocess(path,
+                  alignFile = NA, extractPos = TRUE,
+                  nTopGenes = 5,
+                  genes.to.remove = c("mt-"),
+                  perc.spots = .95,
+                  min.reads = 100,
+                  min.lib.size = 100,
+                  od.genes.alpha = 0.10)
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+mob_rep3_LDAs <- fitLDA(mob_rep3$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+mob_rep3_opt <- buildLDAobject(LDAmodel = optimalModel(mob_rep3_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+```
+
+
+# ==========================
+# PDAC
+
+# PDAC A ST1
+
+```{r}
+
+path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/moncada_pdac_GSE111672/GSE111672_RAW/GSM3036911_PDAC-A-ST1-filtered.txt"
+
+# reformat the data before preprocessing
+# need a matrix in which:
+pdac_a1 <- read.table(path, header = TRUE, sep = "\t")
+pdac_a1
+
+```
+
+input for `preprocess` should be spot (row) x gene (columns) mtx with raw gene counts
+
+```{r}
+
+spotids <- unlist(lapply(colnames(pdac_a1)[2:ncol(pdac_a1)], function(i) {
+  ix <- strsplit(i, "X")[[1]][2]
+  ix
+}))
+
+t <- t(pdac_a1)
+colnames(t) <- pdac_a1$Genes
+t <- t[2:nrow(t),]
+pdac_a1 <- apply(t, 2,FUN = as.numeric)
+rownames(pdac_a1) <- spotids
+pdac_a1[1:10,1:10]
+
+```
+
+```{r}
+
+pdac_a1 <- preprocess(pdac_a1,
+                  alignFile = NA, extractPos = TRUE,
+                  nTopGenes = 5,
+                  genes.to.remove = c("^MT", "^RPL", "^MRPL"), # note, MTOR is removed...maybe other non MT genes...?
+                  perc.spots = .95,
+                  min.reads = 100,
+                  min.lib.size = 100,
+                  od.genes.alpha = 0.10)
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+pdac_a1_LDAs <- fitLDA(pdac_a1$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+pdac_a1_opt <- buildLDAobject(LDAmodel = optimalModel(pdac_a1_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+```
+
+
+# PDAC A ST2
+
+```{r}
+
+path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/moncada_pdac_GSE111672/GSE111672_RAW/GSM4100721_PDAC-A-st2.tsv"
+
+# input for `preprocess` should be spot (row) x gene (columns) mtx with raw gene counts
+
+pdac_a2 <- loadPDACfile(path = path)
+pdac_a2[1:10,1:10]
+
+```
+
+```{r}
+
+pdac_a2 <- preprocess(pdac_a2,
+                  alignFile = NA, extractPos = TRUE,
+                  nTopGenes = 5,
+                  genes.to.remove = c("^MT", "^RPL", "^MRPL"), # note, MTOR is removed...maybe other non MT genes...?
+                  perc.spots = .95,
+                  min.reads = 100,
+                  min.lib.size = 100,
+                  od.genes.alpha = 0.10)
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+pdac_a2_LDAs <- fitLDA(pdac_a2$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+pdac_a2_opt <- buildLDAobject(LDAmodel = optimalModel(pdac_a2_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+```
+
+# PDAC B ST1
+
+```{r}
+
+path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/moncada_pdac_GSE111672/GSE111672_RAW/GSM3405534_PDAC-B-ST1-filtered.txt"
+
+# input for `preprocess` should be spot (row) x gene (columns) mtx with raw gene counts
+
+pdac_b1 <- loadPDACfile(path = path)
+pdac_b1[1:10,1:10]
+
+```
+
+```{r}
+
+pdac_b1 <- preprocess(pdac_b1,
+                  alignFile = NA, extractPos = TRUE,
+                  nTopGenes = 5,
+                  genes.to.remove = c("^MT", "^RPL", "^MRPL"), # note, MTOR is removed...maybe other non MT genes...?
+                  perc.spots = .95,
+                  min.reads = 100,
+                  min.lib.size = 100,
+                  od.genes.alpha = 0.10)
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+pdac_b1_LDAs <- fitLDA(pdac_b1$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+pdac_b1_opt <- buildLDAobject(LDAmodel = optimalModel(pdac_b1_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+```
+
+# PDAC B ST2
+
+```{r}
+
+path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/moncada_pdac_GSE111672/GSE111672_RAW/GSM4100723_PDAC-B-st2.tsv"
+
+# input for `preprocess` should be spot (row) x gene (columns) mtx with raw gene counts
+
+pdac_b2 <- loadPDACfile(path = path)
+pdac_b2[1:10,1:10]
+
+```
+
+```{r}
+
+pdac_b2 <- preprocess(pdac_b2,
+                  alignFile = NA, extractPos = TRUE,
+                  nTopGenes = 5,
+                  genes.to.remove = c("^MT", "^RPL", "^MRPL"), # note, MTOR is removed...maybe other non MT genes...?
+                  perc.spots = .95,
+                  min.reads = 100,
+                  min.lib.size = 100,
+                  od.genes.alpha = 0.10)
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+pdac_b2_LDAs <- fitLDA(pdac_b2$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+pdac_b2_opt <- buildLDAobject(LDAmodel = optimalModel(pdac_b2_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+```
+
+# ==========================
+# MERFISH
+
+to run through 14 k's:
+seq(from = 10, to = 75, by = 5)
+takes on average 15 minutes for the MERFISH corpuses
+
+```{r}
+
+# documents and genes same for all:
+sapply(bregma04_LDAs$models, slot, "Dim")[,1]
+
+# terms in each corpus
+sapply(bregma04_LDAs$models, slot, "n")[1]
+sapply(bregma09_LDAs$models, slot, "n")[1]
+sapply(bregma14_LDAs$models, slot, "n")[1]
+sapply(bregma19_LDAs$models, slot, "n")[1]
+sapply(bregma24_LDAs$models, slot, "n")[1]
+sapply(bregma29_LDAs$models, slot, "n")[1]
+
+# about 1.4 million terms
+
+```
+bregmas:
+<!-- "-0.04" "-0.09" "-0.14" "-0.19" "-0.24" "-0.29" -->
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/merfish_FN7_2_M22_M26_hash.RData")
+
+```
+
+# -0.04
+
+```{r}
+
+bregma04 <- extractBregmaCorpus(FN7_2_M22_M26_hash, "-0.04")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+breg <- bregma04
+
+ggplot() +
+  geom_point(data = breg$df,
+             aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  facet_wrap(~ Cell_class, nrow = 4) +
+  scale_fill_manual(values=breg$cols)
+
+ggplot() +
+  geom_point(data = breg$df,
+             aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  scale_fill_manual(values=breg$cols)
+
+ggplot() +
+  geom_point(data = breg$df, aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  scale_fill_manual(values=breg$cols) +
+  geom_rect(data = breg$gtDocTopics,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black")
+
+ggplot() +
+  geom_point(data = breg$cellCounts, size=7, aes(x=x+50, y=y+50, color=counts)) +
+  scale_color_viridis(option = "C") +
+  geom_rect(data = breg$cellCounts,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100), 
+            fill = NA, color = "black")
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+bregma04_LDAs <- fitLDA(bregma04$sim, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+# -0.09
+
+```{r}
+
+bregma09 <- extractBregmaCorpus(FN7_2_M22_M26_hash, "-0.09")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+breg <- bregma09
+
+ggplot() +
+  geom_point(data = breg$df,
+             aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  facet_wrap(~ Cell_class, nrow = 4) +
+  scale_fill_manual(values=breg$cols)
+
+ggplot() +
+  geom_point(data = breg$df,
+             aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  scale_fill_manual(values=breg$cols)
+
+ggplot() +
+  geom_point(data = breg$df, aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  scale_fill_manual(values=breg$cols) +
+  geom_rect(data = breg$gtDocTopics,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black")
+
+ggplot() +
+  geom_point(data = breg$cellCounts, size=7, aes(x=x+50, y=y+50, color=counts)) +
+  scale_color_viridis(option = "C") +
+  geom_rect(data = breg$cellCounts,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100), 
+            fill = NA, color = "black")
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+bregma09_LDAs <- fitLDA(bregma09$sim, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+# -0.14
+
+```{r}
+
+bregma14 <- extractBregmaCorpus(FN7_2_M22_M26_hash, "-0.14")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+breg <- bregma14
+
+ggplot() +
+  geom_point(data = breg$df,
+             aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  facet_wrap(~ Cell_class, nrow = 4) +
+  scale_fill_manual(values=breg$cols)
+
+ggplot() +
+  geom_point(data = breg$df,
+             aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  scale_fill_manual(values=breg$cols)
+
+ggplot() +
+  geom_point(data = breg$df, aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  scale_fill_manual(values=breg$cols) +
+  geom_rect(data = breg$gtDocTopics,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black")
+
+ggplot() +
+  geom_point(data = breg$cellCounts, size=7, aes(x=x+50, y=y+50, color=counts)) +
+  scale_color_viridis(option = "C") +
+  geom_rect(data = breg$cellCounts,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100), 
+            fill = NA, color = "black")
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+bregma14_LDAs <- fitLDA(bregma14$sim, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+# -0.19
+
+```{r}
+
+bregma19 <- extractBregmaCorpus(FN7_2_M22_M26_hash, "-0.19")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+breg <- bregma19
+
+ggplot() +
+  geom_point(data = breg$df,
+             aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  facet_wrap(~ Cell_class, nrow = 4) +
+  scale_fill_manual(values=breg$cols)
+
+ggplot() +
+  geom_point(data = breg$df,
+             aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  scale_fill_manual(values=breg$cols)
+
+ggplot() +
+  geom_point(data = breg$df, aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  scale_fill_manual(values=breg$cols) +
+  geom_rect(data = breg$gtDocTopics,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black")
+
+ggplot() +
+  geom_point(data = breg$cellCounts, size=7, aes(x=x+50, y=y+50, color=counts)) +
+  scale_color_viridis(option = "C") +
+  geom_rect(data = breg$cellCounts,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100), 
+            fill = NA, color = "black")
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+bregma19_LDAs <- fitLDA(bregma19$sim, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+# -0.24
+
+```{r}
+
+bregma24 <- extractBregmaCorpus(FN7_2_M22_M26_hash, "-0.24")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+breg <- bregma24
+
+ggplot() +
+  geom_point(data = breg$df,
+             aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  facet_wrap(~ Cell_class, nrow = 4) +
+  scale_fill_manual(values=breg$cols)
+
+ggplot() +
+  geom_point(data = breg$df,
+             aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  scale_fill_manual(values=breg$cols)
+
+ggplot() +
+  geom_point(data = breg$df, aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  scale_fill_manual(values=breg$cols) +
+  geom_rect(data = breg$gtDocTopics,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black")
+
+ggplot() +
+  geom_point(data = breg$cellCounts, size=7, aes(x=x+50, y=y+50, color=counts)) +
+  scale_color_viridis(option = "C") +
+  geom_rect(data = breg$cellCounts,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100), 
+            fill = NA, color = "black")
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+bregma24_LDAs <- fitLDA(bregma24$sim, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+# -0.29
+
+```{r}
+
+bregma29 <- extractBregmaCorpus(FN7_2_M22_M26_hash, "-0.29")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+breg <- bregma29
+
+ggplot() +
+  geom_point(data = breg$df,
+             aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  facet_wrap(~ Cell_class, nrow = 4) +
+  scale_fill_manual(values=breg$cols)
+
+ggplot() +
+  geom_point(data = breg$df,
+             aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  scale_fill_manual(values=breg$cols)
+
+ggplot() +
+  geom_point(data = breg$df, aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
+  scale_fill_manual(values=breg$cols) +
+  geom_rect(data = breg$gtDocTopics,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black")
+
+ggplot() +
+  geom_point(data = breg$cellCounts, size=7, aes(x=x+50, y=y+50, color=counts)) +
+  scale_color_viridis(option = "C") +
+  geom_rect(data = breg$cellCounts,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100), 
+            fill = NA, color = "black")
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+bregma29_LDAs <- fitLDA(bregma29$sim, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+# compare results
+
+```{r}
+
+bregmaOpt_04 <- buildLDAobject(LDAmodel = optimalModel(bregma04_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+bregmaOpt_09 <- buildLDAobject(LDAmodel = optimalModel(bregma09_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+bregmaOpt_14 <- buildLDAobject(LDAmodel = optimalModel(bregma14_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+bregmaOpt_24 <- buildLDAobject(LDAmodel = optimalModel(bregma24_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+bregmaOpt_29 <- buildLDAobject(LDAmodel = optimalModel(bregma29_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+```
+
+## 04 vs 09
+
+```{r}
+
+beta_04v09 <- correlationBetweenBetas(beta1 = bregmaOpt_04$beta,
+                                      beta2 = bregmaOpt_09$beta)
+
+betaCombn_04v09 <- correlationBetweenBetas(beta1 = bregmaOpt_04$betaCombn,
+                                       beta2 = bregmaOpt_09$betaCombn)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_04v09,
+          Rowv = bregmaOpt_04$dendro,
+          Colv = bregmaOpt_09$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(bregmaOpt_04$cols),
+          ColSideColors = as.vector(bregmaOpt_09$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "beta_04v09",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_04v09)
+print(pairs)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_04v09[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(bregmaOpt_04$cols)[pairs$rowix],
+          ColSideColors = as.vector(bregmaOpt_09$cols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "beta_04v09",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_04v09_cors <- diag(beta_04v09[pairs$rowix, pairs$colsix])
+
+# -------------------------------------------------------
+# betaCombn:
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(betaCombn_04v09,
+          # Rowv = bregmaOpt_04$dendro,
+          # Colv = bregmaOpt_09$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(bregmaOpt_04$clustCols),
+          ColSideColors = as.vector(bregmaOpt_09$clustCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "betaCombn_04v09",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(betaCombn_04v09)) # 04 (rows) has 23 clusters and 09 has 22 (cols) to need to t()
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(betaCombn_04v09[pairs$colsix, pairs$rowix], # note for pairing it was t() so switch ix's
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(bregmaOpt_04$clustCols)[pairs$colsix], # order based on lsat, and bc more rows than cols in the mtx, it was first t(). And thus not all of the original rows were paired
+          ColSideColors = as.vector(bregmaOpt_09$clustCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "betaCombn_04v09",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+betaCombn_04v09_cors <- diag(betaCombn_04v09[pairs$colsix, pairs$rowix])
+
+```
+
+```{r}
+
+hist(beta_04v09_cors, breaks = 20)
+mean(beta_04v09_cors)
+sd(beta_04v09_cors)
+
+hist(betaCombn_04v09_cors, breaks = 20)
+mean(betaCombn_04v09_cors)
+sd(betaCombn_04v09_cors)
+
+```
+
+
+
+
+# ==========================
+# Additional Questions:
+
+## corpus and optimal k
+
+how does the:
+1. size of the corpus (num docs, num genes, num terms)
+2. or "complexity" of the corpus
+
+influence the "optimal k"
+
+potentially important because I believe that the models are being over fit to the input corpus and thus the optimal k determined is too large. It also leads to slow down because the larger the k, the more time the model takes to fit.
+
+So if I can figure out what drives the model to find an optimal k and what increases k, I could use this to guide the construction of the input corpus. OD genes? removing genes expressed in all spots? removing genes with high expression to lower the total terms?
+
+
+## corpus and speed
+
+related to the above question. A larger k certainly makes it slower to fit the model, but perhaps the size or the corpus itself also influences the speed of fitting, regardless of the size of k.
+
+
+try keeping K constant but modulating the size (doc x genes; also total terms) and measure time to fit. Also perhaps the "complexity". As in, certain topics may share a lot of the same genes instead of topics have unique genes.
+
+
+
+
+
+
+
+
+
+
+
+
+
+

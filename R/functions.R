@@ -132,8 +132,7 @@ clusterTopics <- function(beta,
 fitLDA <- function(corpus, Ks, seed = 0) {
 
   controls <- list(seed = seed,
-                   verbose = 1, keep = 1,
-                   alpha = 1, estimate.alpha = TRUE)
+                   verbose = 1, keep = 1, estimate.alpha = TRUE)
   
   fitted_models <- mclapply(Ks, function(k) {
     topicmodels::LDA(corpus, k=k, control = controls)
@@ -141,11 +140,17 @@ fitLDA <- function(corpus, Ks, seed = 0) {
   mc.cores = detectCores(logical = TRUE) - 1
   )
   
-  pScores <- c()
-  for (k in seq(length(Ks))) {
+  pScores <- unlist(lapply(seq(length(Ks)), function(k){
     p <- topicmodels::perplexity(fitted_models[[k]], corpus)
-    pScores <- append(pScores, p)
-  }
+    p
+  }))
+  
+  # pScores <- c()
+  # for (k in seq(length(Ks))) {
+  #   p <- topicmodels::perplexity(fitted_models[[k]], corpus)
+  #   pScores <- append(pScores, p)
+  # }
+  
   names(pScores) <- Ks
   pScoresNorm <- (pScores-min(pScores))/(max(pScores)-min(pScores))
   
@@ -162,6 +167,14 @@ fitLDA <- function(corpus, Ks, seed = 0) {
               fitCorpus = corpus))
 }
 
+
+#' get the optimal LDA model
+#' 
+#' models = list returned from `fitLDA`
+#' 
+optimalModel <- function(models) {
+  models$models[[which(sapply(models$models, slot, "k") == models$kOpt)]]
+}
 
 #' custom correlation color range for heatmap.2 correlation plots
 correlation_palette <- colorRampPalette(c("blue", "white", "red"))(n = 209)
@@ -283,7 +296,7 @@ vizAllTopics <- function(theta, pos, topicOrder, cluster_cols,
 #' 
 #` theta - document topic proportion matrix
 #` pos - position of documents, x and y columns
-#` topicOrder - order of topics based on dendrogram; a numeric vector
+#` topicOrder - order of topics based on dendrogram; a numeric vector NOT NEEDED
 #` clusters - factor of the color (topic cluster) each cluster is assigned to
 #'            In this case, the levels should be colors. In `vizAllTopics`,
 #'            clusters is "cluster_cols" and can just be a vector of colors.
@@ -448,7 +461,7 @@ topicTermCorrelationMats <- function(beta, corpus, thresh = 0.05, correlation = 
 
 
 #' Compute the "mean correlation" for each topic
-#' based on the topic term corss correlation matrices
+#' based on the topic term correlation matrices
 #'
 #' topicCorrList = list of the resulting term cross correlation matrices
 #'      for each topic. (topicTermCorrelationMats)
@@ -496,29 +509,62 @@ extractBregmaCorpus <- function (hashTable, bregmaID) {
   
   bregmaID <- as.character(bregmaID)
   
+  # corpus in slam format
   sim <- hashTable[[bregmaID]][["patchGeneCounts"]]
   sim <- sim[order(rownames(sim)),]
   sim <- slam::as.simple_triplet_matrix(sim)
   
+  # ground truth spot cell type proportions
   gtDocTopics <- hashTable[[bregmaID]][["cellTypeTable"]]/rowSums(hashTable[[bregmaID]][["cellTypeTable"]])
   gtDocTopics <- gtDocTopics[order(rownames(sim)),]
+  # reformat `gtDocTopic` proportions into data frame with spot coordinates
+  
+  tmp_positions <- do.call(rbind, lapply(rownames(gtDocTopics), function(x){
+    coords <- strsplit(x, "_")[[1]]
+    as.numeric(coords)
+  }))
+  colnames(tmp_positions) <- c("x", "y")
+  rownames(tmp_positions) <- rownames(gtDocTopics)
+  tmp_proportions <- lapply(colnames(gtDocTopics), function(i) {
+    gtDocTopics[,i]
+  })
+  names(tmp_proportions) <- colnames(gtDocTopics)
+  gtDocTopics <- merge(tmp_positions, as.data.frame(tmp_proportions), by="row.names")
+  
   
   df <- hashTable[[bregmaID]][["bregmaFullDf"]]
   df <- df[which(df$patch_id != ""),]
   cellTypes <- df[,c("Cell_class")]
   cells <- rownames(df)
   
+  # ground truth topic words
   mat <- hashTable[[bregmaID]][["cellGeneCounts"]][cells,]
-  
   mm <- model.matrix(~ 0 + factor(cellTypes))
   colnames(mm) <- levels(factor(cellTypes))
-  
   gtTopicWords <- t(t(as.matrix(mat)) %*% mm)
   gtTopicWords <- gtTopicWords/rowSums(gtTopicWords)
   
+  # number of total cells in each spot
+  cell_counts <- hashTable[[bregmaID]]$totalCells
+  count_df <- do.call(rbind, lapply(names(cell_counts), function(x){
+    coords <- strsplit(x, "_")[[1]]
+    as.numeric(coords)
+  }))
+  colnames(count_df) <- c("x", "y")
+  rownames(count_df) <- names(cell_counts)
+  count_df <- as.data.frame(count_df)
+  count_df$counts <- cell_counts
+  
+  # colors for each cell class
+  classColors <- gg_color_hue(length(unique(df$Cell_class)))
+  names(classColors) <- names(tmp_proportions)
+  
   bregma <- list(sim = sim,
                  gtDocTopics = gtDocTopics,
-                 gtTopicWords = gtTopicWords)
+                 gtTopicWords = gtTopicWords,
+                 cellCounts = count_df,
+                 cols = classColors,
+                 df = df)
   
   return(bregma)
   
@@ -662,6 +708,10 @@ correlationBetweenThetas <- function(theta1, theta2, thresh = NULL) {
 #' adjust values to 0-1 range
 #' x = can be vector or matrix
 #' 
+#' note that this will adjust based on all of the values in the object
+#' so if it is a matrix, all the values are adjusted based on the highest
+#' and lowest values in the entire matrix.
+#' 
 scale0_1 <- function(x) {
   xAdj <- (x - min(x)) / diff(range(x))
   return(xAdj)
@@ -723,7 +773,7 @@ combineTopics <- function(mtx, clusters, mtxType) {
       # at various proportions in each doc and these will not necessarily add
       # to 1, should not take average. Just sum topic row vectors together.
       # This way, each document column still adds to 1 when considering the
-      # proportion of each topic-cluster that makes up each the document.
+      # proportion of each topic-cluster that makes up each document.
       
       if (mtxType == "b") {
         topicVector <- colSums(mtx_slice) / length(topics)
@@ -785,8 +835,7 @@ vizGeneCounts <- function(df, gene,
                shape = 21,
                stroke = stroke, size = size) +
     scale_fill_viridis(option = "A", direction = -1) +
-    scale_color_manual(values = group_cols) +
-    ggtitle("Granule txn C1")
+    scale_color_manual(values = group_cols)
   
   if (showLegend == FALSE) {
     p <- p + guides(fill=FALSE)
@@ -812,15 +861,28 @@ vizGeneCounts <- function(df, gene,
 #'  ex: "31x20" extracted as 31, 20 for x and y
 #' extractPos = TRUE determines if this is done
 #' 
+#' perc.spots = genes with counts in this percent of spots are removed
+#' 
+#' min.reads = MERINGUE::cleanCounts param; minimum number of reads a gene needs
+#' min.lib.size = MERINGUE::cleanCounts param; minimum number of counts a spot needs to have
+#' 
+#' od.genes.alpha MERINGUE::getOverdispersedGenes param
+#' 
 #' returns list with corpus (docs x genes) matrix,
 #' corpus in slm format, and spot positions.
 #' 
 #' positions can be adjusted by the alignment matrices supplied if desired.
 #'
-#' remove = character vector of gene names to remove, based on grepl regular expression
+#' genes.to.remove = character vector of gene names to remove, based on grepl regular expression
 #'          ex: c("^mt-") or c("^MT", "^RPL", "^MRPL")
 #'
-preprocess <- function(dat, alignFile = NA, extractPos = TRUE, nTopGenes = 5, remove = NA) {
+preprocess <- function(dat, alignFile = NA, extractPos = TRUE,
+                       nTopGenes = 5,
+                       genes.to.remove = NA,
+                       perc.spots = 1.0,
+                       min.reads = 100,
+                       min.lib.size = 100,
+                       od.genes.alpha = 0.05) {
   
   # if dat is a path to a file, read it, else assume matrix
   # definitely clean this up later..
@@ -833,8 +895,8 @@ preprocess <- function(dat, alignFile = NA, extractPos = TRUE, nTopGenes = 5, re
   
   # remove poor spots and genes
   countsClean <- MERINGUE::cleanCounts(counts = t(counts), 
-                                       min.reads = 100, 
-                                       min.lib.size = 100, 
+                                       min.reads = min.reads, 
+                                       min.lib.size = min.lib.size, 
                                        plot=TRUE,
                                        verbose=TRUE)
   
@@ -850,34 +912,42 @@ preprocess <- function(dat, alignFile = NA, extractPos = TRUE, nTopGenes = 5, re
     positions <- NULL
   }
   
-  # adjust spot coordinates, optional
+  # adjust spot coordinates, optional.
+  # (based on Stahl ST data with alignment matrices)
   if (is.na(alignFile) == FALSE) {
     align <- matrix(unlist(read.table(alignFile)), nrow = 3, ncol = 3)
     (positions[,"x"] * align[1,1]) - 290
     (positions[,"y"] * align[2,2]) - 290
   }
   
-  # remove top expressed genes and mt genes
+  # remove top expressed genes
   top_expressed <- names(rowSums(countsClean)[order(rowSums(countsClean),
                                                     decreasing = TRUE)][1:nTopGenes])
   countsCleanFilt <- countsClean[rownames(countsClean) %in% top_expressed == FALSE,]
-  print(paste("after removing top genes:", dim(countsCleanFilt)[1], dim(countsCleanFilt)[2]))
+  
+  print(paste("after removing top ",
+              as.character(nTopGenes),
+              " genes:", dim(countsCleanFilt)[1], dim(countsCleanFilt)[2]))
   
   # remove specific genes (if there are any)
-  if (is.na(remove) == FALSE) {
-    countsCleanFilt <- countsCleanFilt[!grepl(paste(remove, collapse="|"), rownames(countsCleanFilt)),]
+  if (is.na(genes.to.remove) == FALSE) {
+    countsCleanFilt <- countsCleanFilt[!grepl(paste(genes.to.remove, collapse="|"), rownames(countsCleanFilt)),]
     print(paste("after removing selected genes:", dim(countsCleanFilt)[1], dim(countsCleanFilt)[2]))
   }
   
   # remove genes that appear in every document
   countsCleanFilt_ <- countsCleanFilt
   countsCleanFilt_[which(countsCleanFilt_ > 0)] <- 1
-  countsCleanFilt <- countsCleanFilt[which(rowSums(countsCleanFilt_) < 260),]
-  print(paste("after removing genes present in every spot:", dim(countsCleanFilt)[1], dim(countsCleanFilt)[2]))
+  numberSpots <- (perc.spots * ncol(countsCleanFilt_))
+  countsCleanFilt <- countsCleanFilt[which(rowSums(countsCleanFilt_) < numberSpots),]
+  print(paste("after removing genes present in more than ", 
+              as.character(perc.spots*100), "% of spots: ",
+              dim(countsCleanFilt)[1], dim(countsCleanFilt)[2]))
   
   # get variable genes
   par(mfrow=c(4,2), mar=c(1,1,1,1))
   countsCleanFiltOD <- getOverdispersedGenes(countsCleanFilt,
+                                             alpha = od.genes.alpha,
                                              plot = TRUE,
                                              details = TRUE)
   
@@ -927,4 +997,106 @@ getBetaTheta <- function(lda) {
               theta = theta,
               topicFreq = topicFreqsOverall))
   
+}
+
+
+#' wrapper for functions to extract beta and theta and cluster topics
+#' for a LDA model
+#' 
+#' LDAmodel is an LDA model from `fitLDA` list.
+#' can use: optimalModel(fitLDAoutput) to input the optimal model
+#' 
+#' color schemes for coloring topics:
+#' "rainbow", "ggplot"
+#'
+buildLDAobject <- function(LDAmodel,
+                           deepSplit = 4,
+                           colorScheme = "rainbow"){
+  
+  # get beta and theta list object from the LDA model
+  m <- getBetaTheta(LDAmodel)
+  
+  # cluster topics
+  clust <- clusterTopics(beta = m$beta,
+                         deepSplit = deepSplit)
+  
+  # add cluster information to the list
+  m$clusters <- clust$clusters
+  m$dendro <- clust$dendro
+  
+  # colors for the topics. Essentially colored by the cluster they are in
+  cols <- m$clusters
+  if (colorScheme == "rainbow"){
+    levels(cols) <- rainbow(length(levels(cols)))
+  }
+  if (colorScheme == "ggplot"){
+    levels(cols) <- gg_color_hue(length(levels(cols)))
+  }
+  m$cols <- cols
+  
+  # construct beta and thetas for the topic clusters
+  m$betaCombn <- combineTopics(m$beta, clusters = m$clusters, mtxType = "b")
+  m$thetaCombn <- combineTopics(m$theta, clusters = m$clusters, mtxType = "t")
+  
+  # colors for the topic clusters
+  # separate factor for ease of use with vizTopicClusters and others
+  clusterCols <- as.factor(colnames(m$thetaCombn))
+  names(clusterCols) <- colnames(m$thetaCombn)
+  levels(clusterCols) <- levels(m$cols)
+  m$clustCols <- clusterCols
+  
+  m$k <- LDAmodel@k
+  
+  return(m)
+  
+}
+
+
+#' function to properly construct input ST count matrix
+#' from Moncada et al GSE111672
+#' 
+#' returns spot x gene matrix where row spot names are the x by y spatial coordinates
+#' such that extractPos option in `preprocess` can be set to TRUE
+#' 
+#' path is path to file
+#'
+loadPDACfile <- function(path) {
+  
+  dat <- read.table(path, header = TRUE, sep = "\t")
+  
+  spotids <- unlist(lapply(colnames(dat)[2:ncol(dat)], function(i) {
+    ix <- strsplit(i, "X")[[1]][2]
+    ix
+  }))
+  
+  t <- t(dat)
+  colnames(t) <- dat$Genes
+  t <- t[2:nrow(t),]
+  dat <- apply(t, 2,FUN = as.numeric)
+  rownames(dat) <- spotids
+  
+  return(dat)
+  
+}
+
+
+#' function to get Hungarian sort pairs via clue::lsat
+#' 
+#' pairs each row with a column
+#' So must have equal or less rows than number of columns.
+#' If less rows, then some columns will not be matched and not part of
+#' the output.
+#' 
+lsatPairs <- function(mtx){
+  # must have equal or more rows than columns
+  # values in matrix converted to 0-1 scale relative to all values in mtx
+  pairing <- clue::solve_LSAP(scale0_1(mtx), maximum = TRUE)
+  # clue::lsat returns vector where for each position the first element is a row
+  # and the second is the paired column
+  rowsix <- seq_along(pairing)
+  colsix <- as.numeric(pairing)
+  
+  return(list(pairs = pairing,
+              rowix = rowsix,
+              colsix = colsix))
 }
