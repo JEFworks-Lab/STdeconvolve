@@ -489,6 +489,81 @@ topicTermCorrelation <- function(topicCorrList) {
 }
 
 
+#' build hash table of different bregma experiments to use as input for
+#' `extractBregmaCorpus`
+#'
+#'
+build_bregma_hash_table <- function (data, patch_size) {
+  
+  # data -> `annot.table` from `mpoa_merfish_clean.RData` that has been filtered for cells of a given
+  # merfish experiment and has: c('Centroid_X', 'Centroid_Y', 'Bregma', "Cell_class", "Neuron_cluster_ID")
+  # patch_size -> size of patch in um. Centroid coords are already in um
+  
+  # dictionary hash table
+  h <- hash()
+  
+  for (bregma in unique(spatial_position_and_class$Bregma)) {
+    
+    bregma_key <- as.character(bregma)
+    print(bregma_key)
+    
+    selected_bregma <- data[which(data$Bregma == bregma),]
+    
+    
+    # 1. Get patch edge coordinates:
+    
+    # Sequence of X-coord positions for left edge of each patch:
+    x_edges <- seq(min(selected_bregma$Centroid_X), max(selected_bregma$Centroid_X), patch_size)
+    # drop first and last to avoid any issues with the edges of the whole region
+    inner_x_edges <- x_edges[2:(length(x_edges)-1)]
+    # Sequence of Y-coord positions for bottom edge of each patch:
+    y_edges <- seq(min(selected_bregma$Centroid_Y), max(selected_bregma$Centroid_Y), patch_size)
+    inner_y_edges <- y_edges[2:(length(y_edges)-1)]
+    
+    selected_bregma$patch_id <- character(length(rownames(selected_bregma)))
+    
+    # 2. add patch IDs to bregma cells, for the patch they belong to:
+    
+    for (x in inner_x_edges) {
+      for (y in inner_y_edges) {
+        patch_id <- paste0(as.character(x), "_", as.character(y))
+        patch <- selected_bregma[which( (selected_bregma$Centroid_X > x) &
+                                          (selected_bregma$Centroid_X < x+patch_size) &
+                                          (selected_bregma$Centroid_Y > y) &
+                                          (selected_bregma$Centroid_Y < y+patch_size) ),]
+        
+        if (length(rownames(patch)) > 0) {
+          selected_bregma[rownames(patch),]$patch_id <- patch_id
+        }
+      }
+    }
+    
+    # 3. get table of counts of cell types for each patch in bregma
+    selected_bregma_patches <- selected_bregma[which(selected_bregma$patch_id != ""),
+                                               c("patch_id", "Cell_class")]
+    selected_bregma_patch_cells <- table(selected_bregma_patches[])
+    
+    # 4. total cell counts in each patch
+    bregma_cell_counts <- rowSums(selected_bregma_patch_cells)
+    
+    # 5. counts of unique cell types in each patch
+    unique_types_per_patch <- c()
+    for (i in seq_len(length(rownames(selected_bregma_patch_cells)))) {
+      patch_num_cell_types <- length(which(selected_bregma_patch_cells[i,] != 0))
+      unique_types_per_patch <- append(unique_types_per_patch, patch_num_cell_types)
+    }
+    
+    # 6. combine data objects and append to hash table
+    h[[bregma_key]] <- list(bregmaFullDf = selected_bregma,
+                            cellTypeTable = selected_bregma_patch_cells,
+                            totalCells = bregma_cell_counts,
+                            cellTypeCount = unique_types_per_patch)
+  }
+  
+  return(h)
+  
+}
+
 
 #' Extract corpus and ground truth doc-topic/topic-term matrices from a 
 #' MERFISH bregma in the hash table

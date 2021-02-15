@@ -19,7 +19,7 @@ k_
 ```
 
 
-get datasets first, then come up with a commen gene set for all corpuses before running models
+get datasets first, then come up with a common gene set for all corpus' before running models
 
 # ==========================
 # MOB
@@ -230,6 +230,14 @@ mob_rep3_opt <- buildLDAobject(LDAmodel = optimalModel(mob_rep3_LDAs),
 ```
 
 
+# Standardize corpus for datasets
+
+Common set of genes to use for all curpuses with the MOB. Make it easier to assess reliability of models and produced topics for a given tissue across different samples.
+
+Should still be careful about the time it takes based on the copus size...
+
+
+
 # ==========================
 # PDAC
 
@@ -434,6 +442,42 @@ pdac_b2_opt <- buildLDAobject(LDAmodel = optimalModel(pdac_b2_LDAs),
 
 # ==========================
 # MERFISH
+
+## data
+## '171021_FN7_2_M22_M26'
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mpoa_merfish_clean.RData")
+# has `annot.table`, `counts`, and `features`
+# annot.table: table of the individual cells and data like coordinates, cell types, bregma, animal
+# features: has cells and additional features. Also dataset they belong to
+# counts: gene counts of cell in annot.table for 130 merfish genes profiled
+
+# select cells that are part of given dataset:
+selected_cells <- rownames(features)[features$dataset_name %in% c('171021_FN7_2_M22_M26')]
+
+spatial_position_and_class <- annot.table[selected_cells, c('Centroid_X', 'Centroid_Y', 'Bregma', "Cell_class", "Neuron_cluster_ID")]
+spatial_position_and_class <- na.omit(spatial_position_and_class) # remove rows with NA
+
+dim(spatial_position_and_class)
+# [1] 36329     5
+
+```
+
+```{r}
+
+FN7_2_M22_M26_hash <- build_bregma_hash_table(spatial_position_and_class, 100)
+
+```
+
+```{r}
+
+keys(FN7_2_M22_M26_hash)
+
+```
+
+# models
 
 to run through 14 k's:
 seq(from = 10, to = 75, by = 5)
@@ -910,8 +954,362 @@ sd(betaCombn_04v09_cors)
 
 ```
 
+# ==========================
+# SPOTlight
+
+# mOB scRNAseq reference
+
+starting from processed:
+
+```{r}
+
+# mob_se <- read.csv2("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_6_runs_processed_seurat.dge.csv", sep = ",")
+# 
+# mob_se <- as.sparse(mob_se)
+
+```
+
+```{r}
+
+# load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/mob_processed_sparseMatrix.RData")
+# mob_se
+
+```
+
+```{r}
+
+# mob_meta <- read.csv2("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_metaData_seurat.csv", sep = ",")
+
+```
+
+Use metadata to just get the WT cells and the associated clusters from the metadata.
+Make sure the metadata cell labels selected and the cells in the count matrix match.
+Then make the seurat object. Might have to change some settings in the object to get the variable genes. And a way to get the variable features out of the seurat object.
+
+```{r}
+
+# wt_cells <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$"X"
+# print(length(wt_cells))
+
+```
+
+```{r}
+
+# mob_se_wt <- mob_se[,wt_cells]
+
+```
+
+```{r}
+
+# mob_se_wt <- CreateSeuratObject(counts = mob_se_wt, project = "mob",
+                                meta.data = mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),])
+
+```
+
+```{r}
+
+# a lot of metadata info not being added...? try doing manually:
+# mob_se_wt[["ClusterName"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$ClusterName
+# mob_se_wt[["percent.mito"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$percent.mito
+
+```
+
+based on the paper methods and the values, it looks already log normalized and filtered.
+
+the spotlight pipeline is looking for "assay = RNA" and "slot = counts" so make sure these are part of the seurat object.
+
+For PCA and UMAP, idea is to get clusters. But I already have clusters in the meta data file. So can skip this.
+
+If I wanted to do PCA, this is looking for "scale.data" slot, and to get this I can do:
+ScaleData,
+
+or alternatively, I can do SCTransform, which is an alternative to: 1. Normalize, 2. Find Variable Features, 3. Scale data.
+
+Results are saved in a new assay (named SCT by default) with counts being (corrected) counts, data being log1p(counts), and scale.data is the pearson residuals.
+
+But because this data has already been log transformed, and I'm not sure how SCTransform is transforming the data, I should just stick to finding the variable features and then scaling.
+
+But scaling takes time, and again, I already have clusters for cells from metadata. So skip for now.
+
+```{r}
+
+# mob_se_wt <- FindVariableFeatures(mob_se_wt, selection.method = "vst", nfeatures = 3000)
+# mob_se_wt <- ScaleData(mob_se_wt, vars.to.regress = c("percent.mito", "nCount_RNA"))
+
+```
+
+```{r}
+
+# mob_se_wt <- RunPCA(mob_se_wt, verbose = FALSE)
+# mob_se_wt <- RunUMAP(mob_se_wt, dims = 1:30, verbose = FALSE)
+# 
+# Seurat::DimPlot(cortex_sc,
+#                 group.by = "ClusterName",
+#                 label = TRUE) + Seurat::NoLegend()
+
+```
+
+Set the known clusters as the "active.indent"
+
+Then get the markers for each of these clusters. In this case, using the already normalized data.
+
+It looks like under the only assay I have so far, RNA, there is counts and data. But by the looks of it both are the same values so doesnt matter which one is used. In the future, data is probably transformed and counts could be adjusted or maybe raw counts.
+
+```{r}
+
+# Seurat::Idents(object = mob_se_wt) <- mob_se_wt@meta.data$ClusterName
+# 
+# cluster_markers_mob_se_wt <- Seurat::FindAllMarkers(object = mob_se_wt, 
+#                                               assay = "RNA",
+#                                               slot = "data",
+#                                               verbose = TRUE, 
+#                                               only.pos = TRUE)
+
+```
+
+Now we can train the NMF model:
+
+```{r}
+
+# se_sc_down <- downsample_se_obj(se_obj = mob_se_wt,
+#                                 clust_vr = "ClusterName",
+#                                 cluster_markers = cluster_markers_mob_se_wt,
+#                                 cl_n = 100, # size to sample from each cluster. Cluster types determine from meta.data in se object via clust_vr 
+#                                 hvg = 3000) # number or NULL. choose num of highly variable genes
+
+```
+
+```{r}
+
+# start_time <- Sys.time()
+# nmf_mod_mob_wt_ls <- train_nmf(cluster_markers = cluster_markers_mob_se_wt, 
+#                         se_sc = se_sc_down, 
+#                         mtrx_spatial = cd, # the original mob st data
+#                         clust_vr = "subclass",
+#                         ntop = NULL,
+#                         hvg = 3000, # number of highly variable genes that is used in addition to the marker genes
+#                         transf = "uv",
+#                         method = "nsNMF")
+# 
+# nmf_mod_mob_wt <- nmf_mod_mob_wt_ls[[1]]
+
+# [1] "Preparing Gene set"
+# [1] "Normalizing count matrix"
+# [1] "Seeding initial matrices"
+# [1] "Training..."
+# [1] "Time to train NMF model was 255.28mins"
+
+```
+
+```{r}
+
+# load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/modeling_merged.20210209.image.RData")
+# load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/spotlight_nmf_train_with_mob.RData")
+# 
+# nmf_mod_mob_wt <- nmf_mod_mob_wt_ls[[1]]
 
 
+# this should have all the previous variables and outputs from the LDA models
+# plus the SPOTlight NMF outputs after training
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/modeling_merged.20210211.image.RData")
+
+```
+
+
+```{r}
+
+# get basis matrix W (genes x topic)
+w <- basis(nmf_mod_mob_wt)
+dim(w)
+
+# get coefficient matrix H (cells x topic)
+h <- coef(nmf_mod_mob_wt)
+dim(h)
+
+```
+
+```{r}
+
+# reference for which cell type(s) a topic represents
+ct_topic_profiles <- topic_profile_per_cluster_nmf(h = h,
+                              train_cell_clust = nmf_mod_mob_wt_ls[[2]])
+
+```
+
+adjust the counts of the mob data:
+```{r, mob-qc, fig.width=8, fig.height=3}
+
+# Remove poor datasets and genes
+# cd_clean <- MERINGUE::cleanCounts(counts = cd, 
+#                       min.reads = 100, 
+#                       min.lib.size = 100, 
+#                       plot=TRUE,
+#                       verbose=TRUE)
+# posMob <- pos[colnames(cd_clean),]
+
+# CPM normalize
+cd_cpm_log <- MERINGUE::normalizeCounts(counts = cd, 
+                       log=TRUE,
+                       verbose=TRUE)
+
+# NOTE: because the NMF model was built using the starting cd, if filtering it, it won't work if some genes are removed. Because the matrix W was made with the set of genes that was the intersection of `cd` and also the seurat downsampled object. If this changes, then can't do the nnls step. Matrices will be incomparable sizes
+
+# however, should likely make sure the counts are normalized similarly to how the single cell data was when determining cluster marker genes.
+
+```
+
+```{r}
+
+mixture_transcriptome <- cd_cpm_log
+transf <- "uv" # normalization for the st data. note same as what was done for the scRNAseq data
+
+profile_mtrx <- predict_spatial_mixtures_nmf(nmf_mod = nmf_mod_mob_wt,
+                               mixture_transcriptome = mixture_transcriptome,
+                               transf = transf)
+
+```
+
+#### With raw 'cd'
+
+NOTE:
+if I use the `cd` with raw counts, 23 topics are kept when visualizing.
+HOWEVER, most are just a couple spots. So maybe suggests that noise is being picked up because data wasn't normalized and log scaled.
+
+If I use the cpm log normalized data, then only 11 topics are kept and look like layers. But I will note that the LDA actually looks like it's capturing more information...
+
+```{r}
+
+decon_mtrx <- mixture_deconvolution_nmf(nmf_mod = nmf_mod_mob_wt,
+                          mixture_transcriptome = cd,
+                          transf = "uv", 
+                          reference_profiles = ct_topic_profiles, 
+                          min_cont = 0.09)
+
+rownames(decon_mtrx) <- colnames(mixture_transcriptome)
+spotlightPredictions_1 <- decon_mtrx[,1:(ncol(decon_mtrx)-1)] # last column is residuals
+
+# drop any clusters that were not detected at all in the ST data
+filtPredictions_1 <- spotlightPredictions_1[,which(!colSums(spotlightPredictions_1) == 0)]
+
+# assign colors for the remaining spotlight predicted clusters that are present
+deconClusterCols_1 <- as.factor(colnames(filtPredictions_1))
+names(deconClusterCols_1) <- colnames(filtPredictions_1)
+levels(deconClusterCols_1) <- rainbow(length(colnames(filtPredictions_1)))
+
+```
+
+ALSO might be possible to just use subsets of the genes in W.
+because it can be accessed via:
+nmf_mod@fit@W
+
+And I think basis is just a wrapper to return this matrix
+
+H also accessed the same way. I think coef also just returns this, too
+
+
+
+```{r, fig.height=6, fig.width=8}
+
+vizAllTopics(theta = filtPredictions_1,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(filtPredictions_1))),
+             cluster_cols = levels(deconClusterCols_1),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "decon_mtrx mob sc ref")
+
+vizTopicClusters(theta = filtPredictions_1,
+                pos = pos,
+                clusters = deconClusterCols_1,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# cols <- rep("gray", length(levels(deconClusterCols)))
+# cols[c(1,2,6,13)] <- levels(deconClusterCols)[c(1,2,6,13)]
+# vizAllTopics(theta = filtPredictions,
+#              pos = pos,
+#              topicOrder = seq_len(length(colnames(filtPredictions))),
+#              cluster_cols = cols,
+#              groups = NA,
+#              group_cols = NA,
+#              r = 0.4,
+#              lwd = 0.01,
+#              plotTitle = "decon_mtrx cortex ref")
+
+# cols <- rep("gray", length(levels(deconClusterCols)))
+# cols[c(2,13)] <- levels(deconClusterCols)[c(2,13)]
+# vizAllTopics(theta = filtPredictions,
+#              pos = pos,
+#              topicOrder = seq_len(length(colnames(filtPredictions))),
+#              cluster_cols = cols,
+#              groups = NA,
+#              group_cols = NA,
+#              r = 0.4,
+#              lwd = 0.01,
+#              plotTitle = "decon_mtrx cortex ref")
+
+```
+
+```{r}
+
+spotlight_beta_1 <- w
+colnames(spotlight_beta_1) <- colnames(spotlightPredictions_1)
+spotlight_beta_1 <- t(spotlight_beta_1)
+
+```
+
+```{r}
+
+spotlight_beta_compare_1 <- spotlight_beta_1[colnames(spotlight_samePos_1),which(colnames(spotlight_beta_1) %in% colnames(mob.k30$beta))]
+
+mob_beta_compare_1 <- mob.k30$beta[,colnames(spotlight_beta_compare_1)]
+
+mob_beta_compareCombn_1 <- mob.k30$betaCombn[,colnames(spotlight_beta_compare_1)]
+
+```
+
+taking subsets of the genes from each beta (the ones on both betas)
+So adjust probabilities such that they add up to 1 relative to the subset of genes
+
+```{r}
+
+spotlight_beta_compare_adj_1 <- base::do.call(rbind, (lapply(rownames(spotlight_beta_compare_1), function(x){
+  v <- spotlight_beta_compare_1[x,]
+  adj <- v/sum(v)
+  adj
+})))
+rownames(spotlight_beta_compare_adj_1) <- rownames(spotlight_beta_compare_1)
+
+
+mob_beta_compare_adj_1 <- base::do.call(rbind, (lapply(rownames(mob_beta_compare_1), function(x){
+  v <- mob_beta_compare_1[x,]
+  adj <- v/sum(v)
+  adj
+})))
+rownames(mob_beta_compare_adj_1) <- rownames(mob_beta_compare_1)
+
+
+mob_beta_compareCombn_adj_1 <- base::do.call(rbind, (lapply(rownames(mob_beta_compareCombn_1), function(x){
+  v <- mob_beta_compareCombn_1[x,]
+  adj <- v/sum(v)
+  adj
+})))
+rownames(mob_beta_compareCombn_adj_1) <- rownames(mob_beta_compareCombn_1)
+
+```
+
+```{r}
+
+mob_ldaVsSPOT_betas_1 <- correlationBetweenBetas(beta1 = mob_beta_compare_adj_1,
+                         beta2 = spotlight_beta_compare_adj_1)
+
+mob_ldaVsSPOT_betasCombn_1 <- correlationBetweenBetas(beta1 = mob_beta_compareCombn_adj_1,
+                         beta2 = spotlight_beta_compare_adj_1)
+
+```
 
 # ==========================
 # Additional Questions:
