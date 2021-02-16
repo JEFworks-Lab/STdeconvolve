@@ -141,17 +141,20 @@ fitLDA <- function(corpus, Ks, seed = 0, ncores = parallel::detectCores(logical 
   mc.cores = ncores
   )
 
-  pScores <- c()
-  for (k in seq(length(Ks))) {
+  pScores <- unlist(lapply(seq(length(Ks)), function(k){
     p <- topicmodels::perplexity(fitted_models[[k]], corpus)
-    pScores <- append(pScores, p)
-  }
-  names(pScores) <- Ks
-  pScoresNorm <- (pScores-min(pScores))/(max(pScores)-min(pScores))
+    p
+  }))
 
-  par(mfrow=c(2,1), mar=c(3,5,1,1))
-  barplot(pScores)
-  barplot(pScoresNorm)
+  # pScores <- c()
+  # for (k in seq(length(Ks))) {
+  #   p <- topicmodels::perplexity(fitted_models[[k]], corpus)
+  #   pScores <- append(pScores, p)
+  # }
+
+  # par(mfrow=c(2,1), mar=c(3,5,1,1))
+  # barplot(pScores)
+  # barplot(pScoresNorm)
 
   kOpt <- Ks[which(pScores == min(pScores))]
   # lda_model <- topicmodels::LDA(corpus, k=kOpt, control = controls)

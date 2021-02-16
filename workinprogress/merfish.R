@@ -186,8 +186,15 @@ Ks = seq(10,100,by=10)
 Ks
 ldas <- fitLDA(corpus_slamMtx, Ks=Ks)
 par(mfrow=c(1,1), mar=rep(5,4))
-plot(x=Ks, ldas$perplexities)
+plot(x=Ks, ldas$perplexities, type='l')
 which(ldas$perplexities==min(ldas$perplexities))
+
+Ks2 = seq(70,90,by=1)
+Ks2
+ldas2 <- fitLDA(corpus_slamMtx, Ks=Ks2)
+par(mfrow=c(1,1), mar=rep(5,4))
+plot(x=Ks2, ldas2$perplexities, type='l')
+which(ldas2$perplexities==min(ldas2$perplexities))
 
 kopt = 80
 ldamodel <- topicmodels::LDA(corpus_slamMtx, k=kopt) ## is there some progress bar?
@@ -264,4 +271,5 @@ heatmap(t(gexp.results), scale='none')
 ## use same ordering as previous
 heatmap(t(gexp.results[,c(no.pairs, order)]), Rowv=NA, Colv=NA, scale='row', mar=c(10,5))
 heatmap(t(gexp.results[,c(order)]), Rowv=NA, Colv=NA, scale='row', mar=c(10,5))
-s
+
+save.image('merfish.RData')
