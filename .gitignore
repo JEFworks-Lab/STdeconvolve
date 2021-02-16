@@ -1,6 +1,6 @@
-.RData
+*.RData
 .Rhistory
 .Rproj.user/
 *~
-theory_files/
 .DS_Store
+*.Rproj

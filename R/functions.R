@@ -129,7 +129,7 @@ clusterTopics <- function(beta,
 #' models are objects from the library `topicmodels`
 #' LDA models have slots with additional information.
 #'
-fitLDA <- function(corpus, Ks, seed = 0, ncores = detectCores(logical = TRUE) - 1) {
+fitLDA <- function(corpus, Ks, seed = 0, ncores = parallel::detectCores(logical = TRUE) - 1) {
 
   controls <- list(seed = seed,
                    verbose = 1, keep = 1,
@@ -149,9 +149,9 @@ fitLDA <- function(corpus, Ks, seed = 0, ncores = detectCores(logical = TRUE) - 
   names(pScores) <- Ks
   pScoresNorm <- (pScores-min(pScores))/(max(pScores)-min(pScores))
 
-  #par(mfrow=c(2,1), mar=c(3,5,1,1))
-  #barplot(pScores)
-  #barplot(pScoresNorm)
+  par(mfrow=c(2,1), mar=c(3,5,1,1))
+  barplot(pScores)
+  barplot(pScoresNorm)
 
   kOpt <- Ks[which(pScores == min(pScores))]
   # lda_model <- topicmodels::LDA(corpus, k=kOpt, control = controls)
