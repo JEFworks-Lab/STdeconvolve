@@ -493,16 +493,18 @@ topicTermCorrelation <- function(topicCorrList) {
 #' `extractBregmaCorpus`
 #'
 #'
-build_bregma_hash_table <- function (data, patch_size) {
+build_bregma_hash_table <- function (cellCentroidsAndClass, patch_size) {
   
-  # data -> `annot.table` from `mpoa_merfish_clean.RData` that has been filtered for cells of a given
+  # cellCentroidsAndClass -> `annot.table` from `mpoa_merfish_clean.RData` that has been filtered for cells of a given
   # merfish experiment and has: c('Centroid_X', 'Centroid_Y', 'Bregma', "Cell_class", "Neuron_cluster_ID")
   # patch_size -> size of patch in um. Centroid coords are already in um
   
   # dictionary hash table
   h <- hash()
   
-  for (bregma in unique(spatial_position_and_class$Bregma)) {
+  data <- cellCentroidsAndClass
+  
+  for (bregma in unique(data$Bregma)) {
     
     bregma_key <- as.character(bregma)
     print(bregma_key)
@@ -966,7 +968,6 @@ preprocess <- function(dat, alignFile = NA, extractPos = TRUE,
   } else {
     counts <- dat
   }
-  
   
   # remove poor spots and genes
   countsClean <- MERINGUE::cleanCounts(counts = t(counts), 
