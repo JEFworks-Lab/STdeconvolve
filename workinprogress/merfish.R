@@ -3,6 +3,22 @@ load("~/Desktop/mpoa_merfish_clean.RData")
 head(annot.table)
 head(celltype)
 head(features)
+head(counts)
+colnames(counts)
+
+## remove blanks
+#counts <- counts[, !grepl('Blank', colnames(counts))]
+#colnames(counts)
+#dim(counts)
+
+## remove all genes with detection worse than blanks
+sort(Matrix::colSums(counts), decreasing=TRUE)
+blanks <- counts[,grepl('Blank', colnames(counts))]
+counts <- counts[, !grepl('Blank', colnames(counts))]
+which(Matrix::colSums(counts) < mean(Matrix::colSums(blanks)))
+counts <- counts[, Matrix::colSums(counts) > mean(Matrix::colSums(blanks))]
+colnames(counts)
+dim(counts)
 
 ######### Get one animal
 table(features$dataset_name)
@@ -15,10 +31,10 @@ annot.table.sub <- annot.table.sub[good_cells,]
 features.sub <- features[rownames(annot.table.sub),]
 
 ## fine cell types
-#celltype <- paste0(annot.table.sub$Cell_class, ':', annot.table.sub$Neuron_cluster_ID)
-#names(celltype) <- rownames(annot.table.sub)
-#celltype <- factor(celltype)
-#levels(celltype)
+celltype.fine <- paste0(annot.table.sub$Cell_class, ':', annot.table.sub$Neuron_cluster_ID)
+names(celltype.fine) <- rownames(annot.table.sub)
+celltype.fine <- factor(celltype.fine)
+levels(celltype.fine)
 
 ## coarse cell types
 celltype <- annot.table.sub$Cell_class
@@ -181,22 +197,17 @@ head(corpus_slamMtx)
 #kopt = length(levels(celltype))
 #kopt
 
-## search for optimal k
-Ks = seq(10,100,by=10)
+## search for optimal k (needs to be improved)
+## manuall set for now
+#Ks = c(10, 210, 100, 50, 75, 88, 82, 85, 83, 84)
+Ks = seq(10, 210, 20)
 Ks
 ldas <- fitLDA(corpus_slamMtx, Ks=Ks)
 par(mfrow=c(1,1), mar=rep(5,4))
-plot(x=Ks, ldas$perplexities, type='l')
-which(ldas$perplexities==min(ldas$perplexities))
+plot(x=Ks[order(Ks)], ldas$perplexities[order(Ks)], type='l')
+Ks[which(ldas$perplexities==min(ldas$perplexities))]
 
-Ks2 = seq(70,90,by=1)
-Ks2
-ldas2 <- fitLDA(corpus_slamMtx, Ks=Ks2)
-par(mfrow=c(1,1), mar=rep(5,4))
-plot(x=Ks2, ldas2$perplexities, type='l')
-which(ldas2$perplexities==min(ldas2$perplexities))
-
-kopt = 80
+kopt = 84
 ldamodel <- topicmodels::LDA(corpus_slamMtx, k=kopt) ## is there some progress bar?
 topicmodels::perplexity(ldamodel, corpus_slamMtx)
 
