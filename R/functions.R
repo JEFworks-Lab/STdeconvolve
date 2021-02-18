@@ -594,8 +594,8 @@ extractBregmaCorpus <- function (hashTable, bregmaID) {
   # ground truth spot cell type proportions
   gtDocTopics <- hashTable[[bregmaID]][["cellTypeTable"]]/rowSums(hashTable[[bregmaID]][["cellTypeTable"]])
   gtDocTopics <- gtDocTopics[order(rownames(sim)),]
-  # reformat `gtDocTopic` proportions into data frame with spot coordinates
   
+  # reformat `gtDocTopic` proportions into data frame with spot coordinates
   tmp_positions <- do.call(rbind, lapply(rownames(gtDocTopics), function(x){
     coords <- strsplit(x, "_")[[1]]
     as.numeric(coords)
@@ -945,6 +945,11 @@ vizGeneCounts <- function(df, gene,
 #' 
 #' od.genes.alpha MERINGUE::getOverdispersedGenes param
 #' 
+#' selected.genes = can supply a character vector of gene names to use specifically for the 
+#'                  for the corpus.
+#'                  
+#' ODgenes = boolean whether to use OD genes or not
+#' 
 #' returns list with corpus (docs x genes) matrix,
 #' corpus in slm format, and spot positions.
 #' 
@@ -954,12 +959,15 @@ vizGeneCounts <- function(df, gene,
 #'          ex: c("^mt-") or c("^MT", "^RPL", "^MRPL")
 #'
 preprocess <- function(dat, alignFile = NA, extractPos = TRUE,
-                       nTopGenes = 5,
+                       selected.genes = NA, # can supply a vector of genes to specifically use for corpus.
+                       nTopGenes = 5, # set to NA if do not want to remove top expressed genes
                        genes.to.remove = NA,
-                       perc.spots = 1.0,
+                       perc.spots = 1.0, # set to NA if do not want to remove genes based on this threshold
                        min.reads = 100,
                        min.lib.size = 100,
-                       od.genes.alpha = 0.05) {
+                       ODgenes = TRUE,
+                       od.genes.alpha = 0.05,
+                       gam.k = 5) {
   
   # if dat is a path to a file, read it, else assume matrix
   # definitely clean this up later..
@@ -975,6 +983,10 @@ preprocess <- function(dat, alignFile = NA, extractPos = TRUE,
                                        min.lib.size = min.lib.size, 
                                        plot=TRUE,
                                        verbose=TRUE)
+  
+  if (is.na(selected.genes) == FALSE) {
+    countsClean <- countsClean[selected.genes,]
+  }
   
   # get spot positions
   if (extractPos) {
@@ -996,38 +1008,47 @@ preprocess <- function(dat, alignFile = NA, extractPos = TRUE,
     (positions[,"y"] * align[2,2]) - 290
   }
   
-  # remove top expressed genes
-  top_expressed <- names(rowSums(countsClean)[order(rowSums(countsClean),
-                                                    decreasing = TRUE)][1:nTopGenes])
-  countsCleanFilt <- countsClean[rownames(countsClean) %in% top_expressed == FALSE,]
-  
-  print(paste("after removing top ",
-              as.character(nTopGenes),
-              " genes:", dim(countsCleanFilt)[1], dim(countsCleanFilt)[2]))
+  # remove top expressed genes (nTopGenes needs to be integer or NA)
+  if (is.na(nTopGenes) == FALSE) {
+    top_expressed <- names(rowSums(countsClean)[order(rowSums(countsClean),
+                                                      decreasing = TRUE)][1:nTopGenes])
+    countsClean <- countsClean[rownames(countsClean) %in% top_expressed == FALSE,]
+    
+    print(paste("after removing top ",
+                as.character(nTopGenes),
+                " genes:", dim(countsClean)[1], dim(countsClean)[2]))
+  }
   
   # remove specific genes (if there are any)
   if (is.na(genes.to.remove) == FALSE) {
-    countsCleanFilt <- countsCleanFilt[!grepl(paste(genes.to.remove, collapse="|"), rownames(countsCleanFilt)),]
-    print(paste("after removing selected genes:", dim(countsCleanFilt)[1], dim(countsCleanFilt)[2]))
+    countsClean <- countsClean[!grepl(paste(genes.to.remove, collapse="|"), rownames(countsClean)),]
+    print(paste("after removing selected genes:", dim(countsClean)[1], dim(countsClean)[2]))
   }
   
   # remove genes that appear in every document
-  countsCleanFilt_ <- countsCleanFilt
-  countsCleanFilt_[which(countsCleanFilt_ > 0)] <- 1
-  numberSpots <- (perc.spots * ncol(countsCleanFilt_))
-  countsCleanFilt <- countsCleanFilt[which(rowSums(countsCleanFilt_) < numberSpots),]
-  print(paste("after removing genes present in more than ", 
-              as.character(perc.spots*100), "% of spots: ",
-              dim(countsCleanFilt)[1], dim(countsCleanFilt)[2]))
+  if (is.na(perc.spots) == FALSE){
+    countsClean_ <- countsClean
+    countsClean_[which(countsClean_ > 0)] <- 1
+    numberSpots <- (perc.spots * ncol(countsClean_))
+    countsClean <- countsClean[which(rowSums(countsClean_) < numberSpots),]
+    print(paste("after removing genes present in more than ", 
+                as.character(perc.spots*100), "% of spots: ",
+                dim(countsClean)[1], dim(countsClean)[2]))
+  }
   
   # get variable genes
-  par(mfrow=c(4,2), mar=c(1,1,1,1))
-  countsCleanFiltOD <- getOverdispersedGenes(countsCleanFilt,
-                                             alpha = od.genes.alpha,
-                                             plot = TRUE,
-                                             details = TRUE)
+  if (ODgenes == TRUE) {
+    par(mfrow=c(4,2), mar=c(1,1,1,1))
+    OD <- getOverdispersedGenes(countsClean,
+                                alpha = od.genes.alpha,
+                                gam.k = gam.k,
+                                plot = TRUE,
+                                details = TRUE)
+    
+    countsClean <- countsClean[OD$ods,]
+  }
   
-  corpus <- t(as.matrix(countsCleanFilt[countsCleanFiltOD$ods,]))
+  corpus <- t(as.matrix(countsClean))
   corpus_slm <- slam::as.simple_triplet_matrix(corpus)
   
   return(list(corpus = corpus,
@@ -1176,3 +1197,277 @@ lsatPairs <- function(mtx){
               rowix = rowsix,
               colsix = colsix))
 }
+
+
+
+#' attempt to optimize search time for optimal K
+#' 
+#' based on optimal search algorithm to split data into intervals
+#' and choosing the interval of k's that produce the lower perplexity.
+#' Idea is to not have to fit a model to every k
+#'
+#' interval = c(i, j) where i and j indicate the lower and upper bounds of a
+#' sequence of integer K's to search
+#'
+fitLDA2 <- function(interval, corpus = corpus,
+                    K = c(), Plx = c(), models = c(),
+                    lower = min(interval),
+                    mid = round((min(interval) + max(interval))/2),
+                    upper = max(interval),
+                    tol = .Machine$double.eps^0.25,
+                    seed = 0) {
+  
+  # params for fitting model
+  params <- list(seed = seed,
+                 verbose = 0, keep = 1, estimate.alpha = TRUE)
+  
+  print("begin")
+  cat("interval:", lower, mid, upper, "\n")
+  
+  # if optimal found:
+  if(lower == mid | mid == upper) {
+    # final adjustment in case the optimum was actually at end of the interval
+    # because when computing mid, it rounds. 
+    # ex: for a final interval 6,7, it rounds the mid to 6 and ends search, labeling 6 as optimal
+    # although 7 may have actually been the lower value
+    kopt <- K[which.min(Plx)]
+    
+    cat("optimal K estimated to be", kopt, "\n")
+    
+    # plot
+    oix <- order(K) # order by K's
+    kopt_ix <- which(K[oix] %in% kopt) # index of reordered k's that is optimal
+    
+    plot.new()
+    plot(K[oix], Plx[oix], type="l")
+    points(kopt, Plx[oix][kopt_ix], col = "red")
+    
+    return(list(models = models,
+                kOpt = kopt,
+                perplexities = Plx,
+                Ks = K,
+                fitCorpus = corpus))
+  }
+  
+  # 1. check if perplexities have already been computed for k's.
+  
+  # if not, compute them.
+  # Use mclapply to get values at least for first iteration when there will be multiple k's
+  ks <- c(lower, mid, upper)
+  notComputed <- ks[which(!ks %in% K)]
+  cat("computing perplexities for:", notComputed, "\n")
+  
+  # returns list of lists, where each list is: [[1]]perplexity, [[2]]k, [[3]]LDAmodel
+  fitmodels <- mclapply(notComputed, function(k){
+    model <- topicmodels::LDA(corpus, k=k, control = params)
+    p <- topicmodels::perplexity(model, corpus)
+    return(c(p, k, model))
+  }, mc.cores = detectCores(logical = TRUE) - 1)
+  
+  # append newly obtained perplexities, corresponding k's, and models. Need to be in same order
+  for (i in seq(length(fitmodels))) {
+    m <- fitmodels[[i]]
+    Plx <- c(Plx, m[[1]])
+    K <- c(K, m[[2]])
+    models <- c(models, m[[3]])
+  }
+  # can't get these global lists to update
+  # lapply(fitmodels, function(m){
+  #   perp_vals <- c(perp_vals, m[1])
+  #   k_coords <- c(k_coords, m[2])
+  # })
+  
+  # 2. determine new interval
+  
+  # get perplexity values for the current k interval values (lower, mid, upper)
+  plxs <- sapply(ks, function(k) {
+    # get index of k and perplexity value for each element of current interval `ks`
+    ix <- which(K %in% c(k))
+    p <- Plx[ix]
+    p
+  })
+  
+  # perplexity values for the current interval `ks`
+  fl <- plxs[1]
+  fm <- plxs[2]
+  fu <- plxs[3]
+  
+  cat("lower k", lower, "\n")
+  cat("perplexity:", fl, "\n")
+  cat("mid k", mid, "\n")
+  cat("perplexity", fm, "\n")
+  cat("upper k", upper, "\n")
+  cat("perplexity", fu, "\n")
+  
+  if (fl < fu) {
+    print('searching lower half')
+    fitLDA2(interval = c(lower, mid),
+            corpus = corpus,
+            K = K,
+            Plx = Plx,
+            models = models)
+  } else {
+    print('searching upper half')
+    fitLDA2(interval = c(mid, upper),
+            corpus = corpus,
+            K = K,
+            Plx = Plx,
+            models = models)
+  }
+}
+
+
+
+#' Another alternative to optimizing search for K
+#' 
+#' fit a small number of K's evenly spread out along a chosen interval of
+#' positive integer K's and fit models to them.
+#' 
+#' Then fit a model to the K's and resulting perplexities and try to
+#' predict which K gives the lower perplexity.
+#' 
+#' With mclapply parallelization, the initial starting K's have all be fit at the same time.
+#' Then, the predicted optimal K can be fitted if it is not one of the initial Ks.
+#' Otherwise you're done.
+#' 
+#' This may be useful because the limiting step for every fitting is that you must wait for the
+#' model with the largest K to be fit, which takes the longest.
+#' 
+#' So do this first and in parallel with the smaller initial K's but few enough K's such that
+#' the largest K will be assigned to a thread from the get-go
+#' (instead of waiting for a thread to free up in the original `fitLDA`)
+#' 
+#' Any extra time will be from fitting one more K at the end if it is different from one of the initial K's
+#' but will still be less time than what was needed for the largest K in the interval range chosen.
+#' 
+#' This way it has the potential to be faster than `fitLDA`, but also possible to be a little bit slower
+#' But `fitLDA2`, moving to each segment cannot be threaded, so you are iterating through each segment
+#' and this cannot be parallelized. So if you keep moving in direction of larger K's, this will be ver slow.
+#' 
+#' So this version may be the best compromise. 
+#' 
+#' p = number of perplexities to solve for (k's to fit) initially
+#' 
+#' 
+fitLDA3 <- function(interval, p = 5, corpus, seed = 0){
+  
+  # # sequence across interval
+  # s <- seq(min(interval), max(interval))
+  # # split sequence into p segments
+  # segs <- split(s, cut(s, p))
+  # 
+  # # for each segments, take first element,
+  # # or if last one, take last elements
+  # # selected elements are the Ks to fit
+  # Ks <- sapply(seq(p), function(seg){
+  #   if (seg == tail(seq(p), 1)) {
+  #     k <- max(segs[[seg]])
+  #   } else {
+  #     k <- min(segs[[seg]])
+  #   }
+  #   k
+  # })
+  
+  Ks <- round(seq(min(interval), max(interval), length = p))
+  
+  # params for fitting model
+  params <- list(seed = seed,
+                 verbose = 0, keep = 1, estimate.alpha = TRUE)
+  
+  # fit model and compute perplexity for each k
+  # returns list of lists, where each list is: [[1]]perplexity, [[2]]LDAmodel
+  cat("Training models for following K's:", Ks, "\n")
+  fitmodels <- mclapply(Ks, function(k){
+    model <- topicmodels::LDA(corpus, k=k, control = params)
+    p <- topicmodels::perplexity(model, corpus)
+    return(c(p, model))
+  }, mc.cores = detectCores(logical = TRUE) - 1)
+  
+  plxs <- c() # y coords for model fitting
+  models <- c()
+  for (i in seq(length(fitmodels))) {
+    m <- fitmodels[[i]]
+    plxs <- c(plxs, m[[1]])
+    models <- c(models, m[[2]])
+  }
+  
+  # fit models and pick best one
+  y <- plxs
+  x <- Ks
+  # first degree 
+  fit  <- lm(y~x)
+  # second degree
+  fit2 <- lm(y~poly(x,2,raw=TRUE))
+  # third degree
+  fit3 <- lm(y~poly(x,3,raw=TRUE))
+  # fourth degree
+  fit4 <- lm(y~poly(x,4,raw=TRUE))
+  
+  fits <- list(fit, fit2, fit3, fit4)
+  
+  xx <- seq(min(Ks), max(Ks), length=50)
+  plot(x, y, pch=19)
+  lines(xx, predict(fit, data.frame(x=xx)), col="red")
+  lines(xx, predict(fit2, data.frame(x=xx)), col="green")
+  lines(xx, predict(fit3, data.frame(x=xx)), col="blue")
+  lines(xx, predict(fit4, data.frame(x=xx)), col="purple")
+  
+  # pick best fit by highest r.squared value:
+  rsqds <- sapply(fits, function(f){
+    s <- summary(f)
+    r2 <- s[["r.squared"]]
+    r2
+    #s
+  })
+  best <- fits[[which.max(rsqds)]]
+  
+  # find lowest predicted K
+  xx <- seq(min(Ks), max(Ks))
+  predictions <- predict(best, data.frame(x=xx))
+  optK <- xx[which.min(as.vector(predictions))]
+  
+  # if optK not one of the initial sampled Ks, then a model has not been fitted yet
+  # so fit a model:
+  if (!optK %in% Ks){
+    cat("Training putative optimal K", optK, "\n")
+    model <- topicmodels::LDA(corpus, k=optK, control = params)
+    p <- topicmodels::perplexity(model, corpus)
+    
+    Ks <- c(Ks, optK)
+    plxs <- c(plxs, p)
+    models <- c(models, model)
+  }
+  
+  # final adjustment in case one of the sampled Ks was actually better
+  # than the predicted
+  optK <- Ks[which.min(plxs)]
+  cat("Determined optimal K:", optK, "\n")
+  
+  # plot
+  oix <- order(Ks) # order by K's
+  kopt_ix <- which(Ks[oix] %in% optK) # index of reordered k's that is optimal
+  
+  plot(Ks[oix], plxs[oix], type="l")
+  points(optK, plxs[oix][kopt_ix], col = "red")
+  
+  return(list(models = models,
+              kOpt = optK,
+              perplexities = plxs,
+              Ks = Ks,
+              fitCorpus = corpus))
+  
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

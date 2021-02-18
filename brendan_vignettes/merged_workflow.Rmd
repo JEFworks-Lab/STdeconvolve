@@ -18,9 +18,6 @@ k_
 
 ```
 
-
-get datasets first, then come up with a common gene set for all corpus' before running models
-
 # ==========================
 # MOB
 
@@ -39,22 +36,30 @@ mob <- preprocess(t(cd),
                   alignFile = NA, extractPos = FALSE,
                   nTopGenes = 5,
                   genes.to.remove = c("mt-"),
-                  perc.spots = .95,
+                  perc.spots = 1.0,
                   min.reads = 100,
                   min.lib.size = 100,
-                  od.genes.alpha = 0.10)
+                  od.genes.alpha = 0.05,
+                  gam.k = 5)
 
 mob$pos <- mOB$pos[rownames(mob$corpus),]
 
 ```
 
-approx 5 minutes for 20-75 using corpus of 196 OD genes
+ range to get perplexities for testing optimal search function
+```{r}
+
+k <- seq(from = 2, to = 35, by = 1)
+k
+
+```
+
 
 ```{r}
 
 start_time <- Sys.time()
 
-mob_LDAs <- fitLDA(mob$slm, k_, seed = 0)
+mob_LDAs <- fitLDA(mob$slm, k, seed = 0)
 
 total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
 print(sprintf("Time to train LDA models was %smins", total_t))
@@ -66,10 +71,10 @@ could test out different corpus's and how they affect K and perplexity...
 ```{r}
 
 mobLDA_alphas <- sapply(mob_LDAs$models, slot, "alpha")
-dat <- data.frame(k = as.character(k_),
+dat <- data.frame(k = as.character(k),
                   alpha = mobLDA_alphas,
                   perplexities = mob_LDAs$perplexities,
-                  pos = seq(length(k_)))
+                  pos = seq(length(k)))
 
 ggplot() +
   geom_point(data = dat, aes(x = pos, y = perplexities)) +
@@ -83,6 +88,9 @@ ggplot() +
   xlab("K") + ylab("alpha") +
   theme_classic()
 
+# for testing optimal k search function. 2-35 by 1 with optimal k at 12
+# dat_mob <- dat
+
 ```
 
 ```{r}
@@ -95,31 +103,41 @@ mob_opt <- buildLDAobject(LDAmodel = optimalModel(mob_LDAs),
 
 ```{r, fig.height=6, fig.width=8}
 
-vizAllTopics(theta = mob_opt$thetaCombn,
-             pos = mob$pos,
-             topicOrder = seq_len(length(colnames(mob_opt$thetaCombn))),
-             cluster_cols = levels(mob_opt$clustCols),
+pos <- mob$pos
+m <- mob_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
              groups = NA,
              group_cols = NA, 
              r = 0.4,
              lwd = 0.01,
-             plotTitle = "mob_opt combined")
+             plotTitle = "mob combined")
 
-vizTopicClusters(theta = mob_opt$thetaCombn,
-                pos = mob$pos,
-                clusters = mob_opt$clustCols,
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
                 sharedCol = TRUE,
                 r = 0.4,
                 lwd = 0.01)
 
-vizTopicClusters(theta = mob_opt$theta,
-                pos = mob$pos,
-                clusters = mob_opt$cols,
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
                 sharedCol = FALSE,
                 r = 0.4,
                 lwd = 0.01)
 
 ```
+
+interesting because less information captured using these 196 genes than using the 146 common genes from the 4 different data sets.
+
+note that for the 4 data sets, no genes were removed via top expressed, or certain percent of spots. So perhaps lost too much information. Whereas taking the common set still ended up filtering but kept the most variable genes and therefor more of the variation? Could this be explored more looking at PCA of gene counts?
 
 # Rep1 Stahl data
 
@@ -154,6 +172,40 @@ print(sprintf("Time to train LDA models was %smins", total_t))
 mob_rep1_opt <- buildLDAobject(LDAmodel = optimalModel(mob_rep1_LDAs),
                       deepSplit = 4,
                       colorScheme = "ggplot")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob_rep1$pos
+m <- mob_rep1_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mob_rep1_opt combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
 
 ```
 
@@ -193,6 +245,40 @@ mob_rep2_opt <- buildLDAobject(LDAmodel = optimalModel(mob_rep2_LDAs),
 
 ```
 
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob_rep2$pos
+m <- mob_rep2_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mob_rep2_opt combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
 # Rep3 Stahl data
 
 ```{r}
@@ -229,14 +315,739 @@ mob_rep3_opt <- buildLDAobject(LDAmodel = optimalModel(mob_rep3_LDAs),
 
 ```
 
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob_rep3$pos
+m <- mob_rep3_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mob_rep3_opt combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
 
 # Standardize corpus for datasets
 
 Common set of genes to use for all curpuses with the MOB. Make it easier to assess reliability of models and produced topics for a given tissue across different samples.
 
-Should still be careful about the time it takes based on the copus size...
+Should still be careful about the time it takes based on the corpus size...
+
+```{r}
+
+dim(mob$corpus)
+dim(mob_rep1$corpus)
+dim(mob_rep2$corpus)
+dim(mob_rep3$corpus)
+
+```
+
+```{r}
+
+paths <- list()
+paths[[1]] <- t(cd)
+paths[[2]] <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep1_MOB_count_matrix-1.tsv"
+paths[[3]] <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep2_MOB_count_matrix-1.tsv"
+paths[[4]] <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep3_MOB_count_matrix-1.tsv"
+
+filtMobGenes <- lapply(paths, function(p) {
+  
+  dat <- preprocess(p,
+            alignFile = NA, extractPos = FALSE,
+            nTopGenes = NA,
+            genes.to.remove = NA,
+            perc.spots = NA,
+            min.reads = 100,
+            min.lib.size = 100,
+            od.genes.alpha = 0.1,
+            gam.k = 5)
+  colnames(dat$corpus)
+  
+})
+
+commonGenes <- Reduce(intersect, filtMobGenes)
+length(commonGenes)
+
+```
+
+now, starting from each gene matrix, cleanup then select set of common genes to use as corpus
+
+```{r}
+
+mobDataCommonSet <- lapply(paths, function(p) {
+  
+  dat <- preprocess(p,
+            alignFile = NA, extractPos = FALSE,
+            selected.genes = commonGenes,
+            nTopGenes = NA,
+            genes.to.remove = NA,
+            perc.spots = NA,
+            min.reads = 100,
+            min.lib.size = 100,
+            ODgenes = FALSE)
+  
+})
+
+mob_common <- mobDataCommonSet[[1]]
+mob_rep1_common <- mobDataCommonSet[[2]]
+mob_rep2_common <- mobDataCommonSet[[3]]
+mob_rep3_common <- mobDataCommonSet[[4]]
+
+dim(mob_common$corpus)
+dim(mob_rep1_common$corpus)
+dim(mob_rep2_common$corpus)
+dim(mob_rep3_common$corpus)
+
+sum(mob_common$corpus)
+sum(mob_rep1_common$corpus)
+sum(mob_rep2_common$corpus)
+sum(mob_rep3_common$corpus)
+
+```
+
+as a reference, the initial meringue corpus was 260 x 196 and 103,115 terms and took about 5 minutes to linearly assess k from 10 to 75 (14 k's)
+
+## mOB meringue
+
+```{r}
+
+start_time <- Sys.time()
+
+mob_common_LDAs <- fitLDA(mob_common$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+mob_common_LDA_alphas <- sapply(mob_common_LDAs$models, slot, "alpha")
+dat <- data.frame(k = as.character(k_),
+                  alpha = mob_common_LDA_alphas,
+                  perplexities = mob_common_LDAs$perplexities,
+                  pos = seq(length(k_)))
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = perplexities)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("perplexity") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = alpha)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("alpha") +
+  theme_classic()
+
+```
+
+```{r}
+
+mob_common_opt <- buildLDAobject(LDAmodel = optimalModel(mob_common_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob$pos
+m <- mob_common_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mob common combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+## Rep1 Stahl
+
+```{r}
+
+start_time <- Sys.time()
+
+mob_rep1_common_LDAs <- fitLDA(mob_rep1_common$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+mob_rep1_common_LDA_alphas <- sapply(mob_rep1_common_LDAs$models, slot, "alpha")
+dat <- data.frame(k = as.character(k_),
+                  alpha = mob_rep1_common_LDA_alphas,
+                  perplexities = mob_rep1_common_LDAs$perplexities,
+                  pos = seq(length(k_)))
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = perplexities)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("perplexity") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = alpha)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("alpha") +
+  theme_classic()
+
+```
+
+```{r}
+
+mob_rep1_common_opt <- buildLDAobject(LDAmodel = optimalModel(mob_rep1_common_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob_rep1$pos
+m <- mob_rep1_common_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mob common combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+## Rep2 Stahl
+
+```{r}
+
+start_time <- Sys.time()
+
+mob_rep2_common_LDAs <- fitLDA(mob_rep2_common$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+mob_rep2_common_LDA_alphas <- sapply(mob_rep2_common_LDAs$models, slot, "alpha")
+dat <- data.frame(k = as.character(k_),
+                  alpha = mob_rep2_common_LDA_alphas,
+                  perplexities = mob_rep2_common_LDAs$perplexities,
+                  pos = seq(length(k_)))
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = perplexities)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("perplexity") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = alpha)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("alpha") +
+  theme_classic()
+
+```
+
+```{r}
+
+mob_rep2_common_opt <- buildLDAobject(LDAmodel = optimalModel(mob_rep2_common_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob_rep2$pos
+m <- mob_rep2_common_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mob common combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+## Rep3 Stahl
+
+```{r}
+
+start_time <- Sys.time()
+
+mob_rep3_common_LDAs <- fitLDA(mob_rep3_common$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+mob_rep3_common_LDA_alphas <- sapply(mob_rep3_common_LDAs$models, slot, "alpha")
+dat <- data.frame(k = as.character(k_),
+                  alpha = mob_rep3_common_LDA_alphas,
+                  perplexities = mob_rep3_common_LDAs$perplexities,
+                  pos = seq(length(k_)))
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = perplexities)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("perplexity") +
+  theme_classic()
+
+ggplot() +
+  geom_point(data = dat, aes(x = pos, y = alpha)) +
+  scale_x_continuous(breaks = dat$pos, labels = dat$k) +
+  xlab("K") + ylab("alpha") +
+  theme_classic()
+
+```
+
+```{r}
+
+mob_rep3_common_opt <- buildLDAobject(LDAmodel = optimalModel(mob_rep3_common_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob_rep3$pos
+m <- mob_rep3_common_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "mob common combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+# compare models
+
+## meringue vs Rep1
+
+```{r, fig.height=7, fig.width=8}
+
+m1 <- mob_common_opt
+m2 <- mob_rep1_common_opt
+
+beta_cor <- correlationBetweenBetas(beta1 = m1$beta,
+                                      beta2 = m2$beta)
+
+betaCombn_cor <- correlationBetweenBetas(beta1 = m1$betaCombn,
+                                       beta2 = m2$betaCombn)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          Rowv = m1$dendro,
+          Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols),
+          ColSideColors = as.vector(m2$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "beta mob v Rep1 cor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          ColSideColors = as.vector(m2$cols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "beta mob v Rep1 cor paired",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+# -------------------------------------------------------
+# betaCombn:
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(betaCombn_cor,
+          # Rowv = bregmaOpt_04$dendro,
+          # Colv = bregmaOpt_09$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols),
+          ColSideColors = as.vector(m2$clustCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "beta mob v Rep1 clusters cor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(betaCombn_cor)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(betaCombn_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols)[pairs$rowix],
+          ColSideColors = as.vector(m2$clustCols)[pairs$colsix],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "beta mob v Rep1 clusters cor paired",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+betaCombn_paired_cors <- diag(betaCombn_cor[pairs$rowix, pairs$colsix])
 
 
+hist(beta_paired_cors, breaks = 20)
+mean(beta_paired_cors)
+sd(beta_paired_cors)
+
+hist(betaCombn_paired_cors, breaks = 20)
+mean(betaCombn_paired_cors)
+sd(betaCombn_paired_cors)
+
+```
+
+## Rep1 vs Rep2
+
+```{r, fig.height=7, fig.width=8}
+
+m1 <- mob_rep1_common_opt
+m2 <- mob_rep2_common_opt
+
+beta_cor <- correlationBetweenBetas(beta1 = m1$beta,
+                                      beta2 = m2$beta)
+
+betaCombn_cor <- correlationBetweenBetas(beta1 = m1$betaCombn,
+                                       beta2 = m2$betaCombn)
+
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          Rowv = m1$dendro,
+          Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols),
+          ColSideColors = as.vector(m2$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "beta Rep1 v Rep2 cor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          ColSideColors = as.vector(m2$cols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "beta Rep1 v Rep2 cor paired",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+# -------------------------------------------------------
+# betaCombn:
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(betaCombn_cor,
+          # Rowv = bregmaOpt_04$dendro,
+          # Colv = bregmaOpt_09$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols),
+          ColSideColors = as.vector(m2$clustCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "beta Rep1 v Rep2 clusters cor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(betaCombn_cor)) # more rows than columns so t()
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(betaCombn_cor[pairs$colsix, pairs$rowix], # more rows than columns so t()
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols)[pairs$colsix], # more rows than columns so t()
+          ColSideColors = as.vector(m2$clustCols)[pairs$rowix], # more rows than columns so t()
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "beta Rep1 v Rep2 clusters cor paired",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+betaCombn_paired_cors <- diag(betaCombn_cor[pairs$colsix, pairs$rowix]) # more rows than columns so t()
+
+
+hist(beta_paired_cors, breaks = 20)
+mean(beta_paired_cors)
+sd(beta_paired_cors)
+
+hist(betaCombn_paired_cors, breaks = 20)
+mean(betaCombn_paired_cors)
+sd(betaCombn_paired_cors)
+
+```
+
+## Rep2 vs Rep3
+
+```{r, fig.height=7, fig.width=8}
+
+m1 <- mob_rep2_common_opt
+m2 <- mob_rep3_common_opt
+
+beta_cor <- correlationBetweenBetas(beta1 = m1$beta,
+                                      beta2 = m2$beta)
+
+betaCombn_cor <- correlationBetweenBetas(beta1 = m1$betaCombn,
+                                       beta2 = m2$betaCombn)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          Rowv = m1$dendro,
+          Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols),
+          ColSideColors = as.vector(m2$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "beta Rep2 v Rep3 cor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          ColSideColors = as.vector(m2$cols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "beta Rep2 v Rep3 cor paired",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+# -------------------------------------------------------
+# betaCombn:
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(betaCombn_cor,
+          # Rowv = bregmaOpt_04$dendro,
+          # Colv = bregmaOpt_09$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols),
+          ColSideColors = as.vector(m2$clustCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "beta Rep2 v Rep3 clusters cor",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(betaCombn_cor)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(betaCombn_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols)[pairs$rowix],
+          ColSideColors = as.vector(m2$clustCols)[pairs$colsix],
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "beta Rep2 v Rep3 clusters cor paired",
+          lhei = c(1,5),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+betaCombn_paired_cors <- diag(betaCombn_cor[pairs$rowix, pairs$colsix])
+
+
+hist(beta_paired_cors, breaks = 20)
+mean(beta_paired_cors)
+sd(beta_paired_cors)
+
+hist(betaCombn_paired_cors, breaks = 20)
+mean(betaCombn_paired_cors)
+sd(betaCombn_paired_cors)
+
+```
 
 # ==========================
 # PDAC
@@ -304,6 +1115,39 @@ pdac_a1_opt <- buildLDAobject(LDAmodel = optimalModel(pdac_a1_LDAs),
 
 ```
 
+```{r, fig.height=6, fig.width=8}
+
+pos <- pdac_a1$pos
+m <- pdac_a1_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "pdac_a1_opt combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
 
 # PDAC A ST2
 
@@ -347,6 +1191,40 @@ print(sprintf("Time to train LDA models was %smins", total_t))
 pdac_a2_opt <- buildLDAobject(LDAmodel = optimalModel(pdac_a2_LDAs),
                       deepSplit = 4,
                       colorScheme = "ggplot")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- pdac_a2$pos
+m <- pdac_a2_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "pdac_a2_opt combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
 
 ```
 
@@ -395,6 +1273,40 @@ pdac_b1_opt <- buildLDAobject(LDAmodel = optimalModel(pdac_b1_LDAs),
 
 ```
 
+```{r, fig.height=6, fig.width=8}
+
+pos <- pdac_b1$pos
+m <- pdac_b1_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "pdac_b1_opt combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
 # PDAC B ST2
 
 ```{r}
@@ -440,11 +1352,86 @@ pdac_b2_opt <- buildLDAobject(LDAmodel = optimalModel(pdac_b2_LDAs),
 
 ```
 
+```{r, fig.height=6, fig.width=8}
+
+pos <- pdac_b2$pos
+m <- pdac_b2_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "pdac_b2_opt combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+# Standardize corpus for datasets
+
+Because the corpuses are so different, not sure if it makes sense. But perhaps just try it anyways.
+
+```{r}
+
+dim(pdac_a1$corpus)
+dim(pdac_a2$corpus)
+dim(pdac_b1$corpus)
+dim(pdac_b2$corpus)
+
+```
+
+```{r}
+
+paths <- list()
+paths[[1]] <- t(cd)
+paths[[2]] <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep1_MOB_count_matrix-1.tsv"
+paths[[3]] <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep2_MOB_count_matrix-1.tsv"
+paths[[4]] <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep3_MOB_count_matrix-1.tsv"
+
+filtMobGenes <- lapply(paths, function(p) {
+  
+  dat <- preprocess(p,
+            alignFile = NA, extractPos = FALSE,
+            nTopGenes = NA,
+            genes.to.remove = NA,
+            perc.spots = NA,
+            min.reads = 100,
+            min.lib.size = 100,
+            od.genes.alpha = 0.1,
+            gam.k = 5)
+  colnames(dat$corpus)
+  
+})
+
+commonGenes <- Reduce(intersect, filtMobGenes)
+length(commonGenes)
+
+```
+
 # ==========================
 # MERFISH
 
-## data
-## '171021_FN7_2_M22_M26'
+
+# '171021_FN7_2_M22_M26'
 
 ```{r}
 
@@ -478,6 +1465,8 @@ keys(FN7_2_M22_M26_hash)
 ```
 
 # models
+
+# ** remove Blanks **
 
 to run through 14 k's:
 seq(from = 10, to = 75, by = 5)
@@ -560,6 +1549,48 @@ print(sprintf("Time to train LDA models was %smins", total_t))
 
 ```
 
+```{r}
+
+bregma04_opt <- buildLDAobject(LDAmodel = optimalModel(bregma04_LDAs),
+                      deepSplit = 3,
+                      colorScheme = "ggplot")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- bregma04$cellCounts[,c("x","y")]
+m <- bregma04_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 40,
+             lwd = 0.01,
+             plotTitle = "bregma04_opt combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 40,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 40,
+                lwd = 0.01)
+
+```
+
 # -0.09
 
 ```{r}
@@ -609,6 +1640,48 @@ bregma09_LDAs <- fitLDA(bregma09$sim, k_, seed = 0)
 
 total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
 print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+bregma09_opt <- buildLDAobject(LDAmodel = optimalModel(bregma09_LDAs),
+                      deepSplit = 3,
+                      colorScheme = "ggplot")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- bregma09$cellCounts[,c("x","y")]
+m <- bregma09_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 40,
+             lwd = 0.01,
+             plotTitle = "bregma09_opt combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 40,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 40,
+                lwd = 0.01)
 
 ```
 
@@ -664,6 +1737,48 @@ print(sprintf("Time to train LDA models was %smins", total_t))
 
 ```
 
+```{r}
+
+bregma14_opt <- buildLDAobject(LDAmodel = optimalModel(bregma14_LDAs),
+                      deepSplit = 3,
+                      colorScheme = "ggplot")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- bregma14$cellCounts[,c("x","y")]
+m <- bregma14_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 40,
+             lwd = 0.01,
+             plotTitle = "bregma14_opt combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 40,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 40,
+                lwd = 0.01)
+
+```
+
 # -0.19
 
 ```{r}
@@ -713,6 +1828,48 @@ bregma19_LDAs <- fitLDA(bregma19$sim, k_, seed = 0)
 
 total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
 print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+bregma19_opt <- buildLDAobject(LDAmodel = optimalModel(bregma19_LDAs),
+                      deepSplit = 3,
+                      colorScheme = "ggplot")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- bregma19$cellCounts[,c("x","y")]
+m <- bregma19_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 40,
+             lwd = 0.01,
+             plotTitle = "bregma19_opt combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 40,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 40,
+                lwd = 0.01)
 
 ```
 
@@ -768,6 +1925,48 @@ print(sprintf("Time to train LDA models was %smins", total_t))
 
 ```
 
+```{r}
+
+bregma24_opt <- buildLDAobject(LDAmodel = optimalModel(bregma24_LDAs),
+                      deepSplit = 3,
+                      colorScheme = "ggplot")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- bregma24$cellCounts[,c("x","y")]
+m <- bregma24_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 40,
+             lwd = 0.01,
+             plotTitle = "bregma24_opt combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 40,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 40,
+                lwd = 0.01)
+
+```
+
 # -0.29
 
 ```{r}
@@ -820,7 +2019,49 @@ print(sprintf("Time to train LDA models was %smins", total_t))
 
 ```
 
-# compare results
+```{r}
+
+bregma29_opt <- buildLDAobject(LDAmodel = optimalModel(bregma29_LDAs),
+                      deepSplit = 3,
+                      colorScheme = "ggplot")
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- bregma29$cellCounts[,c("x","y")]
+m <- bregma29_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 40,
+             lwd = 0.01,
+             plotTitle = "bregma29_opt combined")
+
+# same color topics in each cluster
+vizTopicClusters(theta = m$thetaCombn,
+                pos = pos,
+                clusters = m$clustCols,
+                sharedCol = TRUE,
+                r = 40,
+                lwd = 0.01)
+
+# color topics in cluster differently
+vizTopicClusters(theta = m$theta,
+                pos = pos,
+                clusters = m$cols,
+                sharedCol = FALSE,
+                r = 40,
+                lwd = 0.01)
+
+```
+
+# compare models
 
 ```{r}
 
@@ -848,109 +2089,105 @@ bregmaOpt_29 <- buildLDAobject(LDAmodel = optimalModel(bregma29_LDAs),
 
 ## 04 vs 09
 
-```{r}
-
-beta_04v09 <- correlationBetweenBetas(beta1 = bregmaOpt_04$beta,
-                                      beta2 = bregmaOpt_09$beta)
-
-betaCombn_04v09 <- correlationBetweenBetas(beta1 = bregmaOpt_04$betaCombn,
-                                       beta2 = bregmaOpt_09$betaCombn)
-
-```
-
 ```{r, fig.height=7, fig.width=8}
 
+m1 <- bregmaOpt_04
+m2 <- bregmaOpt_09
+
+beta_cor <- correlationBetweenBetas(beta1 = m1$beta,
+                                      beta2 = m2$beta)
+
+betaCombn_cor <- correlationBetweenBetas(beta1 = m1$betaCombn,
+                                       beta2 = m2$betaCombn)
+
+
 par(mfrow=c(1,1), mar=c(8,8,3,2))
-heatmap.2(beta_04v09,
-          Rowv = bregmaOpt_04$dendro,
-          Colv = bregmaOpt_09$dendro,
+heatmap.2(beta_cor,
+          Rowv = m1$dendro,
+          Colv = m2$dendro,
           density.info = "none",
           trace = "none",
-          RowSideColors = as.vector(bregmaOpt_04$cols),
-          ColSideColors = as.vector(bregmaOpt_09$cols),
+          RowSideColors = as.vector(m1$cols),
+          ColSideColors = as.vector(m2$cols),
           col = correlation_palette,
           breaks = correlation_breaks,
           cexRow=1,cexCol=1,margins=c(6,3),
-          main = "beta_04v09",
+          main = "beta 04 v 09 cor",
           lhei = c(1,5),
           key.xlab = "Correlation",
           key.title = NA)
 
-pairs <- lsatPairs(beta_04v09)
-print(pairs)
+pairs <- lsatPairs(beta_cor)
 
 # recall the individual topics colored by their cluster.
 # when ordered based on matches and not dendro, colors will appear mixed
 par(mfrow=c(1,1), mar=c(8,8,3,2))
-heatmap.2(beta_04v09[pairs$rowix, pairs$colsix],
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
           Rowv = NULL,
           Colv = NULL,
           density.info = "none",
           trace = "none",
-          RowSideColors = as.vector(bregmaOpt_04$cols)[pairs$rowix],
-          ColSideColors = as.vector(bregmaOpt_09$cols)[pairs$colsix], # order now based on lsat
+          RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          ColSideColors = as.vector(m2$cols)[pairs$colsix], # order now based on lsat
           col = correlation_palette,
           breaks = correlation_breaks,
           cexRow=1,cexCol=1,margins=c(6,3),
-          main = "beta_04v09",
+          main = "beta 04 v 09 cor paired",
           lhei = c(1,5),
           key.xlab = "Correlation",
           key.title = NA)
 
 # correlations along diagonal (after assigning best matches)
-beta_04v09_cors <- diag(beta_04v09[pairs$rowix, pairs$colsix])
+beta_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
 
 # -------------------------------------------------------
 # betaCombn:
 
 par(mfrow=c(1,1), mar=c(8,8,3,2))
-heatmap.2(betaCombn_04v09,
+heatmap.2(betaCombn_cor,
           # Rowv = bregmaOpt_04$dendro,
           # Colv = bregmaOpt_09$dendro,
           density.info = "none",
           trace = "none",
-          RowSideColors = as.vector(bregmaOpt_04$clustCols),
-          ColSideColors = as.vector(bregmaOpt_09$clustCols),
+          RowSideColors = as.vector(m1$clustCols),
+          ColSideColors = as.vector(m2$clustCols),
           col = correlation_palette,
           breaks = correlation_breaks,
           cexRow=1,cexCol=1,margins=c(6,3),
-          main = "betaCombn_04v09",
+          main = "beta 04 v 09 clusters cor",
           lhei = c(1,5),
           key.xlab = "Correlation",
           key.title = NA)
 
-pairs <- lsatPairs(t(betaCombn_04v09)) # 04 (rows) has 23 clusters and 09 has 22 (cols) to need to t()
+pairs <- lsatPairs(t(betaCombn_cor)) # more rows than columns so t()
 
 par(mfrow=c(1,1), mar=c(8,8,3,2))
-heatmap.2(betaCombn_04v09[pairs$colsix, pairs$rowix], # note for pairing it was t() so switch ix's
+heatmap.2(betaCombn_cor[pairs$colsix, pairs$rowix], # more rows than columns so t()
           Rowv = NULL,
           Colv = NULL,
           density.info = "none",
           trace = "none",
-          RowSideColors = as.vector(bregmaOpt_04$clustCols)[pairs$colsix], # order based on lsat, and bc more rows than cols in the mtx, it was first t(). And thus not all of the original rows were paired
-          ColSideColors = as.vector(bregmaOpt_09$clustCols),
+          RowSideColors = as.vector(m1$clustCols)[pairs$colsix], # more rows than columns so t()
+          ColSideColors = as.vector(m2$clustCols)[pairs$rowix], # more rows than columns so t()
           col = correlation_palette,
           breaks = correlation_breaks,
           cexRow=1,cexCol=1,margins=c(6,3),
-          main = "betaCombn_04v09",
+          main = "beta 04 v 09 clusters cor paired",
           lhei = c(1,5),
           key.xlab = "Correlation",
           key.title = NA)
 
 # correlations along diagonal (after assigning best matches)
-betaCombn_04v09_cors <- diag(betaCombn_04v09[pairs$colsix, pairs$rowix])
+betaCombn_paired_cors <- diag(betaCombn_cor[pairs$colsix, pairs$rowix]) # more rows than columns so t()
 
-```
 
-```{r}
+hist(beta_paired_cors, breaks = 20)
+mean(beta_paired_cors)
+sd(beta_paired_cors)
 
-hist(beta_04v09_cors, breaks = 20)
-mean(beta_04v09_cors)
-sd(beta_04v09_cors)
-
-hist(betaCombn_04v09_cors, breaks = 20)
-mean(betaCombn_04v09_cors)
-sd(betaCombn_04v09_cors)
+hist(betaCombn_paired_cors, breaks = 20)
+mean(betaCombn_paired_cors)
+sd(betaCombn_paired_cors)
 
 ```
 
@@ -1002,7 +2239,7 @@ Then make the seurat object. Might have to change some settings in the object to
 ```{r}
 
 # mob_se_wt <- CreateSeuratObject(counts = mob_se_wt, project = "mob",
-                                meta.data = mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),])
+                                # meta.data = mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),])
 
 ```
 
@@ -1336,8 +2573,382 @@ try keeping K constant but modulating the size (doc x genes; also total terms) a
 
 
 
+I have run 10-75 (14) models for 23 different corpuses. So plot the speed versus doc x genes x terms to see if any correlation...do same for optimal K.
+
+If no correlation for size of corpus, then must have to do with the "complexity: or at least the fact that model can keep updating to lower perplexity (and overfitting to the corpus)
 
 
+```{r}
+
+# collected in `model_metadata.R`
+
+metadata <- data.frame(times = times,
+                       ndocs = ndocs,
+                       ngenes = ngenes,
+                       nterms = nterms,
+                       largest_k = largest_k,
+                       optimal_k = optimal_k,
+                       samples = samples,
+                       groups = groups)
+
+```
+
+```{r}
+
+ggplot(data = metadata) +
+  geom_point(aes(x = times, y = nterms, color=groups))
+
+ggplot(data = metadata) +
+  geom_point(aes(x = times, y = nterms, color=as.character(metadata$largest_k)))
+
+ggplot(data = metadata) +
+  geom_point(aes(x = times, y = nterms, color=as.character(metadata$optimal_k)))
+
+ggplot(data = metadata) +
+  geom_point(aes(x = times, y = ngenes, color=groups))
+
+ggplot(data = metadata) +
+  geom_point(aes(x = nterms, y = ngenes, color=groups))
+
+ggplot(data = metadata) +
+  geom_point(aes(x = ndocs, y = ngenes, color=log10(nterms)))
+
+```
+
+
+
+## optimal k non-linear search
+
+```{r}
+
+fitLDA2 <- function(interval, corpus = corpus,
+                      K = c(), Plx = c(), models = c(),
+                      lower = min(interval),
+                      mid = round((min(interval) + max(interval))/2),
+                      upper = max(interval),
+                      tol = .Machine$double.eps^0.25,
+                      seed = 0) {
+  
+  # params for fitting model
+  params <- list(seed = seed,
+                   verbose = 0, keep = 1, estimate.alpha = TRUE)
+  
+  print("begin")
+  cat("interval:", lower, mid, upper, "\n")
+  
+  # if optimal found:
+  if(lower == mid | mid == upper) {
+    # final adjustment in case the optimum was actually at end of the interval
+    # because when computing mid, it rounds. 
+    # ex: for a final interval 6,7, it rounds the mid to 6 and ends search, labeling 6 as optimal
+    # although 7 may have actually been the lower value
+    kopt <- K[which.min(Plx)]
+    
+    cat("optimal K estimated to be", kopt, "\n")
+    
+    # plot
+    oix <- order(K) # order by K's
+    kopt_ix <- which(K[oix] %in% kopt) # index of reordered k's that is optimal
+    
+    plot.new()
+    plot(K[oix], Plx[oix], type="l")
+    points(kopt, Plx[oix][kopt_ix], col = "red")
+    
+    return(list(models = models,
+                kOpt = kopt,
+                perplexities = Plx,
+                Ks = K,
+                fitCorpus = corpus))
+  }
+  
+  # 1. check if perplexities have already been computed for k's.
+  
+  # if not, compute them.
+  # Use mclapply to get values at least for first iteration when there will be multiple k's
+  ks <- c(lower, mid, upper)
+  notComputed <- ks[which(!ks %in% K)]
+  cat("computing perplexities for:", notComputed, "\n")
+  
+  # returns list of lists, where each list is: [[1]]perplexity, [[2]]k, [[3]]LDAmodel
+  fitmodels <- mclapply(notComputed, function(k){
+    model <- topicmodels::LDA(corpus, k=k, control = params)
+    p <- topicmodels::perplexity(model, corpus)
+    return(c(p, k, model))
+  }, mc.cores = detectCores(logical = TRUE) - 1)
+  
+  # append newly obtained perplexities, corresponding k's, and models. Need to be in same order
+  for (i in seq(length(fitmodels))) {
+    m <- fitmodels[[i]]
+    Plx <- c(Plx, m[[1]])
+    K <- c(K, m[[2]])
+    models <- c(models, m[[3]])
+  }
+  # can't get these global lists to update
+  # lapply(fitmodels, function(m){
+  #   perp_vals <- c(perp_vals, m[1])
+  #   k_coords <- c(k_coords, m[2])
+  # })
+  
+  # 2. determine new interval
+  
+  # get perplexity values for the current k interval values (lower, mid, upper)
+  plxs <- sapply(ks, function(k) {
+     # get index of k and perplexity value for each element of current interval `ks`
+    ix <- which(K %in% c(k))
+    p <- Plx[ix]
+    p
+  })
+  
+  # perplexity values for the current interval `ks`
+  fl <- plxs[1]
+  fm <- plxs[2]
+  fu <- plxs[3]
+  
+  cat("lower k", lower, "\n")
+  cat("perplexity:", fl, "\n")
+  cat("mid k", mid, "\n")
+  cat("perplexity", fm, "\n")
+  cat("upper k", upper, "\n")
+  cat("perplexity", fu, "\n")
+  
+  if (fl < fu) {
+    print('searching lower half')
+    fitLDA2(interval = c(lower, mid),
+            corpus = corpus,
+            K = K,
+            Plx = Plx,
+            models = models)
+  } else {
+    print('searching upper half')
+    fitLDA2(interval = c(mid, upper),
+            corpus = corpus,
+            K = K,
+            Plx = Plx,
+            models = models)
+  }
+}
+
+```
+
+ground truth check:
+```{r}
+
+# from meringue mob after fitting with fitLDA
+dat_mob
+
+# "function" f will be fitting LDA model with a given k, then find perplexity
+# for testing, just have it return the perplexity for a given k
+
+f <- function(K, dat = dat_mob) {
+  
+  per <- dat_mob[which(dat_mob$k == as.character(K)), ]$perplexities
+  return(per)
+  
+}
+
+```
+
+```{r}
+
+x <- seq(from = 2, to = 35, by = 1)
+results <- optSearch(f, interval = c(2,35))
+# results <- fitLDA2(f, i = c(2,35))
+
+plot(x, f(x), type='l')
+points(results[1], results[2], col='red')
+results
+
+```
+
+test new function
+
+```{r}
+
+start_time <- Sys.time()
+
+x <- seq(from = 2, to = 35, by = 1)
+
+mob_fitLDA2_test <- fitLDA2(interval = x,
+                            corpus = mob$slm)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+after the first split, the function starts looking in the upper half. So it ends up missing the true optimal K, which is 12.
+
+But maybe doesn't have to be super precise as we end up collapsing topics into clusters anyways. Just have to be reasonably close
+
+above it took 6.26 minutes versus 5.28 here. So maybe saved a little bit of time. Before I divide up the training processed between 7 cores. It really boils down to the time to train the highest K, plus anytime before hand it had to wait before getting an available core from training lower K models, which are faster. Here once it starts searching ranges, there is no more parallel processing, but the highest k model does gets started first. After it finishes, then the time that gets added on is the sum of training each additional model to obtain optimal. It seems like it takes about 4 searches. So 4 additional models of lower Ks. BUT if the interval includes models with large K's. then this might actually end up being slower than just doing all via parallel processing.
+
+
+
+here's a model that took about 15 minutes for:
+<!-- > k_ -->
+<!--  [1] 10 15 20 25 30 35 40 45 50 55 60 65 70 75 -->
+
+```{r}
+
+start_time <- Sys.time()
+
+mob_rep2_fitLDA2_test <- fitLDA2(interval = c(10,75),
+                            corpus = mob_rep2$slm)
+
+# mob_rep2_LDAs <- fitLDA(mob_rep2$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+maybe comes down to how many cores...fitLDA2 tries to approximate with this search algorithm and can be somewhat fast but only 1 core at a time.
+
+Otherwise, can use fitLDA and do 7+ processes in parallel to brute force get the perplexities.
+
+
+alternative:
+fit lets say 6 models in parallel. Then fit a line/model.
+Then solve for the minimum K. If it is not one of the K's already fitted, then fit it and that's it. So 7 processes total and 6 are run in parallel. Similar issue though..in beginning the largest is fit and takes longest. Then what if the last one is also big? then have to wait sequentially for the two biggest to finish. At least with parallel before, typically a smaller one finishes then finally the largest can get placed. So then just wait for largest and a smaller one sequentially. So this strategy probably would be a little faster, or could also be a lot longer
+
+```{r}
+
+fitLDA3 <- function(interval, p = 5, corpus, seed = 0){
+  
+  # # sequence across interval
+  # s <- seq(min(interval), max(interval))
+  # # split sequence into p segments
+  # segs <- split(s, cut(s, p))
+  # 
+  # # for each segments, take first element,
+  # # or if last one, take last elements
+  # # selected elements are the Ks to fit
+  # Ks <- sapply(seq(p), function(seg){
+  #   if (seg == tail(seq(p), 1)) {
+  #     k <- max(segs[[seg]])
+  #   } else {
+  #     k <- min(segs[[seg]])
+  #   }
+  #   k
+  # })
+  
+  Ks <- round(seq(min(interval), max(interval), length = p))
+  
+  # params for fitting model
+  params <- list(seed = seed,
+                   verbose = 0, keep = 1, estimate.alpha = TRUE)
+  
+  # fit model and compute perplexity for each k
+  # returns list of lists, where each list is: [[1]]perplexity, [[2]]LDAmodel
+  cat("Training models for following K's:", Ks, "\n")
+  fitmodels <- mclapply(Ks, function(k){
+    model <- topicmodels::LDA(corpus, k=k, control = params)
+    p <- topicmodels::perplexity(model, corpus)
+    return(c(p, model))
+  }, mc.cores = detectCores(logical = TRUE) - 1)
+  
+  plxs <- c() # y coords for model fitting
+  models <- c()
+  for (i in seq(length(fitmodels))) {
+    m <- fitmodels[[i]]
+    plxs <- c(plxs, m[[1]])
+    models <- c(models, m[[2]])
+  }
+  
+  # fit models and pick best one
+  y <- plxs
+  x <- Ks
+  # first degree 
+  fit  <- lm(y~x)
+  # second degree
+  fit2 <- lm(y~poly(x,2,raw=TRUE))
+  # third degree
+  fit3 <- lm(y~poly(x,3,raw=TRUE))
+  # fourth degree
+  fit4 <- lm(y~poly(x,4,raw=TRUE))
+  
+  fits <- list(fit, fit2, fit3, fit4)
+  
+  xx <- seq(min(Ks), max(Ks), length=50)
+  plot(x, y, pch=19)
+  lines(xx, predict(fit, data.frame(x=xx)), col="red")
+  lines(xx, predict(fit2, data.frame(x=xx)), col="green")
+  lines(xx, predict(fit3, data.frame(x=xx)), col="blue")
+  lines(xx, predict(fit4, data.frame(x=xx)), col="purple")
+  
+  # pick best fit by highest r.squared value:
+  rsqds <- sapply(fits, function(f){
+    s <- summary(f)
+    r2 <- s[["r.squared"]]
+    r2
+    #s
+  })
+  best <- fits[[which.max(rsqds)]]
+  
+  # find lowest predicted K
+  xx <- seq(min(Ks), max(Ks))
+  predictions <- predict(best, data.frame(x=xx))
+  optK <- xx[which.min(as.vector(predictions))]
+
+  # if optK not one of the initial sampled Ks, then a model has not been fitted yet
+  # so fit a model:
+  if (!optK %in% Ks){
+    cat("Training putative optimal K", optK, "\n")
+    model <- topicmodels::LDA(corpus, k=optK, control = params)
+    p <- topicmodels::perplexity(model, corpus)
+
+    Ks <- c(Ks, optK)
+    plxs <- c(plxs, p)
+    models <- c(models, model)
+  }
+  
+  # final adjustment in case one of the sampled Ks was actually better
+  # than the predicted
+  optK <- Ks[which.min(plxs)]
+  cat("Determined optimal K:", optK, "\n")
+  
+  # plot
+  oix <- order(Ks) # order by K's
+  kopt_ix <- which(Ks[oix] %in% optK) # index of reordered k's that is optimal
+
+  plot(Ks[oix], plxs[oix], type="l")
+  points(optK, plxs[oix][kopt_ix], col = "red")
+
+  return(list(models = models,
+              kOpt = optK,
+              perplexities = plxs,
+              Ks = Ks,
+              fitCorpus = corpus))
+  
+}
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+mob_fitLDA3_test <- fitLDA3(interval = c(2,75), p = 7,
+                            corpus = mob$slm)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+mob_rep2_fitLDA3_test <- fitLDA3(interval = c(2,75), p = 7,
+                            corpus = mob_rep2$slm)
+
+# mob_rep2_LDAs <- fitLDA(mob_rep2$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
 
 
 
