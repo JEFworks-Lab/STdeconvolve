@@ -176,6 +176,7 @@ optimalModel <- function(models) {
   models$models[[which(sapply(models$models, slot, "k") == models$kOpt)]]
 }
 
+
 #' custom correlation color range for heatmap.2 correlation plots
 correlation_palette <- colorRampPalette(c("blue", "white", "red"))(n = 209)
 correlation_breaks = c(seq(-1,-0.01,length=100),
@@ -589,6 +590,9 @@ extractBregmaCorpus <- function (hashTable, bregmaID) {
   # corpus in slam format
   sim <- hashTable[[bregmaID]][["patchGeneCounts"]]
   sim <- sim[order(rownames(sim)),]
+  # print(sim)
+  # remove "Blanks" from data:
+  sim <- sim[,!grepl("Blank", colnames(sim))]
   sim <- slam::as.simple_triplet_matrix(sim)
   
   # ground truth spot cell type proportions
@@ -829,8 +833,8 @@ combineTopics <- function(mtx, clusters, mtxType) {
     # select the topics in the cluster in the same order of the dendrogram
     topics <- labels(clusters[which(clusters == cluster)])
     
-    print(cluster)
-    print(length(topics))
+    # print(cluster)
+    # print(length(topics))
     
     # topic-term distribution reordered based on dendro and selected cluster topics
     mtx_slice <- mtx[topics,]
@@ -1137,6 +1141,8 @@ buildLDAobject <- function(LDAmodel,
   
   # colors for the topic clusters
   # separate factor for ease of use with vizTopicClusters and others
+  # note that these color assignments are different than the
+  # cluster color assignments in the levels of `cols`
   clusterCols <- as.factor(colnames(m$thetaCombn))
   names(clusterCols) <- colnames(m$thetaCombn)
   levels(clusterCols) <- levels(m$cols)
@@ -1460,11 +1466,181 @@ fitLDA3 <- function(interval, p = 5, corpus, seed = 0){
 
 
 
+#' nmfRef = the list from SPOTlight::train_nmf()
+#' stCounts = ST count matrix, genes x spots
+#'
+SPOTlightPredict <- function(nmfRef, stCounts) {
+  
+  # get basis matrix W [genes x topics]
+  w <- basis(nmfRef[[1]])
+  colnames(w) <- paste("Topic", 1:ncol(w), sep = "_")
+  # get coefficient matrix H [topics x cells]
+  h <- coef(nmfRef[[1]])
+  
+  
+  # reference for which cell type(s) a topic represents
+  # ct_topic_profiles = [topics x CellTypes] (seurat clusters)
+  # values are coefficients
+  # uses the H matrix and the cluster labels to get a new mtx where topic x cluster,
+  # Cell types can be made up of multiple topics...
+  ct_topic_profiles <- topic_profile_per_cluster_nmf(h = h,
+                                                     train_cell_clust = nmfRef[[2]])
+  
+  # convert to topic proportions for each cell type
+  ct_topic_profiles_r <- round(ct_topic_profiles, 4)
+  spotlight_ct_topics <- do.call(cbind, lapply(seq(ncol(ct_topic_profiles_r)), function(i){
+    ct <- ct_topic_profiles_r[,i]
+    ct/sum(ct)
+  }))
+  rownames(spotlight_ct_topics) <- paste("Topic", 1:nrow(ct_topic_profiles_r), sep = "_")
+  colnames(spotlight_ct_topics) <- colnames(ct_topic_profiles_r)
+  
+  # now that we have the proportion of each topic for a cell type,
+  # use this information to get gene weights (sum to 1) for each cell type
+  # (w is gene weights for each topic)
+  # do this by getting the topic-gene vectors from w for each cell type and
+  # merging them based on the topic proportions for the cell type
+  spotlight_beta <- do.call(rbind, lapply(seq(ncol(spotlight_ct_topics)), function(ix){
+    # topics for the given cell type in spotlight_ct_topics
+    ts <- spotlight_ct_topics[,ix]
+    # topics that make up the cell type and their proportions
+    ts <- ts[which(ts > 0)]
+    # w topics and the gene associations, multiplied by the topic proportions of the cell type
+    g <- w[,names(ts)]
+    if (length(ts) > 1){
+      g <- g %*% diag(ts) # mtx multi. to multiply first column by first element, second col by second element, etc
+    }
+    
+    # if multiple topics, add the adjusted topic gene vectors together
+    if (is.null(dim(g)) == FALSE){
+      g <- rowSums(g)
+    }
+    
+    # final adjustment to make topic gene proportions sum to 1
+    g <- g/sum(g)
+    g
+  }))
+  rownames(spotlight_beta) <- colnames(spotlight_ct_topics)
+  
+  
+  # [topics x spots]; topic coefficients for each spot
+  # This function appears to account for that only using genes in ST that are also in W
+  # NNLS to get topic coefficients for each spot based on genes associated with each topic (W)
+  profile_mtrx <- predict_spatial_mixtures_nmf(nmf_mod = nmfRef[[1]],
+                                               mixture_transcriptome = stCounts,
+                                               transf = "uv")
+  # normalize to get topic proportions in each spot
+  spotlight_spot_topics <- do.call(cbind, lapply(seq(ncol(profile_mtrx)), function(i){
+    ct <- profile_mtrx[,i]
+    ct/sum(ct)
+  }))
+  rownames(spotlight_spot_topics) <- paste("Topic", 1:nrow(profile_mtrx), sep = "_")
+  colnames(spotlight_spot_topics) <- colnames(profile_mtrx)
+  
+  
+  # returns [spot x CellType]; proportion of each cell type in each spot
+  # topics below `min_cont` are not counted in a spot
+  # within this function, `profile_mtrx` is also made but not returned
+  decon_mtrx <- mixture_deconvolution_nmf(nmf_mod = nmfRef[[1]],
+                                          mixture_transcriptome = stCounts,
+                                          transf = "uv", 
+                                          reference_profiles = ct_topic_profiles, 
+                                          min_cont = 0.09) # only keep topics if 9% or more in a spot
+  # note that last column is an additional columns for the residual error
+  # cleanup to get actual spot-celltype predictions:
+  rownames(decon_mtrx) <- colnames(stCounts)
+  spotlight <- decon_mtrx[,1:(ncol(decon_mtrx)-1)] # last column is residuals
+  # note: all spots and cell types.
+  # Possible some cell type will not be detected at all and be 0 for all spots
+  
+  return(list(topicBeta = t(w), # topic x gene weights that sum to 1 (all genes and topics)
+              ctBeta = spotlight_beta, # CellType x gene weights that sum to 1 (all genes and topics)
+              ctTopicProps = spotlight_ct_topics, # topic proportion for each cell type
+              spotTopicTheta = t(spotlight_spot_topics), # proportion of each topic in each spot (all topics)
+              spotCtTheta = spotlight)) # spot x celltype proportions (all spots and cell types)
+  
+  # if made with original raw `stCounts` then will have thousands of genes and all spots.
+  # so when comparing, will need to make sure the betas or thetas have same spots and genes as
+  # the `stCounts` they might actually be compared to (corpus for a given topic model)
+  # however, a raw `stCounts` can be used to make the SPOTlight predictions at first, and
+  # after the betas and theta can be filtered. OR, a processed corpus could be used for
+  # SPOTlight, which will probably affect the predicted topics because the gene set used
+  # will be smaller. Worth comparing both cases.
+  
+  # WARNING: SPOTlight functions crash the session if use a corpus with a gene set
+  # that is not in the NMF. I think this happens in `SPOTlight::predict_spatial_mixtures()`
+  # during the nnls step at the end. Because it generates the full W matrix after selecting
+  # genes in the ST mtrx. When the NMF was trained, there was a step that made it only
+  # train on the intersecting genes. So under normal circumstances this would not be noticed
+  # because all genes should match between W and ST mtrx.
+  # But if one were to use a different ST mtrx on the trained NMF, then I bet it would crash
+  # because the matrices end up not being comparable shapes.
+  
+  # looking at the code, it seems the cd is bigger than w. So actually cd is being trimmed
+  # such that it's genes equal W. If other way around it all crashes
+  
+  # remember that during training of the NMF, it got cluster genes, and then only kept
+  # those that were in cd.
+  # with the corpuses, genes could come up as variable genes that were not picked
+  # as cluster genes for the NMF, and thus would not be in the NMF at all
+  
+}
 
 
-
-
-
+#' Get filtered spotCtTheta, spotTopicTheta, ctBeta, topicBeta sl matrices
+#' wrt a given lda model such that they can be compared equally in terms
+#' of shared genes, shared spots, and cell types that were detected
+#' to be present in the sl predictions. Also generated colors for the
+#' cell type clusters and topics of the sl object.
+#'
+#'
+filterSPOTlightMtxs <- function(sl, lda_model){
+  
+  # Thetas:
+  # make sure the spots are the same
+  spotCtThetaFilt <- sl$spotCtTheta[rownames(lda_model$theta),]
+  spotTopicThetaFilt <- sl$spotTopicTheta[rownames(lda_model$theta),]
+  
+  # drop any clusters that were not detected at all in the ST data
+  spotCtThetaFilt <- spotCtThetaFilt[,which(!colSums(spotCtThetaFilt) == 0)]
+  spotTopicThetaFilt <- spotTopicThetaFilt[,which(!colSums(spotTopicThetaFilt) == 0)]
+  
+  # Betas:
+  # make sure genes are consistent between the topic model lda beta
+  keep_genes <- colnames(sl$ctBeta)[colnames(sl$ctBeta) %in% colnames(lda_model$beta)]
+  
+  # also filter for cell types that were detected in the spots 
+  ctBetaFilt <- sl$ctBeta[colnames(spotCtThetaFilt),keep_genes]
+  
+  # also filter for topics that were detected in the spots 
+  topicBetaFilt <- sl$topicBeta[colnames(spotTopicThetaFilt),keep_genes]
+  
+  # Before subetting genes, topicBeta was just W. ctBeta combined W topic genes vectors
+  # proportional to topics in each cell type). So gene values would add to 1.
+  # But after subsetting to have same genes as corpus to compare, the genes no longer add to 1.
+  # So adjust such that gene values sum to 1
+  ctBetaFilt <- ctBetaFilt/rowSums(ctBetaFilt)
+  topicBetaFilt <- topicBetaFilt/rowSums(topicBetaFilt)
+  
+  # colors for the predicted and filtered cell types
+  ctcols <- as.factor(colnames(spotCtThetaFilt))
+  names(ctcols) <- colnames(spotCtThetaFilt)
+  levels(ctcols) <- gg_color_hue(length(colnames(spotCtThetaFilt)))
+  
+  # colors for the topics
+  topiccols <- as.factor(colnames(spotTopicThetaFilt))
+  names(topiccols) <- colnames(spotTopicThetaFilt)
+  levels(topiccols) <- gg_color_hue(length(colnames(spotTopicThetaFilt)))
+  
+  return(list(ctThetaFilt = spotCtThetaFilt,
+              topicThetaFilt = spotTopicThetaFilt,
+              ctBetaFilt = ctBetaFilt,
+              topicBetaFilt = topicBetaFilt,
+              ctcols = ctcols,
+              topiccols = topiccols,
+              shared_genes = keep_genes))
+  
+}
 
 
 
