@@ -60,14 +60,15 @@ mob_corpus <- t(as.matrix(countsFiltnoUnifGenes))
 mob_corpus_slamMtx <- slam::as.simple_triplet_matrix(mob_corpus)
 
 # optimal k
-Ks = seq(2,20,by=1)
+Ks = seq(2,20,by=5)
+Ks
 mob_lda <- fitLDA(mob_corpus_slamMtx, Ks=Ks)
 par(mfrow=c(1,1), mar=rep(5,4))
 plot(x=Ks, mob_lda$perplexities)
 
 # pick k
 kopt = Ks[which(mob_lda$perplexities == min(mob_lda$perplexities))]
-kopt
+kopt = 18
 mob_lda.k <- topicmodels::LDA(mob_corpus_slamMtx, k=kopt)
 topicmodels::perplexity(mob_lda.k, mob_corpus_slamMtx)
 
@@ -84,6 +85,31 @@ sapply(1:ncol(mob_lda.theta), function(i) {
 
 # compare with ground truth annotations
 cpm.deconvolved <- t(mob_lda.beta * 1e6)
+
+heatmap(cpm.deconvolved, scale='row')
+d <- as.dist(1-cor(cpm.deconvolved ))
+#d <- dist(t(cpm.deconvolved))
+hc <- hclust(d, method='ward.D2')
+groups <- cutree(hc, 4)
+groups
+groups <- factor(groups)
+
+
+d2 <- as.dist(1-cor(t(cpm.deconvolved )))
+hc2 <- hclust(d2, method='ward.D2')
+
+m <- log10(cpm.deconvolved+1)
+m <- t(scale(t(m)))
+#m <- scale(m)
+range(m)
+m[m > 2] <- 2
+m[m < -2] <- -2
+heatmap(m,
+        scale='none',
+        ColSideColors = rainbow(length(unique(groups)))[groups],
+        Colv = as.dendrogram(hc),
+        Rowv = as.dendrogram(hc2),
+        col=colorRampPalette(c('blue', 'white', 'red'))(100))
 
 mm <- model.matrix(~ 0 + annot)
 colnames(mm) <- levels(annot)

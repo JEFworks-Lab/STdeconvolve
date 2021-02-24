@@ -7,18 +7,18 @@ head(counts)
 colnames(counts)
 
 ## remove blanks
-#counts <- counts[, !grepl('Blank', colnames(counts))]
-#colnames(counts)
-#dim(counts)
-
-## remove all genes with detection worse than blanks
-sort(Matrix::colSums(counts), decreasing=TRUE)
-blanks <- counts[,grepl('Blank', colnames(counts))]
 counts <- counts[, !grepl('Blank', colnames(counts))]
-which(Matrix::colSums(counts) < mean(Matrix::colSums(blanks)))
-counts <- counts[, Matrix::colSums(counts) > mean(Matrix::colSums(blanks))]
 colnames(counts)
 dim(counts)
+
+## remove all genes with detection worse than blanks
+#sort(Matrix::colSums(counts), decreasing=TRUE)
+#blanks <- counts[,grepl('Blank', colnames(counts))]
+#counts <- counts[, !grepl('Blank', colnames(counts))]
+#which(Matrix::colSums(counts) < mean(Matrix::colSums(blanks)))
+#counts <- counts[, Matrix::colSums(counts) > mean(Matrix::colSums(blanks))]
+#colnames(counts)
+#dim(counts)
 
 ######### Get one animal
 table(features$dataset_name)
@@ -57,7 +57,7 @@ dim(spatial_position_and_class)
 library(ggplot2)
 ggplot(spatial_position_and_class, aes(x=Centroid_X, y=Centroid_Y, color=Cell_class)) +
   geom_point(size=0.01) +
-  facet_grid(vars(Bregma)) +
+  facet_wrap(vars(Bregma), scales = 'free') +
   theme_classic() +
   theme(legend.position="none")
 
@@ -172,6 +172,7 @@ save(simulatedMerfishSpots, file='simulatedMerfishSpots100umMajorCt.RData')
 
 ########## Test LDA
 #load('simulatedMerfishSpots100um.RData')
+load('simulatedMerfishSpots100umMajorCt.RData')
 dim(simulatedMerfishSpots[[1]][[1]]) ## words
 dim(simulatedMerfishSpots[[1]][[2]]) ## ground truth topics
 dim(simulatedMerfishSpots[[1]][[3]]) ## pos
@@ -193,21 +194,15 @@ corpus <- as.matrix(spotGexp)
 corpus_slamMtx <- slam::as.simple_triplet_matrix(corpus)
 head(corpus_slamMtx)
 
-## use known optimal k for now
-#kopt = length(levels(celltype))
-#kopt
+## search
+#perp <- recursiveFitLDA(corpus_slamMtx, interval = c(5, 10))
+#par(mfrow=c(1,1), mar=rep(5,4))
+#plot(perp[order(perp[,1]),1], perp[order(perp[,1]),2], type='l')
 
-## search for optimal k (needs to be improved)
-## manuall set for now
-#Ks = c(10, 210, 100, 50, 75, 88, 82, 85, 83, 84)
-Ks = seq(10, 210, 20)
-Ks
-ldas <- fitLDA(corpus_slamMtx, Ks=Ks)
-par(mfrow=c(1,1), mar=rep(5,4))
-plot(x=Ks[order(Ks)], ldas$perplexities[order(Ks)], type='l')
-Ks[which(ldas$perplexities==min(ldas$perplexities))]
-
-kopt = 84
+#kopt = perp[,1][which(perp[,2]==min(perp[,2]))]
+kopt = 209
+#kopt = length(levels(celltype.fine)) - 1
+kopt
 ldamodel <- topicmodels::LDA(corpus_slamMtx, k=kopt) ## is there some progress bar?
 topicmodels::perplexity(ldamodel, corpus_slamMtx)
 
@@ -222,6 +217,44 @@ sapply(1:ncol(ldamodel.theta), function(i) {
 })
 
 ############## Performance evaluation
+## compare with ground truth cell type gene expressions
+cpm.deconvolved <- t(ldamodel.beta * 1e6)
+
+mm <- model.matrix(~ 0 + celltype.fine)
+colnames(mm) <- levels(celltype.fine)
+true <- t(as.matrix(counts[names(celltype.fine),])) %*% mm
+head(true)
+cpm.true <- MERINGUE::normalizeCounts(true, log=FALSE)
+cpm.true <- cpm.true[, which(colnames(cpm.true) != 'Ambiguous:')]
+dim(cpm.true)
+
+hc <- hclust(as.dist(1-cor(as.matrix(cpm.true))), method='ward')
+plot(hc)
+cpm.true <- cpm.true[,rev(hc$order)]
+
+gexp.results <- do.call(rbind, lapply(1:ncol(cpm.true), function(i) {
+  sapply(1:ncol(cpm.deconvolved), function(j) {
+    #Metrics::rmse(cpm.true[,i], cpm.deconvolved[,j])
+    cor(cpm.true[,i], cpm.deconvolved[,j]) ## correlation instead?
+  })
+}))
+rownames(gexp.results) <- colnames(cpm.true)
+colnames(gexp.results) <- colnames(cpm.deconvolved)
+head(gexp.results)
+
+heatmap(gexp.results, scale='none')
+
+library(clue)
+compare <- gexp.results
+order <- clue::solve_LSAP(compare-min(compare), maximum = TRUE)
+m <- gexp.results[, order]
+#m <- scale(m)
+#m <- t(scale(t(m)))
+range(m)
+m[m < -2.5] <- -2.5
+m[m > 2.5] <- 2.5
+heatmap(t(m), Rowv=NA, Colv=NA, scale='none', mar=c(10,5), col=colorRampPalette(c('blue', 'white', 'red'))(100))
+
 ## compare with ground truth cell type proportions
 gtProp <- do.call(rbind, lapply(simulatedMerfishSpots, function(x) x[[2]]))
 head(gtProp)
@@ -231,6 +264,8 @@ gtProp[is.nan(gtProp)] <- 0
 head(gtProp)
 rowSums(ldamodel.theta)
 head(ldamodel.theta)
+## remove ambiguous
+gtProp <- gtProp[, which(colnames(gtProp) != 'Ambiguous:')]
 
 ## correlation across spots
 prop.results <- do.call(rbind, lapply(1:ncol(gtProp), function(i) {
@@ -246,41 +281,15 @@ prop.results[is.na(prop.results)] <- 0
 
 heatmap(t(prop.results), scale='none')
 
-library(clue)
-## transpose as needed
-if(nrow(prop.results) > ncol(prop.results)) {
-  compare <- t(prop.results)
-} else {
-  compare <- prop.results
-}
-order <- clue::solve_LSAP(compare-min(compare), maximum = TRUE)
-no.pairs <-setdiff(as.numeric(colnames(compare)), as.numeric(order))
-no.pairs
-heatmap(t(compare[, c(no.pairs, order)]), Rowv=NA, Colv=NA, scale='none', mar=c(10,5))
-heatmap(t(compare[, c(order)]), Rowv=NA, Colv=NA, scale='none', mar=c(10,5))
+m2 <- prop.results[rownames(m), colnames(m)]
+m2 <- scale(m2)
+m2 <- t(scale(t(m2)))
+range(m2)
+m2[m2 < -2.5] <- -2.5
+m2[m2 > 2.5] <- 2.5
+heatmap(t(m2), Rowv=NA, Colv=NA, scale='none', mar=c(10,5),
+        col=colorRampPalette(c('blue', 'white', 'red'))(100))
 
-## compare with ground truth cell type gene expressions
-cpm.deconvolved <- t(ldamodel.beta * 1e6)
 
-mm <- model.matrix(~ 0 + celltype)
-colnames(mm) <- levels(celltype)
-true <- t(as.matrix(counts[names(celltype),])) %*% mm
-head(true)
-cpm.true <- MERINGUE::normalizeCounts(true, log=FALSE)
-
-gexp.results <- do.call(rbind, lapply(1:ncol(cpm.true), function(i) {
-  sapply(1:ncol(cpm.deconvolved), function(j) {
-    #Metrics::rmse(cpm.true[,i], cpm.deconvolved[,j])
-    cor(cpm.true[,i], cpm.deconvolved[,j]) ## correlation instead?
-  })
-}))
-rownames(gexp.results) <- colnames(cpm.true)
-colnames(gexp.results) <- colnames(cpm.deconvolved)
-head(gexp.results)
-
-heatmap(t(gexp.results), scale='none')
-## use same ordering as previous
-heatmap(t(gexp.results[,c(no.pairs, order)]), Rowv=NA, Colv=NA, scale='row', mar=c(10,5))
-heatmap(t(gexp.results[,c(order)]), Rowv=NA, Colv=NA, scale='row', mar=c(10,5))
-
-save.image('merfish.RData')
+save.image('merfish_209topics.RData')
+#load('merfish_209topics.RData')

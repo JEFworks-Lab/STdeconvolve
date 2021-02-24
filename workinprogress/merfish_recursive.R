@@ -73,6 +73,7 @@ perp <- recursiveFitLDA(corpus_slamMtx, interval = c(5, 10))
 par(mfrow=c(1,1), mar=rep(5,4))
 plot(perp[order(perp[,1]),1], perp[order(perp[,1]),2], type='l')
 
+#kopt = perp[,1][which(perp[,2]==min(perp[,2]))]
 kopt = 84
 ldamodel <- topicmodels::LDA(corpus_slamMtx, k=kopt) ## is there some progress bar?
 topicmodels::perplexity(ldamodel, corpus_slamMtx)
