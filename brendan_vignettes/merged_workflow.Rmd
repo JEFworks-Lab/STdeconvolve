@@ -106,11 +106,15 @@ mob_opt <- buildLDAobject(LDAmodel = optimalModel(mob_LDAs),
 pos <- mob$pos
 m <- mob_opt
 
+ctcols <- as.factor(colnames(m$theta))
+names(ctcols) <- colnames(m$theta)
+levels(ctcols) <- gg_color_hue(length(colnames(m$theta)))
+
 # all topics
-vizAllTopics(theta = m$thetaCombn,
+vizAllTopics(theta = m$theta,
              pos = pos,
-             topicOrder = seq_len(length(colnames(m$thetaCombn))),
-             cluster_cols = levels(m$clustCols),
+             topicOrder = seq_len(length(colnames(m$theta))),
+             cluster_cols = levels(ctcols),
              groups = NA,
              group_cols = NA, 
              r = 0.4,
@@ -118,18 +122,18 @@ vizAllTopics(theta = m$thetaCombn,
              plotTitle = "mob combined")
 
 # same color topics in each cluster
-vizTopicClusters(theta = m$thetaCombn,
-                pos = pos,
-                clusters = m$clustCols,
-                sharedCol = TRUE,
-                r = 0.4,
-                lwd = 0.01)
+# vizTopicClusters(theta = m$thetaCombn,
+#                 pos = pos,
+#                 clusters = m$clustCols,
+#                 sharedCol = TRUE,
+#                 r = 0.4,
+#                 lwd = 0.01)
 
 # color topics in cluster differently
 vizTopicClusters(theta = m$theta,
                 pos = pos,
-                clusters = m$cols,
-                sharedCol = FALSE,
+                clusters = ctcols,
+                sharedCol = TRUE,
                 r = 0.4,
                 lwd = 0.01)
 
@@ -506,6 +510,34 @@ vizTopicClusters(theta = m$theta,
 
 ```
 
+```{r}
+
+head(mob_common_opt$betaCombn[c(17),order(mob_common_opt$betaCombn[c(17),], decreasing = TRUE)], n=10)
+head(mob_common_opt$betaCombn[c(17),order(mob_common_opt$betaCombn[c(7),], decreasing = TRUE)], n=10)
+head(mob_common_opt$betaCombn[c(17),order(mob_common_opt$betaCombn[c(3),], decreasing = TRUE)], n=10)
+head(mob_common_opt$betaCombn[c(17),order(mob_common_opt$betaCombn[c(4),], decreasing = TRUE)], n=10)
+
+```
+
+
+```{r}
+
+genes <- c("Mbp", "Atp1b1", "Snap25", "Fabp7")
+genecounts <- mob_common$corpus[,genes]
+mobExp <- merge(as.data.frame(mob$pos), as.data.frame(genecounts), by=0)
+rownames(mobExp) <- mobExp$Row.names
+mobExp <- mobExp[,2:ncol(mobExp)]
+
+```
+
+```{r}
+
+vizGeneCounts(mobExp, gene = "Fabp7")
+
+```
+
+
+
 ## Rep1 Stahl
 
 ```{r}
@@ -737,7 +769,7 @@ vizTopicClusters(theta = m$theta,
 
 ```
 
-# ** compare models
+# compare models
 
 ## meringue vs Rep1
 
@@ -1048,6 +1080,13 @@ mean(betaCombn_paired_cors)
 sd(betaCombn_paired_cors)
 
 ```
+
+# ------------------------------------
+
+# ** mob_common with k = scRNA clusters (38)
+
+same as NMF topics 38. What about the remaining cell types after filtering (the NMF ones that were actually present)
+Here its 17 i think?
 
 # ==========================
 # PDAC
@@ -1386,7 +1425,7 @@ vizTopicClusters(theta = m$theta,
 
 ```
 
-# ** Standardize corpus for datasets
+# Standardize corpus for datasets
 
 Because the corpuses are so different, not sure if it makes sense. But perhaps just try it anyways.
 
@@ -1563,6 +1602,25 @@ bregma04_opt <- buildLDAobject(LDAmodel = optimalModel(bregma04_LDAs),
 
 ```
 
+```{r, fig.height=8, fig.width=9}
+
+pos <- bregma04$cellCounts[,c("x","y")]
+m <- bregma04_opt
+
+# all topics
+vizAllTopics(theta = m$thetaCombn,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m$thetaCombn))),
+             cluster_cols = levels(m$clustCols),
+             groups = NA,
+             group_cols = NA, 
+             r = 40,
+             lwd = 0.01,
+             plotTitle = "bregma04_opt combined")
+
+```
+
+
 ```{r, fig.height=6, fig.width=8}
 
 pos <- bregma04$cellCounts[,c("x","y")]
@@ -1594,6 +1652,224 @@ vizTopicClusters(theta = m$theta,
                 sharedCol = FALSE,
                 r = 40,
                 lwd = 0.01)
+
+```
+
+## theta
+
+```{r}
+
+m1 <- bregma04
+m2 <- bregma04_opt
+
+
+# -------------------------------------------------------
+# individual topics
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$gtDocTopics[,4:12], # 9
+                                      theta2 = m2$theta) # 75
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          Rowv = m1$dendro,
+          Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols),
+          ColSideColors = as.vector(m2$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "breg04 theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          ColSideColors = as.vector(m2$cols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "breg04 theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+# -------------------------------------------------------
+# clusters
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$gtDocTopics[,4:12],
+                                      theta2 = m2$thetaCombn)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols),
+          ColSideColors = as.vector(m2$clustCols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "bregma04_opt clusters theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          ColSideColors = as.vector(m2$clustCols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "bregma04_opt clusters theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+## beta
+
+```{r}
+
+m1 <- bregma04_opt
+m2 <- bregma04
+
+
+# -------------------------------------------------------
+# individual topics
+
+cor <- correlationBetweenBetas(beta1 = m1$beta, # 75
+                               beta2 = m2$gtTopicWords, # 9
+                               thresh = NULL)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(cor,
+          Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols),
+          ColSideColors = as.vector(m2$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "breg04 beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          ColSideColors = as.vector(m2$cols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "breg04 beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+cor_paired_cors <- diag(cor[pairs$colsix, pairs$rowix])
+
+hist(cor_paired_cors, breaks = 10)
+mean(cor_paired_cors)
+sd(cor_paired_cors)
+
+# -------------------------------------------------------
+# clusters
+
+cor <- correlationBetweenBetas(beta1 = m1$betaCombn,
+                                beta2 = m2$gtTopicWords,
+                                thresh = NULL)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols),
+          ColSideColors = as.vector(m2$cols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "bregma04_opt clusters beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols)[pairs$colsix],
+          ColSideColors = as.vector(m2$cols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "bregma04_opt clusters beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+cor_paired_cors <- diag(cor[pairs$colsix, pairs$rowix])
+
+hist(cor_paired_cors, breaks = 10)
+mean(cor_paired_cors)
+sd(cor_paired_cors)
 
 ```
 
@@ -4576,12 +4852,627 @@ length(sl_mobcommon_mob_opt$shared_genes)
 
 ## -----------------------
 
+## Train with `countsClean` cd
+
+Instead of using all genes, just consider the "cleaned ST data"
+
+dim(cd)
+[1] 15928   262
+dim(countsClean)
+[1]  260 7365
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/mob_processed_sparseMatrix.RData")
+# mob_se
+
+mob_meta <- read.csv2("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_metaData_seurat.csv", sep = ",")
+
+wt_cells <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$"X"
+print(length(wt_cells))
+
+mob_se_wt <- mob_se[,wt_cells]
+
+meta.data.wt = mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]
+
+```
+
+```{r}
+
+mob_se_wt <- CreateSeuratObject(counts = mob_se_wt, project = "mob_wt_noN10",
+                                      meta.data = meta.data.wt)
+
+# a lot of metadata info not being added...? try doing manually:
+mob_se_wt[["ClusterName"]] <- meta.data.wt$ClusterName
+mob_se_wt[["percent.mito"]] <- meta.data.wt$percent.mito
+
+# Set the known clusters as the "active.indent"
+Seurat::Idents(object = mob_se_wt) <- mob_se_wt@meta.data$ClusterName
+
+# get cluster markers
+cluster_markers_mob_se_wt <- Seurat::FindAllMarkers(object = mob_se_wt,
+                                              assay = "RNA",
+                                              slot = "data",
+                                              verbose = TRUE,
+                                              only.pos = TRUE)
+
+# down samples cell from each cluster and select genes marker and variable genes
+se_sc_down_wt <- downsample_se_obj(se_obj = mob_se_wt,
+                                clust_vr = "ClusterName",
+                                cluster_markers = cluster_markers_mob_se_wt,
+                                cl_n = 100, # size to sample from each cluster
+                                hvg = 3000) # number or NULL. choose additional highly variable genes on top of cluster genes
+
+start_time <- Sys.time()
+nmf_mod_mob_wt_countsClean_ls <- train_nmf(cluster_markers = cluster_markers_mob_se_wt,
+                        se_sc = se_sc_down_wt,
+                        mtrx_spatial = t(countsClean), # the original mob st data
+                        clust_vr = "ClusterName",
+                        ntop = NULL, # number unique markers per cluster, otherwise all of them
+                        hvg = 3000, # number of highly variable genes in addition to the marker genes
+                        transf = "uv",
+                        method = "nsNMF")
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train NMF model was %smins", total_t))
+
+# save(nmf_mod_mob_wt_countsClean_ls, file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/spotlight_nmf_train_mob_wt_countsClean_ls.RData")
+
+```
+
+```{r}
+
+sl_countsClean <- SPOTlightPredict(nmfRef = nmf_mod_mob_wt_countsClean_ls, stCounts =t(countsClean))
+
+```
+
+```{r}
+
+dim(sl_countsClean$spotCtTheta)
+dim(sl_countsClean$spotTopicTheta)
+dim(sl_countsClean$ctBeta)
+dim(sl_countsClean$topicBeta)
+dim(sl_countsClean$ctTopicProps)
+
+```
+
+```{r, fig.height=7, fig.width=8}
+
+# correlation_palette <- colorRampPalette(c("black", "red"))(n = 109)
+# correlation_breaks = c(seq(0,0.009,length=10),
+#                        seq(0.01,1,length=100))
+
+correlation_palette <- colorRampPalette(c("white", "black"))(n = 209)
+
+pairs <- lsatPairs(sl_countsClean$ctTopicProps)
+
+par(mfrow=c(1,1), mar=c(2,2,2,2))
+heatmap.2(t(sl_countsClean$ctTopicProps[pairs$rowix, pairs$colsix]),
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$cols),
+          col = correlation_palette,
+          # breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(4,5),
+          main = "sl_countsClean$ctTopicProps",
+          lhei = c(1,5),
+          key.xlab = "Proportion",
+          key.title = NA)
+# par(mfrow=c(1,1), oma=c(1.6,10.4,4.8,2.8)) # b, l, t, r
+# grid(nx = 38, ny = 38)
+
+```
+
+will still need to filter to drop cts and topics that were not present
+
+```{r}
+
+sl_countsClean_mob_opt <- filterSPOTlightMtxs(sl = sl_countsClean, lda_model = mob_opt)
+
+dim(sl_countsClean_mob_opt$ctThetaFilt)
+dim(sl_countsClean_mob_opt$topicThetaFilt)
+dim(sl_countsClean_mob_opt$ctBetaFilt)
+dim(sl_countsClean_mob_opt$topicBetaFilt)
+length(sl_countsClean_mob_opt$shared_genes)
+
+```
+
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob$pos
+m <- sl_countsClean_mob_opt$ctThetaFilt
+cols <- sl_countsClean_mob_opt$ctcols
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = levels(cols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "sl_countsClean_mob_opt predictions")
+
+vizTopicClusters(theta = m,
+                pos = pos,
+                clusters = cols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob$pos
+m <- sl_countsClean_mob_opt$topicThetaFilt
+cols <- sl_countsClean_mob_opt$topiccols
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = levels(cols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "sl_countsClean_mob_opt topic predictions")
+
+vizTopicClusters(theta = m,
+                pos = pos,
+                clusters = cols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+## vs `mob_common_opt` lda corpus
+
+compare the sl predictions using the countsClean ST filtered gene set (so 6336 cluster genes used in W, and using the countsClean corpus from meringue mob set), with the lda model using the same meringue mob corpus but with topics determined from the common set of 149 OD genes between all the mob replicates.
+
+```{r}
+
+sl_countsClean_mob_common <- filterSPOTlightMtxs(sl = sl_countsClean, lda_model = mob_common_opt)
+
+dim(sl_countsClean_mob_common$ctThetaFilt)
+dim(sl_countsClean_mob_common$topicThetaFilt)
+dim(sl_countsClean_mob_common$ctBetaFilt)
+dim(sl_countsClean_mob_common$topicBetaFilt)
+length(sl_countsClean_mob_common$shared_genes)
+
+```
+
+### theta
+
+```{r}
+
+m1 <- mob_common_opt
+m2 <- sl_countsClean_mob_common
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$theta,
+                                      theta2 = m2$ctThetaFilt)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols),
+          ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean_mob_common vs mob_common_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(theta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean_mob_common vs mob_common_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$colsix, pairs$rowix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+# -------------------------------------------------------
+# sl predicted topics
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$theta,
+                                      theta2 = m2$topicThetaFilt)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols),
+          ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean_mob_common vs mob_common_opt topics theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(theta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          ColSideColors = as.vector(m2$topiccols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean_mob_common vs mob_common_opt topics theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$colsix, pairs$rowix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+
+# -------------------------------------------------------
+# sl predicted cell types versus clusters
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$thetaCombn,
+                                      theta2 = m2$ctThetaFilt)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols),
+          ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean_mob_common vs mob_common_opt ct thetaCombn",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(theta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols)[pairs$colsix],
+          ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean_mob_common vs mob_common_opt ct thetaCombn paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$colsix, pairs$rowix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+# -------------------------------------------------------
+# sl predicted topics versus clusters
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$thetaCombn,
+                                      theta2 = m2$topicThetaFilt)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols),
+          ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean_mob_common vs mob_common_opt topics thetaCombn",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols)[pairs$rowix],
+          ColSideColors = as.vector(m2$topiccols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean_mob_common vs mob_common_opt topics thetaCombn paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+### beta
+
+```{r}
+
+m1 <- mob_common_opt
+m2 <- sl_countsClean_mob_common
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1$beta[,m2$shared_genes],
+                                      beta2 = m2$ctBetaFilt[,m2$shared_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols),
+          ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean vs mob_common_opt ct beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(beta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean vs mob_common_opt ct beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$colsix, pairs$rowix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+
+# -------------------------------------------------------
+# sl predicted topics
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1$beta[,m2$shared_genes],
+                                      beta2 = m2$topicBetaFilt[,m2$shared_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols),
+          ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean vs mob_common_opt topics beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(beta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          ColSideColors = as.vector(m2$topiccols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean vs mob_common_opt topics beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$colsix, pairs$rowix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+
+# -------------------------------------------------------
+# sl predicted cell types versus clusters
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1$betaCombn[,m2$shared_genes],
+                                      beta2 = m2$ctBetaFilt[,m2$shared_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols),
+          ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean vs mob_common_opt ct betaCombn",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(beta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols)[pairs$colsix],
+          ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean vs mob_common_opt ct betaCombn paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$colsix, pairs$rowix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+
+# -------------------------------------------------------
+# sl predicted topics versus clusters
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1$betaCombn[,m2$shared_genes],
+                                      beta2 = m2$topicBetaFilt[,m2$shared_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols),
+          ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean vs mob_common_opt topics betaCombn",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols)[pairs$rowix],
+          ColSideColors = as.vector(m2$topiccols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean vs mob_common_opt topics betaCombn paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+```
+
+## -----------------------
+
 ## Compare sl models
 
 ## `sl_cd` vs `sl_mob`
 
 sl_cd is the predicted topics and cell types use all the shared seurat cluster and St genes.
-sl_mob is the above model, but only genes present in meringue mob corpus are kept and used to predict cell types.
+sl_mob is the above model, but only genes present in meringue mob corpus are kept (after training NMF) and used to predict cell types.
 
 (prediction is based on nnls using the reference)
 
@@ -4877,12 +5768,1852 @@ rowSums(sl_cd_mob_opt$ctBetaFilt) # took subset of genes for filtering when ctBe
 
 Adjusted such that when filtering, the betas get adjusted so the gene values sum to 1
 
+## `sl_cd` vs `sl_cd_noN10`
+
+### theta
+
+#### all spots, cts, topics
+
+```{r}
+
+# use raw, so can see which cell types are not present at all.
+# fill need to filter to get dendros and compare
+
+m1 <- sl_cd
+m2 <- sl_cd_noN10
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$spotCtTheta,
+                                      theta2 = m2$spotCtTheta)
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_cd_noN10 ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$spotTopicTheta,
+                                      theta2 = m2$spotTopicTheta)
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_cd_noN10 ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+```
+
+interesting, shows that for the most part, the same cell types correlate really well in terms of the space they were asssigned to. Also may help indicate which types are really distinct, because some cell types do correlate with other cell types. Like the N's for example. And actually when removing N10, other N's were assigned to the same region. Can see here in this theta correlation that they also correlate in space. 
+
+Maybe try removing `Mono` next? Does this encompass a distinct tissue layer? Also Try `Astro1` because the other astro doest really correspond. Perhaps a better options. For N's, a lot of similar ones that then seem to be used to make up for another N that might be missing. Or `drop all the Astros...`
+
+#### filtered
+
+```{r}
+
+m1 <- sl_cd_mob_opt
+m2 <- sl_cd_noN10_mob_opt
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$ctThetaFilt, #22
+                                      theta2 = m2$ctThetaFilt) # 23
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$ctcols),
+          ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd mob_opt vs noN10 mob_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$ctcols)[pairs$rowix],
+          ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd mob_opt vs noN10 mob_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+# -------------------------------------------------------
+# sl predicted topics
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$topicThetaFilt, # 36
+                                      theta2 = m2$topicThetaFilt) # 34
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$topiccols),
+          ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd mob_opt vs noN10 mob_opt topics theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(theta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$topiccols)[pairs$colsix],
+          ColSideColors = as.vector(m2$topiccols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd mob_opt vs noN10 mob_opt topics theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$colsix, pairs$rowix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+### beta
+
+actually the genes do differ between `sl_cd` and `sl_cd_noN10` so make sure same ones are being used
+
+```{r}
+
+keep_genes <- colnames(sl_cd$ctBeta)[colnames(sl_cd$ctBeta) %in% colnames(sl_cd_noN10$ctBeta)]
+length(keep_genes)
+
+```
+
+```{r}
+
+m1 <- sl_cd
+m2 <- sl_cd_noN10
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1$ctBeta[,keep_genes], # 38 x 9850
+                                      beta2 = m2$ctBeta[,keep_genes]) # 37 x 9862
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_cd_noN10 ct beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(beta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_cd_noN10 ct beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$colsix, pairs$rowix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+
+# -------------------------------------------------------
+# sl predicted topics
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1$topicBeta[,keep_genes],
+                                      beta2 = m2$topicBeta[,keep_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_cd_noN10 topics beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(beta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$topiccols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_cd_noN10 topics beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$colsix, pairs$rowix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+```
+
+## `sl_cd` vs `sl_cd_noAstro`
+
+### theta
+
+#### all spots, cts, topics
+
+```{r}
+
+# use raw, so can see which cell types are not present at all.
+# fill need to filter to get dendros and compare
+
+m1 <- sl_cd
+m2 <- sl_cd_noAstro
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$spotCtTheta, # 38
+                                      theta2 = m2$spotCtTheta) # 35
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_cd_noAstro ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$spotTopicTheta,
+                                      theta2 = m2$spotTopicTheta)
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_cd_noAstro ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+```
+
+```{r}
+
+length(which(!colSums(sl_cd$spotCtTheta) == 0))
+length(which(!colSums(sl_cd_noAstro$spotCtTheta) == 0))
+
+```
+
+Some cell types were not detected initially. (Above rows for sl_cd). Interesting that sl_cd_noAstros, while Atros1-3 were dropped, still ended up with same number of cell types present as the original (23). EC1 not detected in sl_cd, but now detected in sl_cd_noAstros. So cell type presence got shifted around when clusters dropped. Different marker genes maybe? There were actually more marker genes for the `noN10` NMF training, even though less topics initialized and missing clusters. Maybe more differential genes able to be selected? SHould look into how seurat is picking markers and how many for each cluster with and without dropping...
+
+```{r}
+
+dim(nmf_mod_mob_wt_ls[[1]]@fit@W)
+dim(nmf_mod_mob_wt_noN10_ls[[1]]@fit@W)
+dim(nmf_mod_mob_wt_noAstros_ls[[1]]@fit@W)
+
+```
+
+
+#### filtered
+
+```{r}
+
+m1 <- sl_cd_mob_opt
+m2 <- sl_cd_noAstro_mob_opt
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$ctThetaFilt, #22
+                                      theta2 = m2$ctThetaFilt) # 23
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$ctcols),
+          ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd mob_opt vs noAstro mob_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$ctcols)[pairs$rowix],
+          ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd mob_opt vs noAstro mob_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+# -------------------------------------------------------
+# sl predicted topics
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$topicThetaFilt, # 36
+                                      theta2 = m2$topicThetaFilt) # 33
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$topiccols),
+          ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd mob_opt vs noAstro mob_opt topics theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(theta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$topiccols)[pairs$colsix],
+          ColSideColors = as.vector(m2$topiccols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd mob_opt vs noAstro mob_opt topics theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$colsix, pairs$rowix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+### beta
+
+actually the genes do differ between `sl_cd` and `sl_cd_noAstro` so make sure same ones are being used
+
+```{r}
+
+keep_genes <- colnames(sl_cd$ctBeta)[colnames(sl_cd$ctBeta) %in% colnames(sl_cd_noAstro$ctBeta)]
+length(keep_genes)
+
+```
+
+```{r}
+
+m1 <- sl_cd
+m2 <- sl_cd_noAstro
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1$ctBeta[,keep_genes], # 38 x 9850
+                                      beta2 = m2$ctBeta[,keep_genes]) # 37 x 9862
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_cd_noAstro ct beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(beta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_cd_noAstro ct beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$colsix, pairs$rowix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+
+# -------------------------------------------------------
+# sl predicted topics
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1$topicBeta[,keep_genes],
+                                      beta2 = m2$topicBeta[,keep_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_cd_noAstro topics beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(beta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$topiccols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_cd_noAstro topics beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$colsix, pairs$rowix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+```
+
+Transcriptionally, cell types and columns still match up really well and model doesnt get confused by assigning gene patterns from one topic or cell type to another. This makes sense given the cluster genes are primarily the same, although some small differences and thus why not 100%.
+
+But the thetas do change and are are less perfectly correlated. So model able to define cell types well transcriptionally (b/c have that scRNAseq cluster reference). but theta changes. Makes sense. Actually if you look at `N14` and `N15` for the `sl_cd`, they too are where the `Astro1s` are. But seem to take up larger percentages now in the `sl_cd_noAstros`. 
+
+## `sl_cd` vs `sl_countsClean`
+
+### theta
+
+#### all spots, cts, topics
+
+number of spots are different for the unfiltered (`sl_cd` has all 262)
+
+```{r}
+
+keep_spots <- rownames(sl_cd$spotCtTheta)[which(rownames(sl_cd$spotCtTheta) %in% rownames(sl_countsClean$spotCtTheta))]
+
+```
+
+```{r}
+
+# use raw, so can see which cell types are not present at all.
+# fill need to filter to get dendros and compare
+
+m1 <- sl_cd
+m2 <- sl_countsClean
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$spotCtTheta[keep_spots,], # 38
+                                      theta2 = m2$spotCtTheta[keep_spots,]) # 38
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_countsClean ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$spotTopicTheta[keep_spots,],
+                                      theta2 = m2$spotTopicTheta[keep_spots,])
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_countsClean ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+```
+
+#### filtered
+
+topics and cts not detected removed and bad spots removed (260 remaining)
+
+```{r}
+
+m1 <- sl_cd_mob_opt
+m2 <- sl_countsClean_mob_opt
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$ctThetaFilt, #22
+                                      theta2 = m2$ctThetaFilt) # 17
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$ctcols),
+          ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_countsClean ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(theta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$ctcols)[pairs$colsix],
+          ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_countsClean ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$colsix, pairs$rowix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+# -------------------------------------------------------
+# sl predicted topics
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$topicThetaFilt, # 36
+                                      theta2 = m2$topicThetaFilt) # 36
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$topiccols),
+          ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_countsClean topics theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$topiccols)[pairs$rowix],
+          ColSideColors = as.vector(m2$topiccols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_countsClean topics theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+### beta
+
+actually the genes do differ between `sl_cd` and `sl_countsClean` so make sure same ones are being used
+
+```{r}
+
+keep_genes <- colnames(sl_cd$ctBeta)[colnames(sl_cd$ctBeta) %in% colnames(sl_countsClean$ctBeta)]
+length(keep_genes)
+
+```
+
+```{r}
+
+m1 <- sl_cd
+m2 <- sl_countsClean
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1$ctBeta[,keep_genes], # 38 x 9850; adjusted to 6336
+                                      beta2 = m2$ctBeta[,keep_genes]) # 38 x 6336
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_countsClean ct beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_countsClean ct beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+
+# -------------------------------------------------------
+# sl predicted topics
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1$topicBeta[,keep_genes],
+                                      beta2 = m2$topicBeta[,keep_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_countsClean topics beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$topiccols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_cd vs sl_countsClean topics beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+```
+
+so even after cleaning and using the cleaned set of genes for training and then prediction, very similar to using all of the genes without cleaning. So for now use countsCleaned when training NMF and also dropping clusters. But in general I don't think the results should differ very much.
+
+## `sl_countsClean` vs `sl_countsClean_noAstros`
+
+### remove all Astros
+
+using countsClean
+
+```{r}
+
+# load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/mob_processed_sparseMatrix.RData")
+# # mob_se
+# 
+# mob_meta <- read.csv2("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_metaData_seurat.csv", sep = ",")
+# 
+# wt_cells <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$"X"
+# 
+# mob_se_wt <- mob_se[,wt_cells]
+# meta.data.wt = mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]
+# 
+# meta.data.wt.noAstros <- meta.data.wt[which(!meta.data.wt$ClusterName %in% c("Astro1", "Astro2", "Astro3")),]
+# keepCells <- mob_meta[which(!mob_meta$ClusterName %in% c("Astro1", "Astro2", "Astro3")),]$"X"
+# mob_se_wt_noAstros <- mob_se_wt[,which(colnames(mob_se_wt) %in% keepCells)]
+
+```
+
+```{r}
+
+# mob_se_wt_noAstros <- CreateSeuratObject(counts = mob_se_wt_noAstros, project = "mob_wt_noAstros",
+#                                       meta.data = meta.data.wt.noAstros)
+# 
+# # a lot of metadata info not being added...? try doing manually:
+# mob_se_wt_noAstros[["ClusterName"]] <- meta.data.wt.noAstros$ClusterName
+# mob_se_wt_noAstros[["percent.mito"]] <- meta.data.wt.noAstros$percent.mito
+# 
+# # Set the known clusters as the "active.indent"
+# Seurat::Idents(object = mob_se_wt_noAstros) <- mob_se_wt_noAstros@meta.data$ClusterName
+
+```
+
+
+```{r}
+
+# get cluster markers
+# cluster_markers_mob_se_wt_noAstros <- Seurat::FindAllMarkers(object = mob_se_wt_noAstros,
+#                                               assay = "RNA",
+#                                               slot = "data",
+#                                               verbose = TRUE,
+#                                               only.pos = TRUE)
+# 
+# # down samples cell from each cluster and select genes marker and variable genes
+# se_sc_down_wt_noAstros <- downsample_se_obj(se_obj = mob_se_wt_noAstros,
+#                                 clust_vr = "ClusterName",
+#                                 cluster_markers = cluster_markers_mob_se_wt_noAstros,
+#                                 cl_n = 100, # size to sample from each cluster
+#                                 hvg = 3000) # number or NULL. choose additional highly variable genes on top of cluster genes
+# 
+# start_time <- Sys.time()
+# nmf_mod_mob_wt_countsClean_noAstros_ls <- train_nmf(cluster_markers = cluster_markers_mob_se_wt_noAstros,
+#                         se_sc = se_sc_down_wt_noAstros,
+#                         mtrx_spatial = t(countsClean), # the original mob st data
+#                         clust_vr = "ClusterName",
+#                         ntop = NULL, # number unique markers per cluster, otherwise all of them
+#                         hvg = 3000, # number of highly variable genes in addition to the marker genes
+#                         transf = "uv",
+#                         method = "nsNMF")
+# total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+# print(sprintf("Time to train NMF model was %smins", total_t))
+# 
+# save(nmf_mod_mob_wt_countsClean_noAstros_ls, file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/spotlight_nmf_train_mob_wt_countsClean_noAstros_ls.RData")
+
+```
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/spotlight_nmf_train_mob_wt_countsClean_noAstros_ls.RData")
+
+```
+
+```{r}
+
+sl_countsClean_noAstros <- SPOTlightPredict(nmfRef = nmf_mod_mob_wt_countsClean_noAstros_ls, stCounts =t(countsClean))
+
+```
+
+```{r}
+
+dim(sl_countsClean_noAstros$ctBeta)
+dim(sl_countsClean_noAstros$topicBeta)
+dim(sl_countsClean_noAstros$ctTopicProps)
+dim(sl_countsClean_noAstros$spotCtTheta)
+dim(sl_countsClean_noAstros$spotTopicTheta)
+
+```
+
+
+```{r}
+
+sl_countsClean_noAstros_mob_opt <- filterSPOTlightMtxs(sl = sl_countsClean_noAstros, lda_model = mob_opt)
+
+dim(sl_countsClean_noAstros_mob_opt$ctThetaFilt)
+dim(sl_countsClean_noAstros_mob_opt$topicThetaFilt)
+dim(sl_countsClean_noAstros_mob_opt$ctBetaFilt)
+dim(sl_countsClean_noAstros_mob_opt$topicBetaFilt)
+length(sl_countsClean_noAstros_mob_opt$shared_genes)
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob$pos
+m <- sl_countsClean_noAstros_mob_opt$ctThetaFilt
+cols <- sl_countsClean_noAstros_mob_opt$ctcols
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = levels(cols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "sl_countsClean_noAstro topic predictions")
+
+vizTopicClusters(theta = m,
+                pos = pos,
+                clusters = cols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+### theta
+
+#### all spots, cts, topics
+
+```{r}
+
+# use raw, so can see which cell types are not present at all.
+# fill need to filter to get dendros and compare
+
+m1 <- sl_countsClean
+m2 <- sl_countsClean_noAstros
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$spotCtTheta, # 38
+                                      theta2 = m2$spotCtTheta) # 35
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs sl_countsClean_noAstro ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$spotTopicTheta,
+                                      theta2 = m2$spotTopicTheta)
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs sl_countsClean_noAstro ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+```
+
+```{r}
+
+length(which(!colSums(sl_countsClean$spotCtTheta) == 0))
+length(which(!colSums(sl_countsClean_noAstros$spotCtTheta) == 0))
+
+```
+
+```{r}
+
+dim(nmf_mod_mob_wt_ls[[1]]@fit@W)
+dim(nmf_mod_mob_wt_noN10_ls[[1]]@fit@W)
+dim(nmf_mod_mob_wt_noAstros_ls[[1]]@fit@W)
+dim(nmf_mod_mob_wt_countsClean_ls[[1]]@fit@W)
+dim(nmf_mod_mob_wt_countsClean_noAstros_ls[[1]]@fit@W)
+
+```
+
+#### filtered
+
+```{r}
+
+m1 <- sl_countsClean_mob_opt
+m2 <- sl_countsClean_noAstros_mob_opt
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$ctThetaFilt, # 17
+                                      theta2 = m2$ctThetaFilt) # 18
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$ctcols),
+          ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean mob_opt vs noAstro mob_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$ctcols)[pairs$rowix],
+          ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean mob_opt vs noAstro mob_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+# -------------------------------------------------------
+# sl predicted topics
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$topicThetaFilt, # 36
+                                      theta2 = m2$topicThetaFilt) # 33
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$topiccols),
+          ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean mob_opt vs noAstro mob_opt topics theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(theta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$topiccols)[pairs$colsix],
+          ColSideColors = as.vector(m2$topiccols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean mob_opt vs noAstro mob_opt topics theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$colsix, pairs$rowix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+### beta
+
+actually the genes do differ between `sl_cd` and `sl_cd_noAstro` so make sure same ones are being used
+
+```{r}
+
+keep_genes <- colnames(sl_countsClean$ctBeta)[colnames(sl_countsClean$ctBeta) %in% colnames(sl_countsClean_noAstros$ctBeta)]
+length(keep_genes)
+
+```
+
+```{r}
+
+m1 <- sl_countsClean
+m2 <- sl_countsClean_noAstros
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1$ctBeta[,keep_genes], # 38 x 6336
+                                      beta2 = m2$ctBeta[,keep_genes]) # 35 x 6288
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs sl_countsClean_noAstro ct beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(beta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs sl_countsClean_noAstro ct beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$colsix, pairs$rowix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+
+# -------------------------------------------------------
+# sl predicted topics
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1$topicBeta[,keep_genes], # 38
+                                      beta2 = m2$topicBeta[,keep_genes]) # 35
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs sl_countsClean_noAstro topics beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(beta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$topiccols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs sl_countsClean_noAstro topics beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$colsix, pairs$rowix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+```
+
+just the cts present:
+```{r}
+
+cts1 <- rownames(sl_countsClean_mob_opt$ctBetaFilt)
+cts1
+cts2 <- rownames(sl_countsClean_noAstros_mob_opt$ctBetaFilt)
+cts2
+
+tps1 <- rownames(sl_countsClean_mob_opt$topicBetaFilt)
+tps1
+tps2 <- rownames(sl_countsClean_noAstros_mob_opt$topicBetaFilt)
+tps2
+
+```
+
+
+```{r}
+
+m1 <- sl_countsClean
+m2 <- sl_countsClean_noAstros
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1$ctBeta[cts1,keep_genes], # 17 x 6336
+                                      beta2 = m2$ctBeta[cts2,keep_genes]) # 18 x 6288
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs sl_countsClean_noAstro ct beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs sl_countsClean_noAstro ct beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+
+# -------------------------------------------------------
+# sl predicted topics
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1$topicBeta[tps1,keep_genes], # 38
+                                      beta2 = m2$topicBeta[tps2,keep_genes]) # 33
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs sl_countsClean_noAstro topics beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(beta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$topiccols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs sl_countsClean_noAstro topics beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$colsix, pairs$rowix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+```
+
+## `sl_countsClean` vs `sl_countsClean_noOECs`
+
+### theta
+
+#### all spots, cts, topics
+
+```{r}
+
+# use raw, so can see which cell types are not present at all.
+# fill need to filter to get dendros and compare
+
+m1 <- sl_countsClean
+m2 <- sl_countsClean_noOEC
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$spotCtTheta, # 38
+                                      theta2 = m2$spotCtTheta) # 33
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs sl_countsClean_noOEC ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$spotTopicTheta,
+                                      theta2 = m2$spotTopicTheta)
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs sl_countsClean_noOEC ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+
+```
+
+#### filtered
+
+```{r}
+
+m1 <- sl_countsClean_mob_opt
+m2 <- sl_countsClean_noOEC_mob_opt
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$ctThetaFilt, # 17
+                                      theta2 = m2$ctThetaFilt) # 19
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$ctcols),
+          ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean mob_opt vs noOEC mob_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$ctcols)[pairs$rowix],
+          ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean mob_opt vs noOEC mob_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+# -------------------------------------------------------
+# sl predicted topics
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$topicThetaFilt, # 36
+                                      theta2 = m2$topicThetaFilt) # 31
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$topiccols),
+          ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean mob_opt vs noOEC mob_opt topics theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(theta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$topiccols)[pairs$colsix],
+          ColSideColors = as.vector(m2$topiccols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean mob_opt vs noOEC mob_opt topics theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$colsix, pairs$rowix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+# `sl_countsClean_noOECs` vs `mob_common_opt`
+
+## theta
+
+```{r}
+
+m1 <- mob_common_opt
+m2 <- sl_countsClean_noOEC_mob_opt
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$theta, # 75
+                                      theta2 = m2$ctThetaFilt) # 19
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols),
+          ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean noOECs vs mob_common_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(theta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean noOECs vs mob_common_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$colsix, pairs$rowix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+# -------------------------------------------------------
+# sl predicted topics
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$theta, # 75
+                                      theta2 = m2$topicThetaFilt) # 31
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols),
+          ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean noOECs vs mob_common_opt topics theta theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(theta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          ColSideColors = as.vector(m2$topiccols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean noOECs vs mob_common_opt topics theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$colsix, pairs$rowix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+
+# -------------------------------------------------------
+# sl predicted cell types versus clusters
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$thetaCombn, # 18
+                                      theta2 = m2$ctThetaFilt) # 19
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols),
+          ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean noOECs vs mob_common_opt ct thetaCombn",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols)[pairs$rowix],
+          ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean noOECs vs mob_common_opt ct thetaCombn paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+# -------------------------------------------------------
+# sl predicted topics versus clusters
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$thetaCombn, # 18
+                                      theta2 = m2$topicThetaFilt) # 31
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols),
+          ColSideColors = as.vector(m2$topiccols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean noOECs vs mob_common_opt topics thetaCombn",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          RowSideColors = as.vector(m1$clustCols)[pairs$rowix],
+          ColSideColors = as.vector(m2$topiccols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean noOECs vs mob_common_opt topics thetaCombn paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
 ## -----------------------
 
 
-# ** MISSING CELL CLUSTERS:
+# Missing Cell Clusters:
 
 might make more sense to retrain NMF with a dropped cluster b/c the genes are also picked based on the cluster. Alternatively could drop cluster and genes from W and H, but only if the matrices are identical either way. Then for other clusters can drop them and analyze faster. Will have to be smart in the beginning. Pick a cluster that is well represented and also makes up a distinct cell layer. How does the model do when this is missing? Correlate with other NMF, and with LDAs. Assess to a ground truth to measure performance change? Might have to stick to MERFISH if this this case because actual GT. But keep in mind the merfish vocab was based on genes that were selected specifically to separate cell types so all models would be exprected to do better than normal.
+
+
+## **Important and interesting point:
+Intersting: sl_cd trained with cd intersecting genes, and then used to predict on cd, get Astro 1 as the circle layer around middle (and remember when comparing to other corpuses I filter, but this just cleans up spots when looking at thetas at least. THe predictions have already been made). Middle is also N10. These are the predicted thetas. 
+
+Now if I remove genes from W (post trained with cd), and then use to predict, on mob (just using 211 genes), or other corpus, but again, using different gene set to predict, get different cell types asigned to layers on tissue. So the marker genes uses are crucial for prediction. 
+
+Thus, how the NMF is trained (and thus the generation of the gene weights to the topics in W (and the weights also sum to 1, based on gene set, so weights specific wrt the genes used), or the genes ultimately used for prediction) matters. 
+
+So one will have to use the same ST data for prediction that was used to select genes initially for the NMD training.
+
+After training and predicting, for comparing to other corpuses and models, fine to filter and use shared set gene and spots. And ok to readjust the gene value proportions of the new shared set. (I think readjusting the gene wegiths to sum to one for the shared set actually maintains their relative proportions anyways as I saw when comparing models above)
 
 
 I think NMF should be trained based on all genes in cd (or whatever full ST data set is being used)
@@ -4894,7 +7625,9 @@ But if I wanted to test predictions with using just a subset of genes to make it
 
 Although during training, perhaps the values would change if the gene set was a lot smaller than 9850..?
 
-# Retraining NMF
+Not just change, but different genes picked. Removing N10 actually ended up with more cluster genes in the NMF for some reason.
+
+# Retraining NMF (remove N10)
 
 ```{r}
 
@@ -4979,18 +7712,204 @@ print(sprintf("Time to train NMF model was %smins", total_t))
 # the final genes used must be shared between the selected seurat genes and genes detected in the ST data
 # before training, the selected seurat marker gene counts are normalized. "uv" = divide by sd
 
+# "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/spotlight_nmf_train_with_mob_wt_noN10.RData"
+
 # nmf_mod_mob_wt <- nmf_mod_mob_wt_ls[[1]]
 
 # [1] "Preparing Gene set"
 # [1] "Normalizing count matrix"
 # [1] "Seeding initial matrices"
 # [1] "Training..."
-# [1] "Time to train NMF model was 255.28mins"
+# [1] "Time to train NMF model was 1006.55mins" # but stopped overnight..started back up in morning
+
+```
+
+```{r}
+
+sl_cd_noN10 <- SPOTlightPredict(nmfRef = nmf_mod_mob_wt_noN10_ls, stCounts = cd)
+
+```
+
+```{r}
+
+sl_cd_noN10_mob_opt <- filterSPOTlightMtxs(sl = sl_cd_noN10, lda_model = mob_opt)
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob$pos
+m <- sl_cd_noN10_mob_opt$ctThetaFilt
+cols <- sl_cd_noN10_mob_opt$ctcols
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = levels(cols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "sl cd no N10 predictions")
+
+vizTopicClusters(theta = m,
+                pos = pos,
+                clusters = cols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
 
 ```
 
 
-# Filtering from pretrained NMF
+# Remove all Astros
+
+```{r}
+
+mob_meta <- read.csv2("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_metaData_seurat.csv", sep = ",")
+
+wt_cells <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$"X"
+
+mob_se_wt <- mob_se[,wt_cells]
+meta.data.wt = mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]
+
+meta.data.wt.noAstros <- meta.data.wt[which(!meta.data.wt$ClusterName %in% c("Astro1", "Astro2", "Astro3")),]
+keepCells <- mob_meta[which(!mob_meta$ClusterName %in% c("Astro1", "Astro2", "Astro3")),]$"X"
+mob_se_wt_noAstros <- mob_se_wt[,which(colnames(mob_se_wt) %in% keepCells)]
+
+```
+
+```{r}
+
+mob_se_wt_noAstros <- CreateSeuratObject(counts = mob_se_wt_noAstros, project = "mob_wt_noAstros",
+                                      meta.data = meta.data.wt.noAstros)
+
+# a lot of metadata info not being added...? try doing manually:
+mob_se_wt_noAstros[["ClusterName"]] <- meta.data.wt.noAstros$ClusterName
+mob_se_wt_noAstros[["percent.mito"]] <- meta.data.wt.noAstros$percent.mito
+
+# Set the known clusters as the "active.indent"
+Seurat::Idents(object = mob_se_wt_noAstros) <- mob_se_wt_noAstros@meta.data$ClusterName
+
+```
+
+
+```{r}
+
+# get cluster markers
+cluster_markers_mob_se_wt_noAstros <- Seurat::FindAllMarkers(object = mob_se_wt_noAstros,
+                                              assay = "RNA",
+                                              slot = "data",
+                                              verbose = TRUE,
+                                              only.pos = TRUE)
+
+# down samples cell from each cluster and select genes marker and variable genes
+se_sc_down_wt_noAstros <- downsample_se_obj(se_obj = mob_se_wt_noAstros,
+                                clust_vr = "ClusterName",
+                                cluster_markers = cluster_markers_mob_se_wt_noAstros,
+                                cl_n = 100, # size to sample from each cluster
+                                hvg = 3000) # number or NULL. choose additional highly variable genes on top of cluster genes
+
+start_time <- Sys.time()
+nmf_mod_mob_wt_noAstros_ls <- train_nmf(cluster_markers = cluster_markers_mob_se_wt_noAstros,
+                        se_sc = se_sc_down_wt_noAstros,
+                        mtrx_spatial = cd, # the original mob st data
+                        clust_vr = "ClusterName",
+                        ntop = NULL, # number unique markers per cluster, otherwise all of them
+                        hvg = 3000, # number of highly variable genes in addition to the marker genes
+                        transf = "uv",
+                        method = "nsNMF")
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train NMF model was %smins", total_t))
+
+```
+
+```{r}
+
+sl_cd_noAstro <- SPOTlightPredict(nmfRef = nmf_mod_mob_wt_noAstros_ls, stCounts = cd)
+
+```
+
+```{r}
+
+sl_cd_noAstro_mob_opt <- filterSPOTlightMtxs(sl = sl_cd_noAstro, lda_model = mob_opt)
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob$pos
+m <- sl_cd_noAstro_mob_opt$ctThetaFilt
+cols <- sl_cd_noAstro_mob_opt$ctcols
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = levels(cols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "sl cd no Astro predictions")
+
+vizTopicClusters(theta = m,
+                pos = pos,
+                clusters = cols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+# Remove all OECs
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/spotlight_nmf_train_mob_wt_countsClean_noOECs_ls.RData")
+# nmf_mod_mob_wt_countsClean_noOECs_ls
+
+```
+
+## `sl_countsClean_noOEC`
+
+```{r}
+
+sl_countsClean_noOEC <- SPOTlightPredict(nmfRef = nmf_mod_mob_wt_countsClean_noOECs_ls, stCounts = t(countsClean))
+
+```
+
+```{r}
+
+sl_countsClean_noOEC_mob_opt <- filterSPOTlightMtxs(sl = sl_countsClean_noOEC, lda_model = mob_opt)
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob$pos
+m <- sl_countsClean_noOEC_mob_opt$ctThetaFilt
+cols <- sl_countsClean_noOEC_mob_opt$ctcols
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = levels(cols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "sl_countsClean_noOEC predictions")
+
+vizTopicClusters(theta = m,
+                pos = pos,
+                clusters = cols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+# IGNORE Filtering from pretrained NMF
 
 ```{r}
 
@@ -5004,15 +7923,1412 @@ dim(hh)
 
 ```
 
+The genes chosen for the clusters also change when filtering out the clusters so need to retrain from beginning...can't just select from W and H
 
-
-
-
-
-# ** RMSE compute?
+# RMSE compute?
 
 # ==========================
-# ** stereoscope
+# RCTD
+
+# mOB scRNAseq reference
+
+## make reference
+
+ load the processes sparse mtx
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/mob_processed_sparseMatrix.RData")
+# mob_se
+
+```
+ accompanying meta data that has assigned clusters of the cells and wt labels
+```{r}
+
+mob_meta <- read.csv2("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_metaData_seurat.csv", sep = ",")
+
+```
+
+ use metadata to just get the WT cells and the associated clusters from the metadata.
+```{r}
+
+wt_cells <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$"X"
+print(length(wt_cells))
+
+```
+
+```{r}
+
+mob_se_wt <- mob_se[,wt_cells]
+
+```
+
+ make seurat object for just WT cells
+```{r}
+
+mob_se_wt <- CreateSeuratObject(counts = mob_se_wt, project = "mob",
+                                meta.data = mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),])
+
+```
+
+ add in cluster names to object
+```{r}
+
+# a lot of metadata info not being added...? try doing manually:
+mob_se_wt[["ClusterName"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$ClusterName
+mob_se_wt[["percent.mito"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$percent.mito
+mob_se_wt[["nUMI"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$nUMI
+
+```
+
+```{r}
+
+# write.csv(x=mob_se_wt@meta.data[,c("ClusterName", "nUMI")], file="meta_data.csv")
+# write.csv(x=mob_se_wt@assays$RNA@counts, file="dge.csv")
+
+refdir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mob_RCTD_ref/"
+reference <- dgeToSeurat(refdir)
+
+```
+
+```{r}
+
+# write.csv(x = data.frame(Cluster = unique(mob_se_wt@meta.data$ClusterName),
+#            Name = unique(mob_se_wt@meta.data$ClusterName)), file = "cell_type_dict.csv") 
+
+```
+
+
+# mOB
+
+```{r}
+
+# remove poor spots and genes
+countsClean <- MERINGUE::cleanCounts(counts = t(cd), 
+                                     min.reads = 100, 
+                                     min.lib.size = 100, 
+                                     plot=TRUE,
+                                     verbose=TRUE)
+
+```
+
+```{r}
+
+# write.csv(x=t(countsClean), file="MappedDGEForR.csv")
+# write.csv(x=mob$pos, file="BeadLocationsForR.csv")
+
+```
+
+```{r}
+
+datadir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mob_RCTD_inputs/"
+mob_SpatialRNA <- read.SpatialRNA(datadir)
+
+```
+
+```{r}
+
+barcodes <- colnames(mob_SpatialRNA@counts)
+
+```
+
+```{r}
+
+plot_puck_continuous(mob_SpatialRNA, barcodes,
+                     mob_SpatialRNA@nUMI,
+                     ylimit = c(0,round(quantile(mob_SpatialRNA@nUMI,0.9))), 
+                     title ='plot of nUMI') 
+
+```
+
+```{r}
+
+mob_RCTD <- create.RCTD(mob_SpatialRNA, reference, max_cores = 7, CELL_MIN_INSTANCE = 20)
+
+```
+
+took about 7 minutes
+```{r}
+
+mob_RCTD_run <- run.RCTD(mob_RCTD, doublet_mode = TRUE)
+
+```
+
+```{r}
+
+mob_RCTD_results <- mob_RCTD_run@results
+# normalize the cell type proportions to sum to 1.
+norm_weights_mob <-  sweep(mob_RCTD_results$weights, 1, rowSums(mob_RCTD_results$weights), '/') 
+cell_type_names <- mob_RCTD_run@cell_type_info$info[[2]] #list of cell type names
+mob_spatialRNA <- mob_RCTD_run@spatialRNA
+
+# puck_d <- get_decomposed_data(mob_RCTD_results$results_df,
+#                               mob_RCTD_run@internal_vars$gene_list_reg,
+#                               mob_spatialRNA, mob_RCTD_results$weights_doublet, 
+#                               mob_RCTD_run@cell_type_info$renorm)
+
+```
+
+```{r}
+
+# theta of 38 cell types
+norm_weights
+
+# puck_d 
+# object with information about predicted cell types and gene counts.
+# @counts = genes x cells. 3350 x 428
+# @cell_labels = factor of length 428 with 38 levels (cell labels for each cell 1-428)
+
+# question: why 428 cells? @coords = 428 x 2. 
+# the `norm_weights` is 260 x 28. So these are the spots. Are the 428 cells combos of these singlets and doublets?
+
+# can collapse genes based on cells they belong to in order to get gene expression for each cell. But if I have the single cell data, couldn't I just do this using the original scRNAseq data?
+
+```
+
+For SPOTlight and RCTD, would be interesting to compare the original scRNAseq cell type collapsed gene expression and compare to W, or what these 428 cells are and their collapsed gene expression.
+
+```{r}
+
+# colors for the cell types
+rctd_cols <- as.factor(colnames(norm_weights_mob))
+names(rctd_cols) <- colnames(norm_weights_mob)
+levels(rctd_cols) <- gg_color_hue(length(colnames(norm_weights_mob)))
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob$pos
+m <- norm_weights_mob
+cols <- rctd_cols
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = levels(cols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "rctd mob predictions")
+
+vizTopicClusters(theta = m,
+                pos = pos,
+                clusters = cols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+OECs looking quite distinct across SPOTlight and RCTD. So definitely try with these removed
+
+Remove cell types less than 9% (similar to SPOTlight)
+
+```{r}
+
+norm_weights_ <- norm_weights_mob
+norm_weights_[which(norm_weights_ < 0.09)] <- 0
+
+norm_weights_filt <- norm_weights_[,which(!colSums(norm_weights_) == 0)]
+
+```
+
+```{r}
+
+# colors for the cell types
+rctd_cols_filt <- as.factor(colnames(norm_weights_filt))
+names(rctd_cols_filt) <- colnames(norm_weights_filt)
+levels(rctd_cols_filt) <- gg_color_hue(length(colnames(norm_weights_filt)))
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob$pos
+m <- norm_weights_filt
+cols <- rctd_cols_filt
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = levels(cols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "rctd mob predictions")
+
+vizTopicClusters(theta = m,
+                pos = pos,
+                clusters = cols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+# `RCTD` vs SL `sl_countsClean`
+
+## all spots, cts, topics
+
+```{r}
+
+# use raw, so can see which cell types are not present at all.
+# fill need to filter to get dendros and compare
+
+m1 <- sl_countsClean
+m2 <- norm_weights
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$spotCtTheta, # 38
+                                      theta2 = m2) # 38
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs RCTD norm_weights ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+## filtered
+
+```{r}
+
+m1 <- sl_countsClean_mob_opt
+m2 <- norm_weights_filt
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$ctThetaFilt, # 17
+                                      theta2 = m2) # 25
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean mob_opt vs norm_weights_filt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean mob_opt vs norm_weights_filt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+  theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+# `RCTD` vs LDA `mob_common`
+
+## filtered
+
+```{r}
+
+m1 <- mob_common_opt
+m2 <- norm_weights_filt
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$theta, # 75
+                                      theta2 = m2) # 25
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "mob common opt vs norm_weights_filt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(theta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "mob common opt vs norm_weights_filt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$colsix, pairs$rowix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+```{r}
+
+m1 <- mob_common_opt
+m2 <- norm_weights_filt
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$thetaCombn,
+                                      theta2 = m2) # 25
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "mob common opt vs norm_weights_filt ct thetaCombn",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "mob common opt vs norm_weights_filt ct thetaCombn paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+# `RCTD_noOEC` vs `RCTD`
+
+## all spots, cts, topics
+
+```{r}
+
+# use raw, so can see which cell types are not present at all.
+# fill need to filter to get dendros and compare
+
+m1 <- norm_weights_mob
+m2 <- norm_weights_noOEC
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1, # 38
+                                      theta2 = m2) # 33
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "RCTD norm_weights vs norm_weights_noOEC ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+## filtered
+
+```{r}
+
+m1 <- norm_weights_filt
+m2 <- norm_weights_filt_noOEC
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1, # 25
+                                      theta2 = m2) # 22
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "RCTD norm_weights vs norm_weights_noOEC filt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(theta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "RCTD norm_weights vs norm_weights_noOEC filt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+  theta_cor_paired_cors <- diag(theta_cor[pairs$colsix, pairs$rowix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+# `RCTD_noOEC` vs `sl_countsClean_noOEC`
+
+## all spots, cts, topics
+
+```{r}
+
+# use raw, so can see which cell types are not present at all.
+# fill need to filter to get dendros and compare
+
+m1 <- sl_countsClean_noOEC
+m2 <- norm_weights_noOEC
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$spotCtTheta, # 33
+                                      theta2 = m2) # 33
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs RCTD norm_weights  noOEC ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+```
+
+## filtered
+
+```{r}
+
+m1 <- sl_countsClean_noOEC_mob_opt
+m2 <- norm_weights_filt_noOEC
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$ctThetaFilt, # 19
+                                      theta2 = m2) # 22
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs norm_weights noOEC filt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "sl_countsClean vs norm_weights noOEC filt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+  theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+# `RCTD_noOEC` vs LDA `mob_common`
+
+## not filtered
+
+```{r}
+
+m1 <- mob_common_opt
+m2 <- norm_weights_noOEC
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$theta, # 75
+                                      theta2 = m2) # 33
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "mob common opt vs norm_weights_noOEC ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(theta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "mob common opt vs norm_weights_noOEC ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$colsix, pairs$rowix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+```{r}
+
+m1 <- mob_common_opt
+m2 <- norm_weights_noOEC
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$thetaCombn, # 18
+                                      theta2 = m2) # 33
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "mob common opt vs norm_weights_noOEC ct thetaCombn",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "mob common opt vs norm_weights_noOEC ct thetaCombn paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+## filtered
+
+```{r}
+
+m1 <- mob_common_opt
+m2 <- norm_weights_filt_noOEC
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$theta, # 75
+                                      theta2 = m2) # 22
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "mob common opt vs norm_weights_noOEC filt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(theta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "mob common opt vs norm_weights_noOEC ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$colsix, pairs$rowix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+```{r}
+
+m1 <- mob_common_opt
+m2 <- norm_weights_filt_noOEC
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$thetaCombn, # 18
+                                      theta2 = m2) # 22
+
+par(mfrow=c(1,1), mar=c(3,3,1,1))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "mob common opt vs norm_weights_filt_noOEC ct thetaCombn",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$ctcols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=0.5,cexCol=0.6,margins=c(3,3),
+          main = "mob common opt vs norm_weights_filt_noOEC ct thetaCombn paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(theta_cor_paired_cors, breaks = 10)
+mean(theta_cor_paired_cors)
+sd(theta_cor_paired_cors)
+
+```
+
+# =========================
+# scRNAseq cluster gexp
+
+Trying to deconvolve cell type proportions. So makes sense to do NNLS to solve for the individual types mixed together in a spot. But for the gene expression reference, why even do NMF for W?
+
+Also what is the RCTD deconvolved result/ Like a beta but what are the individual cells?
+
+```{r}
+
+# mob_se_wt@assays$RNA@counts
+
+cell_type_clusters <- as.factor(mob_se_wt@meta.data$ClusterName)
+names(cell_type_clusters) <- rownames(mob_se_wt@meta.data)
+
+```
+
+```{r}
+
+mm <- model.matrix(~ 0 + cell_type_clusters)
+colnames(mm) <- levels(cell_type_clusters)
+scRNAseq_mob_cluster_gexp <- t(as.matrix(mob_se_wt@assays$RNA@counts) %*% mm)
+scRNAseq_mob_cluster_gexp <- scRNAseq_mob_cluster_gexp/rowSums(scRNAseq_mob_cluster_gexp)
+dim(scRNAseq_mob_cluster_gexp)
+scRNAseq_mob_cluster_gexp[1:10,1:10]
+
+```
+
+## vs sl_countsClean
+
+```{r}
+
+W_countsClean <- nmf_mod_mob_wt_countsClean_ls[[1]]@fit@W
+
+keep_genes <- colnames(scRNAseq_mob_cluster_gexp)[colnames(scRNAseq_mob_cluster_gexp) %in% rownames(W_countsClean)]
+length(keep_genes)
+
+```
+
+```{r}
+
+m1 <- scRNAseq_mob_cluster_gexp
+m2 <- t(W_countsClean)
+
+# -------------------------------------------------------
+# sl topics in W
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1[,keep_genes],
+                                      beta2 = m2[,keep_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "scRNAseq vs sl_countsClean W beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "scRNAseq vs sl_countsClean W beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+# -------------------------------------------------------
+# sl ct in ctBeta (from topic gene weights but combined wrt topic proportions in cell types)
+
+m1 <- scRNAseq_mob_cluster_gexp
+m2 <- sl_countsClean$ctBeta
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1[,keep_genes],
+                                      beta2 = m2[,keep_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "scRNAseq vs sl_countsClean ctBeta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "scRNAseq vs sl_countsClean ctBeta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+
+
+```
+
+```{r}
+
+m1 <- scRNAseq_mob_cluster_gexp
+m2 <- scRNAseq_mob_cluster_gexp
+
+# -------------------------------------------------------
+# sl topics in W
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1[,keep_genes],
+                                      beta2 = m2[,keep_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "scRNAseq vs self beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "scRNAseq vs self beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+# -------------------------------------------------------
+# sl ct in ctBeta (from topic gene weights but combined wrt topic proportions in cell types)
+
+m1 <- sl_countsClean$ctBeta
+m2 <- sl_countsClean$ctBeta
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1[,keep_genes],
+                                      beta2 = m2[,keep_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean vs self ctBeta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean vs self ctBeta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+# -------------------------------------------------------
+# W self
+
+m1 <- t(W_countsClean)
+m2 <- t(W_countsClean)
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1[,keep_genes],
+                                      beta2 = m2[,keep_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsCleanW vs self",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "sl_countsClean W vs self paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+```
+
+## vs `mob_common_opt`
+
+```{r}
+
+keep_genes <- colnames(scRNAseq_mob_cluster_gexp)[colnames(scRNAseq_mob_cluster_gexp) %in% colnames(mob_common_opt$beta)]
+length(keep_genes)
+
+```
+
+```{r}
+
+m1 <- scRNAseq_mob_cluster_gexp
+m2 <- mob_common_opt$beta
+
+# -------------------------------------------------------
+# sl topics in W
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1[,keep_genes],
+                                      beta2 = m2[,keep_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "scRNAseq vs mob_common_opt beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "scRNAseq vs mob_common_opt beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+```
+
+I think the W and betas are supposed to be weights of genes associating with a topic or ct and not really the average gexp of the scRNAseq clusters
+
+# ----------------------------------
+
+# `RCTD` no OECs
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/mob_processed_sparseMatrix.RData")
+# mob_se
+
+mob_meta <- read.csv2("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_metaData_seurat.csv", sep = ",")
+
+wt_cells <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$"X"
+
+mob_se_wt <- mob_se[,wt_cells]
+meta.data.wt = mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]
+
+cell.types <- c("OEC1", "OEC2", "OEC3", "OEC4", "OEC5")
+
+meta.data.wt.noOEC <- meta.data.wt[which(!meta.data.wt$ClusterName %in% cell.types),]
+keepCells <- meta.data.wt[which(!meta.data.wt$ClusterName %in% cell.types),]$"X"
+mob_se_wt_noOEC <- mob_se_wt[,which(colnames(mob_se_wt) %in% keepCells)]
+
+```
+
+```{r}
+
+mob_se_wt_noOEC <- CreateSeuratObject(counts = mob_se_wt_noOEC, project = "mob_wt_noOEC",
+                                      meta.data = meta.data.wt.noOEC)
+
+# a lot of metadata info not being added...? try doing manually:
+mob_se_wt_noOEC[["ClusterName"]] <- meta.data.wt.noOEC$ClusterName
+mob_se_wt_noOEC[["percent.mito"]] <- meta.data.wt.noOEC$percent.mito
+mob_se_wt_noOEC[["nUMI"]] <- meta.data.wt.noOEC$nUMI
+
+```
+
+```{r}
+
+write.csv(x=mob_se_wt_noOEC@meta.data[,c("ClusterName", "nUMI")], file="meta_data.csv")
+write.csv(x=mob_se_wt_noOEC@assays$RNA@counts, file="dge.csv")
+
+```
+
+```{r}
+
+write.csv(x = data.frame(Cluster = unique(mob_se_wt_noOEC@meta.data$ClusterName),
+           Name = unique(mob_se_wt_noOEC@meta.data$ClusterName)), file = "cell_type_dict.csv")
+
+```
+
+```{r}
+
+refdir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mob_RCTD_noOEC_ref/"
+reference_noOEC <- dgeToSeurat(refdir)
+
+```
+
+```{r}
+
+datadir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mob_RCTD_inputs/"
+mob_SpatialRNA <- read.SpatialRNA(datadir)
+
+```
+
+```{r}
+
+barcodes <- colnames(mob_SpatialRNA@counts)
+
+```
+
+```{r}
+
+mob_noOEC_RCTD <- create.RCTD(mob_SpatialRNA, reference_noOEC, max_cores = 7, CELL_MIN_INSTANCE = 20)
+
+```
+
+took about 7 minutes
+```{r}
+
+mob_noOEC_RCTD_run <- run.RCTD(mob_noOEC_RCTD, doublet_mode = TRUE)
+
+```
+
+```{r}
+
+mob_noOEC_RCTD_results <- mob_noOEC_RCTD_run@results
+# normalize the cell type proportions to sum to 1.
+norm_weights_noOEC = sweep(mob_noOEC_RCTD_results$weights, 1, rowSums(mob_noOEC_RCTD_results$weights), '/') 
+cell_type_names <- mob_noOEC_RCTD_run@cell_type_info$info[[2]] #list of cell type names
+mob_spatialRNA <- mob_noOEC_RCTD_run@spatialRNA
+
+mob_noOEC_RCTD_decomposed <- get_decomposed_data(mob_noOEC_RCTD_results$results_df,
+                              mob_noOEC_RCTD_run@internal_vars$gene_list_reg,
+                              mob_spatialRNA, mob_noOEC_RCTD_results$weights_doublet,
+                              mob_noOEC_RCTD_run@cell_type_info$renorm)
+
+```
+
+```{r}
+
+norm_weights_ <- norm_weights_noOEC
+norm_weights_[which(norm_weights_ < 0.09)] <- 0
+
+norm_weights_filt_noOEC <- norm_weights_[,which(!colSums(norm_weights_) == 0)]
+
+```
+
+```{r}
+
+# colors for the cell types
+rctd_cols_filt_noOEC <- as.factor(colnames(norm_weights_filt_noOEC))
+names(rctd_cols_filt_noOEC) <- colnames(norm_weights_filt_noOEC)
+levels(rctd_cols_filt_noOEC) <- gg_color_hue(length(colnames(norm_weights_filt_noOEC)))
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+pos <- mob$pos
+m <- norm_weights_filt_noOEC
+cols <- rctd_cols_filt_noOEC
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = levels(cols),
+             groups = NA,
+             group_cols = NA, 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = "rctd no OEC mob predictions")
+
+vizTopicClusters(theta = m,
+                pos = pos,
+                clusters = cols,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
 
 # ==========================
 # Additional Questions:
