@@ -1,75 +1,140 @@
-#' Collection of functions for STDeconvolve with Topic Modeling
+#' Restrict to informative words (genes) for topic modeling
 #'
 #'
-#'
+restrictCorpus <- function(counts,
+                           t = 0.9,
+                           alpha = 0.05,
+                           plot = FALSE,
+                           verbose = TRUE) {
+  ## overdispersed genes only
+  odGenes <- getOverdispersedGenes(counts,
+                                   alpha = alpha,
+                                   plot = plot,
+                                   details = TRUE,
+                                   verbose = verbose)
+  countsFilt <- counts[odGenes$ods,]
 
-#' convert a matrix to a long form data frame for easy plotting via ggplot2
-#'
-#' mtx = the matrix to be converted
-#' colLab = df column label for the mtx columns, whatever they may represent
-#' rowLab = df row label for the row labels, whatever they may represent
-#' cellLab = label for the cell values, whatever they may represent
-#'
-#' example:
-#'        [,1] [,2] [,3]
-#' [1,]    6    9    1
-#' [2,]    7   10    2
-#' [3,]    8    3   12
-#' [4,]    4   11    5
-#' becomes:
-#'    columns rows cells
-#'  1        1    1     6
-#'  2        2    1     9
-#'  3        3    1     1
-#'  4        1    2     7
-#'  5        2    2    10
-#'  6        3    2     2
-#'  7        1    3     8
-#'  8        2    3     3
-#'  9        3    3    12
-#'  10       1    4     4
-#'  11       2    4    11
-#'  12       3    4     5
-#'
-mtx2ggplotDf <- function(mtx,
-                         colLab = "columns", rowLab = "rows", cellLab = "cells") {
+  ## remove genes that are present in more than X% of spots
+  vi <- rowSums(countsFilt > 0) >= ncol(countsFilt)*t
+  if(verbose) {
+    print(paste0('Removing genes present in more than ', t*100, '% of datasets...'))
+  }
+  countsFiltnoUnifGenes <- countsFilt[!vi,]
 
-  if (is.null(colnames(mtx))) {
-    colvals <- 1:ncol(mtx)
-  } else {
-    colvals <- colnames(mtx)
+  if(verbose) {
+    print(paste0(nrow(countsFiltnoUnifGenes), ' genes remaining...'))
+  }
+  if (plot) {
+    par(mfrow=c(1,2), mar=rep(5,4))
+    hist(log10(Matrix::colSums(countsFiltnoUnifGenes)+1), breaks=20, main='Genes Per Dataset')
+    hist(log10(Matrix::rowSums(countsFiltnoUnifGenes)+1), breaks=20, main='Datasets Per Gene')
   }
 
-  if (is.null(rownames(mtx))) {
-    rowvals <- 1:nrow(mtx)
-  } else {
-    rowvals <- rownames(mtx)
-  }
-
-  dat <- data.frame(columns = factor(rep(colvals, dim(mtx)[1])), # columns
-                    rows = factor(rep(rowvals, each = dim(mtx)[2])), # rows
-                    cells = as.vector(t(mtx))) # cell values
-
-  colnames(dat) <- c(as.character(colLab),
-                     as.character(rowLab),
-                     as.character(cellLab))
-  return(dat)
+  return(countsFiltnoUnifGenes)
 }
 
 
-#' cluster topics together using dynamic tree cutting.
-#' Topics clustered by beta matrix (topic-word distributions)
+#' Find the optimal number of topics K for topic modeling
 #'
-#' returns:
-#' a list that contains:
-#' order = vector of the dendrogram index order for the topics
-#' clusters = factor of the topics (names) and their assigned cluster (levels)
-#' dendro = dendrogram of the clusters
+#' @param counts Gene expression counts with genes as rows
+#' @param Ks vector of K parameters to search
+#' @param seed Random seed
+#' @param ncores Number of cores for parallelization
+#' @plotElbow Boolean for plotting
+#'
+#' @return A list that contains
+#' \itemize{
+#' \item models: each fitted LDA model
+#' \item kOpt1: the optimal K based on Kneed algorithm
+#' \item kOpt2: the optimal K based on minimum
+#' \item perplexities: perplexity scores for each model
+#' \item corpus: the corpus that was used to fit each model
+#' }
+#'
+#' @export
+#'
+fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
+                   ncores = parallel::detectCores(logical = TRUE) - 1,
+                   plotElbow = TRUE) {
+
+  # topic modeling
+  corpus <- slam::as.simple_triplet_matrix(t(as.matrix(counts)))
+
+  controls <- list(seed = seed,
+                   verbose = 1, keep = 1,
+                   alpha = 1, estimate.alpha = TRUE)
+
+  fitted_models <- parallel::mclapply(Ks, function(k) {
+    topicmodels::LDA(corpus, k=k, control = controls)
+  },
+  mc.cores = ncores
+  )
+  names(fitted_models) <- Ks
+
+  pScores <- unlist(lapply(fitted_models, function(model){
+    p <- topicmodels::perplexity(model, corpus)
+    return(p)
+  }))
+
+  ## Kneed algorithm
+  kOpt1 <- Ks[where.is.knee(pScores)]
+  ## Min
+  kOpt2 <- Ks[which(pScores == min(pScores))]
+
+  if(plotElbow) {
+    plot(Ks, pScores)
+    abline(v = kOpt1, col='blue')
+    abline(v = kOpt2, col='red')
+  }
+
+  return(list(models = fitted_models,
+              kOpt1 = kOpt1,
+              kOpt2 = kOpt2,
+              perplexities = pScores,
+              fitCorpus = corpus))
+}
+
+#' Pull out topics and terms from fitted topic models from fitLDA
+#' Jean: Brendan, the use of theta and beta vs topics and terms
+#' across different functions is quite confusing
+#' Please update for consistency
+#'
+getTopicsAndTerms <- function(models, kOpt) {
+  lda.k <- models[[as.character(kOpt)]]
+  lda.tmResult<- topicmodels::posterior(lda.k)
+  lda.theta <- lda.tmResult$topics
+  lda.beta <- lda.tmResult$terms
+
+  return(list(
+    theta = lda.theta,
+    beta = lda.beta
+  ))
+}
+
+#' Cluster topics together using dynamic tree cutting.
+#'
+#' @param beta Beta matrix (topic-word distributions)
+#' @param distance Distance measure to be used (default: euclidean)
+#' @param clustering Clustering agglomeration method to be used (default: ward.D)
+#' @param dynamic Dynamic tree cutting method to be used (default: hybrid)
+#' @param deepSplit Dynamic tree cutting sensitivity parameter (default: 4)
+#' @param plot Boolean for plotting
+#'
+#' @return A list that contains
+#' \itemize{
+#' \item order = vector of the dendrogram index order for the topics
+#' \item clusters = factor of the topics (names) and their assigned cluster (levels)
+#' \item dendro = dendrogram of the clusters
+#' }
+#'
+#' @export
 #'
 clusterTopics <- function(beta,
-                          distance = "euclidean", clustering = "ward.D", dynamic = "hybrid",
+                          #distance = "euclidean",
+                          clustering = "ward.D",
+                          dynamic = "hybrid",
                           deepSplit = 4,
-                          plotDendro = TRUE) {
+                          plot = TRUE) {
 
   if (deepSplit == 4) {
     maxCoreScatter = 0.95
@@ -88,12 +153,10 @@ clusterTopics <- function(beta,
     minGap = (1 - maxCoreScatter) * 3/4
   }
 
-  d_ <- dist(beta, method = distance)
+  #d_ <- dist(beta, method = distance)
+  ## Jean: use correlation instead
+  d_ <- as.dist(1-cor(t(beta)))
   hc_ <- hclust(d_, method = clustering)
-
-  if (plotDendro) {
-    plot(hc_)
-  }
 
   groups <- cutreeDynamic(hc_,
                           method = dynamic,
@@ -108,290 +171,22 @@ clusterTopics <- function(beta,
   names(groups) <- hc_$labels
   groups <- factor(groups)
 
+  if (plot) {
+    #plot(hc_)
+    d2_ <- as.dist(1-cor(beta))
+    rc_ <- hclust(d2_, method = clustering)
+    heatmap(t(beta),
+         Colv=as.dendrogram(hc_),
+         Rowv=as.dendrogram(rc_),
+         ColSideColors = fac2col(groups),
+         col = correlation_palette)
+  }
+
   return(list(clusters = groups,
               order = hc_$order,
               dendro = as.dendrogram(hc_)))
 
 }
-
-
-#' Train vanilla LDA model from `topicmodels`
-#'
-#` corpus - slam::as.simple_triplet_matrix; docs x words
-#` Ks - vector of K parameters to search
-#'
-#' returns list of each fitted LDA model, the optimal K
-#' perplexity scores for each model, and the corpus
-#' that was used to fit them.
-#'
-#' Note:
-#' access given model via: lda$models[[k]][1]
-#' models are objects from the library `topicmodels`
-#' LDA models have slots with additional information.
-#'
-fitLDA <- function(corpus, Ks, seed = 0, ncores = parallel::detectCores(logical = TRUE) - 1) {
-
-  controls <- list(seed = seed,
-                   verbose = 1, keep = 1,
-                   alpha = 1, estimate.alpha = TRUE)
-
-  fitted_models <- parallel::mclapply(Ks, function(k) {
-    topicmodels::LDA(corpus, k=k, control = controls)
-  },
-  mc.cores = ncores
-  )
-
-  pScores <- unlist(lapply(seq(length(Ks)), function(k){
-    p <- topicmodels::perplexity(fitted_models[[k]], corpus)
-    p
-  }))
-
-  # pScores <- c()
-  # for (k in seq(length(Ks))) {
-  #   p <- topicmodels::perplexity(fitted_models[[k]], corpus)
-  #   pScores <- append(pScores, p)
-  # }
-
-  # par(mfrow=c(2,1), mar=c(3,5,1,1))
-  # barplot(pScores)
-  # barplot(pScoresNorm)
-
-  kOpt <- Ks[which(pScores == min(pScores))]
-  # lda_model <- topicmodels::LDA(corpus, k=kOpt, control = controls)
-
-  return(list(models = fitted_models,
-              kOpt = kOpt,
-              perplexities = pScores,
-              fitCorpus = corpus))
-}
-
-
-#' custom correlation color range for heatmap.2 correlation plots
-correlation_palette <- colorRampPalette(c("blue", "white", "red"))(n = 209)
-correlation_breaks = c(seq(-1,-0.01,length=100),
-                       seq(-0.009,0.009,length=10),
-                       seq(0.01,1,length=100))
-
-#' lighten and darken a color
-lighten <- function(color, factor = 0.5) {
-  if ((factor > 1) | (factor < 0)) stop("factor needs to be within [0,1]")
-  col <- col2rgb(color)
-  col <- col + (255 - col)*factor
-  col <- rgb(t(col), maxColorValue=255)
-  col
-}
-
-darken <- function(color, factor=1.4){
-  col <- col2rgb(color)
-  col <- col/factor
-  col <- rgb(t(col), maxColorValue=255)
-  col
-}
-
-
-#' color palette to replicate ggplot2
-gg_color_hue <- function(n) {
-  hues = seq(15, 375, length = n + 1)
-  hcl(h = hues, l = 65, c = 100)[1:n]
-}
-
-
-#' Visualize topic proportions across spots with `scatterpie`
-#'
-#` theta = document x topic proportion matrix
-#` pos = position of documents, x and y columns
-#` topicOrder = order of topics based on dendrogram; a numeric vector
-#'             from: (clusterTopics$order)
-#'
-#` cluster_cols = vector of colors for each of the topics
-#'     can use factor of clusters for each topic (via clusterTopics$clusters)
-#'     as long as the cluster levels/values have been converted to colors.
-#'     This gets reordered wrt the topicOrder fyi.
-#'
-#' groups = color spot piecharts based on a group or cell layer they belong to.
-#'          Needs to be a character vector. Ex: c("0", "1", "0", ...).
-#' group_cols = color labels for the groups. Ex: c("0" = "gray", "1" = "red")
-#'
-#' r = radius of the circles. Adjust based on size of spots.
-#'     40 = merfish; 0.4 = mOB
-#'
-#' lwd = width of lines of the pie charts
-#'
-vizAllTopics <- function(theta, pos, topicOrder, cluster_cols,
-                         groups = NA,
-                         group_cols = NA,
-                         r = 40,
-                         lwd = 0.5,
-                         showLegend = TRUE,
-                         plotTitle = NA) {
-
-  # reorder colors of topics wrt the dendrogram
-  colors_ordered <- as.vector(cluster_cols[topicOrder])
-
-  # doc-topic distribution reordered based on topicOrder
-  theta_ordered <- theta[, topicOrder]
-  theta_ordered <- as.data.frame(theta_ordered)
-  # colnames(theta_ordered) <- paste0("Topic.", topicOrder)
-  colnames(theta_ordered) <- paste0("Topic.", colnames(theta_ordered))
-
-  # add columns with document positions
-  # colnames(pos) <- c("x", "y")
-  theta_ordered_pos <- merge(data.frame(theta_ordered),
-                                 data.frame(pos), by=0)
-
-  # column names of topics in DF, in order of topicOrder
-  # topicColumns <- paste0("Topic.", topicOrder)
-
-  # first column after merge is "Row.names", last two are "x" and "y"
-  # problem is that data frame will replace "-" and " " with "."
-  topicColumns <- colnames(theta_ordered_pos)[2:(dim(theta_ordered_pos)[2]-2)]
-
-  # color of piechart groups (lines of piechart):
-  if (is.na(groups) == TRUE) {
-    groups <- rep("0", dim(theta_ordered_pos)[1])
-    theta_ordered_pos$groups <- groups
-  } else {
-    theta_ordered_pos$groups <- as.character(groups)
-  }
-  if (is.na(group_cols) == TRUE) {
-    group_cols <- c("0" = "gray")
-  }
-
-  p <- ggplot() +
-    theme(panel.background = element_rect(fill = "black"),
-          panel.grid = element_blank()) +
-    # theme_classic() +
-    geom_scatterpie(aes(x=x, y=y, group=Row.names, r=r, color = groups),
-                    lwd = lwd,
-                    data = theta_ordered_pos,
-                    cols = topicColumns,
-                    legend_name = "Topics") +
-    scale_fill_manual(values=colors_ordered) +
-    scale_color_manual(values = group_cols)
-    coord_equal()
-
-  if (showLegend == FALSE) {
-    p <- p + guides(fill=FALSE)
-  }
-
-  if (is.na(plotTitle) == FALSE) {
-    p <- p + ggtitle(plotTitle)
-  }
-
-  print(p)
-}
-
-
-#' Visualize proportions of topic clusters separately
-#'
-#` theta - document topic proportion matrix
-#` pos - position of documents, x and y columns
-#` topicOrder - order of topics based on dendrogram; a numeric vector
-#` clusters - factor of the color (topic cluster) each cluster is assigned to
-#'            In this case, the levels should be colors. In `vizAllTopics`,
-#'            clusters is "cluster_cols" and can just be a vector of colors.
-#'
-#' groups = color spot piecharts based on a group or cell layer they belong to.
-#'          Needs to be a character vector. Ex: c("0", "1", "0", ...).
-#' group_cols = color labels for the groups. Ex: c("0" = "gray", "1" = "red")
-#'
-#' r = radius of the circles. Adjust based on size of spots.
-#'     40 = merfish; 0.4 = mOB
-#'
-#' lwd = width of lines of the pie charts
-#'
-vizTopicClusters <- function(theta, pos, topicOrder, clusters,
-                             groups = NA,
-                             group_cols = NA,
-                             sharedCol = FALSE,
-                             r = 40,
-                             lwd = 0.5,
-                             plotTitle = NA) {
-
-  # reorder factor wrt the dendrogram
-  clusters_ordered <- clusters[topicOrder]
-
-  print("Topic cluster members:")
-  # produce a plot for each topic cluster:
-  for (cluster in levels(clusters)) {
-
-    # select the topics in the cluster in the same order of the dendrogram
-    topics <- labels(clusters_ordered[which(clusters_ordered == cluster)])
-
-    cat(cluster, ":", topics, "\n")
-
-    # doc-topic distribution reordered based on topicOrder and selected cluster topics
-    theta_ordered <- theta[, topics]
-
-    # get percentage of other topics not in cluster
-    if (is.null(dim(theta_ordered))) {
-      other <- 1 - theta_ordered
-    } else {
-      other <- 1 - rowSums(theta_ordered)
-    }
-
-    theta_ordered <- as.data.frame(theta_ordered)
-    colnames(theta_ordered) <- paste0("Topic.", topics)
-    theta_ordered$other <- other
-
-    # if any topics not represented at all, drop them
-    # Apparently if a topic is 0 for all pie charts, it is not plotted
-    # and doesn't appear in the legend. So it messes with the colors.
-    # "other" takes one of the colors of the topics and is not gray
-    theta_ordered <- theta_ordered[,which(!colSums(theta_ordered) == 0)]
-
-    # add columns with document positions
-    rownames(theta_ordered) <- rownames(pos)
-    theta_ordered_pos <- merge(data.frame(theta_ordered),
-                                   data.frame(pos), by=0)
-
-    # first column after merge is "Row.names", last two are "x" and "y"
-    # problem is that data frame will replace "-" and " " with "."
-    topicColumns <- colnames(theta_ordered_pos)[2:(dim(theta_ordered_pos)[2]-2)]
-
-    # get a hue of colors representing the cluster color
-    if (sharedCol){
-      color_ramp <- colorRampPalette(c(cluster, cluster))
-    } else {
-      color_ramp <- colorRampPalette(c(lighten(cluster, factor = 0.8), darken(cluster, factor = 1)))
-    }
-
-    # topic_colors <- viridis_pal(option = "C")(length(blue_cluster))
-    topic_colors <- color_ramp(ncol(theta_ordered) - 1) # don't count "other"
-    topic_colors <- append(topic_colors, c("gray"))
-
-    # color of piechart groups (lines of piechart):
-    if (is.na(groups) == TRUE) {
-      groups <- rep("0", dim(theta_ordered_pos)[1])
-      theta_ordered_pos$groups <- groups
-    } else {
-      theta_ordered_pos$groups <- as.character(groups)
-    }
-    if (is.na(group_cols) == TRUE) {
-      group_cols <- c("0" = "gray")
-    }
-
-    p <- ggplot() +
-      theme(panel.background = element_rect(fill = "black"),
-            panel.grid = element_blank()) +
-      # theme_classic() +
-      geom_scatterpie(aes(x=x, y=y, group=Row.names, r = r, color = groups), # r=40 for MERFISH 0.4 mOB
-                      lwd = lwd,
-                      data=theta_ordered_pos,
-                      cols = topicColumns,
-                      legend_name = "Topics") +
-      coord_equal() +
-      scale_fill_manual(values=topic_colors) +
-      scale_color_manual(values = group_cols)
-
-    if (is.na(plotTitle) == FALSE) {
-      p <- p + ggtitle(plotTitle)
-    }
-
-    print(p)
-  }
-}
-
 
 #' Compute the cross correlation between top terms in each topic
 #' correlation based on the term counts across the corpus documents
