@@ -20,8 +20,8 @@ cd <- mOB$counts
 annot <- mOB$annot
 
 counts <- cleanCounts(cd, min.lib.size = 100, min.reads = 100)
-corpus <- restrictCorpus(counts, t = 1)
-lda <- fitLDA(corpus, Ks = seq(2, 10, by = 1))
+corpus <- restrictCorpus(counts, t = 0.9)
+lda <- fitLDA(corpus, Ks = seq(2, 10, by = 1), plot=TRUE)
 results <- getBetaTheta(lda$models[["8"]])
 order <- clusterTopics(results$beta, plot=TRUE) 
 vizAllTopics(results$theta, pos, 

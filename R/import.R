@@ -150,4 +150,18 @@ fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=F,un
   }
 }
 
+bh.adjust <- function(x, log = FALSE) {
+  nai <- which(!is.na(x))
+  ox <- x
+  x <- x[nai]
+  id <- order(x, decreasing = FALSE)
+  if(log) {
+    q <- x[id] + log(length(x)/seq_along(x))
+  } else {
+    q <- x[id]*length(x)/seq_along(x)
+  }
+  a <- rev(cummin(rev(q)))[order(id)]
+  ox[nai] <- a
+  ox
+}
 
