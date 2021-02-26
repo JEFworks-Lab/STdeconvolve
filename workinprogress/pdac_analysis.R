@@ -26,7 +26,7 @@ plot(pdacAst1.Pos[,"x"], pdacAst1.Pos[,"y"], col='red', pch="+")
 
 ## Remove poor genes (seems like datasets already cleaned)
 pdacAst1.Clean <- MERINGUE::cleanCounts(counts = t(pdacAst1), # genes x spots mtx
-                                        min.reads = 100,
+                                        min.reads = 10,
                                         min.lib.size = 0,
                                         verbose=TRUE)
 
@@ -43,10 +43,12 @@ countsFilt <- counts[odGenes$ods,]
 ## remove genes that are present in more than X% of spots
 ## if we don't remove perplexity poor
 ## also remove genes that are too rare
-library(Matrix)
-vi <- rowSums(countsFilt > 0) > ncol(countsFilt)*0.1 & rowSums(countsFilt > 0) < ncol(countsFilt)*0.9
-table(vi)
-countsFiltnoUnifGenes <- countsFilt[vi,]
+#library(Matrix)
+#vi <- rowSums(countsFilt > 0) > ncol(countsFilt)*0.2 & rowSums(countsFilt > 0) < ncol(countsFilt)*0.8
+#table(vi)
+#countsFiltnoUnifGenes <- countsFilt[vi,]
+## no filter
+countsFiltnoUnifGenes <- countsFilt
 
 dim(countsFiltnoUnifGenes)
 hist(log10(colSums(countsFiltnoUnifGenes)+1))
@@ -102,7 +104,7 @@ pdac_lda.topicFreqsOverall <- colSums(pdac_lda.theta) / nrow(pdac_corpus_slamMtx
 library(dynamicTreeCut)
 pdac_lda.clust <- clusterTopics(beta = pdac_lda.beta,
                                 distance = "euclidean",
-                                clustering = "complete",
+                                clustering = "ward.D2",
                                 dynamic = "hybrid",
                                 deepSplit = 4,
                                 plotDendro = TRUE)
@@ -197,17 +199,34 @@ sapply(1:ncol(pdac_lda.theta ), function(i) {
   MERINGUE::plotEmbedding(pdacAst1.Pos[rownames(pdac_lda.theta ),], colors=pdac_lda.theta[,i], cex=1, main=i)
 })
 
+par(mfrow=c(5,6), mar=rep(1,4))
+sapply(1:ncol(pdac_lda.thetaCombined ), function(i) {
+  MERINGUE::plotEmbedding(pdacAst1.Pos[rownames(pdac_lda.thetaCombined ),], colors=pdac_lda.thetaCombined[,i], cex=1, main=i)
+})
+
 ######### Look at cell-types
 m <- t(pdac_lda.beta*1e6)
 range(m)
 m <- scale(m)
 m <- t(scale(t(m)))
 
-i <- 12
+i <- 21
 head(sort(m[,i], decreasing=TRUE), n=20)
 #barplot(sort(pdac_lda.betaCombined[i,], decreasing=TRUE))
 
+par(mfrow=c(5,6), mar=rep(1,4))
+gs <- names(head(sort(m[,i], decreasing=TRUE), n=30))
+sapply(gs, function(g) {
+g %in% rownames(pdacAst1.CPM)
+gexp <- scale(pdacAst1.CPM[g,])[,1]
+gexp[gexp > 2] <- 2
+gexp[gexp < -2] <- -2
+MERINGUE::plotEmbedding(pdacAst1.Pos, col=gexp, main=g, cex=1)
+})
+
 ######### Looking at specific genes
+par(mfrow=c(5,6), mar=rep(1,4))
+
 g <- 'KRT19'
 g %in% rownames(pdacAst1.CPM)
 MERINGUE::plotEmbedding(pdacAst1.Pos, col=pdacAst1.CPM[g,], main=g, cex=1)
@@ -225,4 +244,23 @@ sapply(gs, function(g) {
   MERINGUE::plotEmbedding(pdacAst1.Pos, col=pdacAst1.CPM[g,], main=g, cex=1)
 })
 
+gs <- rownames(pdacAst1.CPM)[grepl('^MUC1', rownames(pdacAst1.CPM))]
+gs
+sapply(gs, function(g) {
+  g %in% rownames(pdacAst1.CPM)
+  MERINGUE::plotEmbedding(pdacAst1.Pos, col=pdacAst1.CPM[g,], main=g, cex=1)
+})
+
+## from paper
+gs <- c('CRISP3', 'PRSS1', 'TM4SF1', 'COL1A1', 'MUC4', 'MUC5B')
+gs
+sapply(gs, function(g) {
+  g %in% rownames(pdacAst1.CPM)
+  gexp <- scale(pdacAst1.CPM[g,])[,1]
+  gexp[gexp > 2] <- 2
+  gexp[gexp < -2] <- -2
+  MERINGUE::plotEmbedding(pdacAst1.Pos, col=gexp, main=g, cex=1)
+})
+
+## get immune cell genes, see if enriched in topics
 

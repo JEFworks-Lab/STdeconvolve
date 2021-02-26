@@ -481,55 +481,6 @@ topicTermCorrelation <- function(topicCorrList) {
 }
 
 
-
-#' Extract corpus and ground truth doc-topic/topic-term matrices from a
-#' MERFISH bregma in the hash table
-#'
-#' For FN7_2_M22_M26_hash[["-0.04"]] specifically:
-#'
-#' bregmas: [1] "-0.04" "-0.09" "-0.14" "-0.19" "-0.24" "-0.29"
-#'
-#' what is in the hash table:
-#' h[[bregma_key]] <- list(bregmaFullDf = selected_bregma, # use with cellGeneCounts to get topic-word proportions
-#'                             cellTypeTable = selected_bregma_patch_cells, # gt document-topic proportions
-# '                            totalCells = bregma_cell_counts,
-# '                            cellTypeCount = unique_types_per_patch,
-#'                             cellGeneCounts = cellGeneCounts, # use to get gt topic-word proportions
-# '                            patchGeneCounts = patchGeneCounts) # the simulation
-#'
-extractBregmaCorpus <- function (hashTable, bregmaID) {
-
-  bregmaID <- as.character(bregmaID)
-
-  sim <- hashTable[[bregmaID]][["patchGeneCounts"]]
-  sim <- sim[order(rownames(sim)),]
-  sim <- slam::as.simple_triplet_matrix(sim)
-
-  gtDocTopics <- hashTable[[bregmaID]][["cellTypeTable"]]/rowSums(hashTable[[bregmaID]][["cellTypeTable"]])
-  gtDocTopics <- gtDocTopics[order(rownames(sim)),]
-
-  df <- hashTable[[bregmaID]][["bregmaFullDf"]]
-  df <- df[which(df$patch_id != ""),]
-  cellTypes <- df[,c("Cell_class")]
-  cells <- rownames(df)
-
-  mat <- hashTable[[bregmaID]][["cellGeneCounts"]][cells,]
-
-  mm <- model.matrix(~ 0 + factor(cellTypes))
-  colnames(mm) <- levels(factor(cellTypes))
-
-  gtTopicWords <- t(t(as.matrix(mat)) %*% mm)
-  gtTopicWords <- gtTopicWords/rowSums(gtTopicWords)
-
-  bregma <- list(sim = sim,
-                 gtDocTopics = gtDocTopics,
-                 gtTopicWords = gtTopicWords)
-
-  return(bregma)
-
-}
-
-
 #' compute pvalue for topic correlation
 #' based on a null distribution of randomly sampled sets of terms
 #'

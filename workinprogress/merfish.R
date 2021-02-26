@@ -196,11 +196,14 @@ head(corpus_slamMtx)
 
 ## search
 #perp <- recursiveFitLDA(corpus_slamMtx, interval = c(5, 10))
-#par(mfrow=c(1,1), mar=rep(5,4))
-#plot(perp[order(perp[,1]),1], perp[order(perp[,1]),2], type='l')
+Ks <- seq(10, 200, by=10)
+perp <- fitLDA(corpus_slamMtx, Ks)
+par(mfrow=c(1,1), mar=rep(5,4))
+plot(Ks, perp$perplexities, type='l')
+abline(v=45,col='red')
 
 #kopt = perp[,1][which(perp[,2]==min(perp[,2]))]
-kopt = 209
+kopt = 45
 #kopt = length(levels(celltype.fine)) - 1
 kopt
 ldamodel <- topicmodels::LDA(corpus_slamMtx, k=kopt) ## is there some progress bar?
@@ -216,19 +219,82 @@ sapply(1:ncol(ldamodel.theta), function(i) {
   MERINGUE::plotEmbedding(spotPos[rownames(ldamodel.theta),1:2], colors=ldamodel.theta[,i], cex=0.1, main=i)
 })
 
-############## Performance evaluation
+############## Cluster
+library(dynamicTreeCut)
+ldamodel.clust <- clusterTopics(beta = ldamodel.beta,
+                               distance = "euclidean",
+                               clustering = "ward.D",
+                               dynamic = "hybrid",
+                               deepSplit = 4,
+                               plotDendro = TRUE)
+clusterColorsk <- ldamodel.clust$clusters
+levels(clusterColorsk) <- gg_color_hue(length(levels(clusterColorsk)))
+
+m <- t(ldamodel.beta)
+range(m)
+m <- scale(m)
+#m <- t(scale(t(m)))
+range(m)
+m[m < -2] <- -2
+m[m > 2] <- 2
+rc <- hclust(as.dist(1-cor(t(m))), method='ward.D2')
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+gplots::heatmap.2(m,
+                  Colv = ldamodel.clust$dendro,
+                  Rowv = as.dendrogram(rc),
+                  density.info = "none",
+                  trace = "none",
+                  ColSideColors = as.vector(clusterColorsk),
+                  col = colorRampPalette(c('blue', 'white', 'red'))(100),
+                  cexRow=0.5,cexCol=0.7,margins=c(6,3),
+                  main = "ldamodel.beta",
+                  lhei = c(1,5),
+                  key.title = NA,
+                  scale = 'none')
+
+ldamodel.betaCombined <- combineTopics(mtx = ldamodel.beta, clusters = clusterColorsk, mtxType = "b")
+
+cpmCombined.deconvolved <- t(ldamodel.betaCombined * 1e6)
+
+mm <- model.matrix(~ 0 + celltype)
+colnames(mm) <- levels(celltype)
+true <- t(as.matrix(counts[names(celltype),])) %*% mm
+head(true)
+cpm.true <- MERINGUE::normalizeCounts(true, log=FALSE)
+cpm.true <- cpm.true[, which(colnames(cpm.true) != 'Ambiguous')]
+dim(cpm.true)
+
+hc <- hclust(as.dist(1-cor(as.matrix(cpm.true))), method='ward')
+plot(hc)
+cpm.true <- cpm.true[,rev(hc$order)]
+
+gexp.results <- do.call(rbind, lapply(1:ncol(cpm.true), function(i) {
+  sapply(1:ncol(cpmCombined.deconvolved), function(j) {
+    #Metrics::rmse(cpm.true[,i], cpm.deconvolved[,j])
+    cor(cpm.true[,i], cpmCombined.deconvolved[,j]) ## correlation instead?
+  })
+}))
+rownames(gexp.results) <- colnames(cpm.true)
+colnames(gexp.results) <- colnames(cpmCombined.deconvolved)
+head(gexp.results)
+
+heatmap(gexp.results, scale='none')
+
+############## All identified topics
 ## compare with ground truth cell type gene expressions
-cpm.deconvolved <- t(ldamodel.beta * 1e6)
+#cpm.deconvolved <- t(ldamodel.beta * 1e6)
+cpm.deconvolved <- t(ldamodel.beta)
 
 mm <- model.matrix(~ 0 + celltype.fine)
 colnames(mm) <- levels(celltype.fine)
 true <- t(as.matrix(counts[names(celltype.fine),])) %*% mm
 head(true)
-cpm.true <- MERINGUE::normalizeCounts(true, log=FALSE)
+#cpm.true <- MERINGUE::normalizeCounts(true, log=FALSE)
+cpm.true <- true ## no normalization
 cpm.true <- cpm.true[, which(colnames(cpm.true) != 'Ambiguous:')]
 dim(cpm.true)
 
-hc <- hclust(as.dist(1-cor(as.matrix(cpm.true))), method='ward')
+hc <- hclust(as.dist(1-cor(as.matrix(cpm.true))), method='ward.D')
 plot(hc)
 cpm.true <- cpm.true[,rev(hc$order)]
 
@@ -245,15 +311,31 @@ head(gexp.results)
 heatmap(gexp.results, scale='none')
 
 library(clue)
-compare <- gexp.results
+compare <- t(gexp.results)
 order <- clue::solve_LSAP(compare-min(compare), maximum = TRUE)
-m <- gexp.results[, order]
+#order2 <- unlist(lapply(rev(hc$order), function(i) which(order==i)))
+#m <- t(gexp.results)[order2,rev(hc$order)]
+m <- t(gexp.results)[, order]
 #m <- scale(m)
 #m <- t(scale(t(m)))
 range(m)
-m[m < -2.5] <- -2.5
-m[m > 2.5] <- 2.5
+m[m < 0] <- 0
+#m[m < -3] <- -3
+#m[m > 3] <- 3
 heatmap(t(m), Rowv=NA, Colv=NA, scale='none', mar=c(10,5), col=colorRampPalette(c('blue', 'white', 'red'))(100))
+
+library(gplots)
+rc = hclust(as.dist(1-cor(t(m))), method='ward.D2')
+hc = hclust(as.dist(1-cor(m)), method='ward.D2')
+gplots::heatmap.2(t(m), Colv=as.dendrogram(rc), Rowv=as.dendrogram(hc),
+                  trace='none', scale='none', mar=c(10,5), col=colorRampPalette(c('blue', 'white', 'red'))(100))
+
+## reorder within groups?
+groups1 <- cutree(rc, 3)
+groups2 <- cutree(hc, 3)
+
+od1 <- rc$order
+od2 <- hc$order
 
 ## compare with ground truth cell type proportions
 gtProp <- do.call(rbind, lapply(simulatedMerfishSpots, function(x) x[[2]]))
@@ -291,5 +373,5 @@ heatmap(t(m2), Rowv=NA, Colv=NA, scale='none', mar=c(10,5),
         col=colorRampPalette(c('blue', 'white', 'red'))(100))
 
 
-save.image('merfish_209topics.RData')
+#save.image('merfish_45topics.RData')
 #load('merfish_209topics.RData')
