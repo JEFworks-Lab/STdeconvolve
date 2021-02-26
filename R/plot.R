@@ -34,24 +34,21 @@ mtx2ggplotDf <- function(mtx, colLab = "columns", rowLab = "rows", cellLab = "ce
 
 #' Visualize topic proportions across spots with `scatterpie`
 #'
-#` theta = document x topic proportion matrix
-#` pos = position of documents, x and y columns
-#` topicOrder = order of topics based on dendrogram; a numeric vector
+#' @param theta document x topic proportion matrix
+#' @param pos position of documents, x and y columns
+#' @param topicOrder order of topics based on dendrogram; a numeric vector
 #'             from: (clusterTopics$order)
-#'
-#` cluster_cols = vector of colors for each of the topics
+#' @param cluster_cols vector of colors for each of the topics
 #'     can use factor of clusters for each topic (via clusterTopics$clusters)
 #'     as long as the cluster levels/values have been converted to colors.
 #'     This gets reordered wrt the topicOrder fyi.
-#'
-#' groups = color spot piecharts based on a group or cell layer they belong to.
+#' @param groups color spot piecharts based on a group or cell layer they belong to.
 #'          Needs to be a character vector. Ex: c("0", "1", "0", ...).
-#' group_cols = color labels for the groups. Ex: c("0" = "gray", "1" = "red")
+#' @param group_cols color labels for the groups. Ex: c("0" = "gray", "1" = "red")
+#' @param r = radius of the circles. Adjust based on size of spots.
+#' @param lwd = width of lines of the pie charts
 #'
-#' r = radius of the circles. Adjust based on size of spots.
-#'     40 = merfish; 0.4 = mOB
-#'
-#' lwd = width of lines of the pie charts
+#' @export
 #'
 vizAllTopics <- function(theta, pos,
                          topicOrder=seq(ncol(theta)),
@@ -129,23 +126,22 @@ vizAllTopics <- function(theta, pos,
 }
 
 
-#' Visualize proportions of topic clusters separately
+#' Visualize proportions of topic clusters
 #'
-#` theta - document topic proportion matrix
-#` pos - position of documents, x and y columns
-#` topicOrder - order of topics based on dendrogram; a numeric vector
-#` clusters - factor of the color (topic cluster) each cluster is assigned to
+#' @param theta document topic proportion matrix
+#' @param pos position of documents, x and y columns
+#' @param topicOrder order of topics based on dendrogram; a numeric vector
+#' @param clusters factor of the color (topic cluster) each cluster is assigned to
 #'            In this case, the levels should be colors. In `vizAllTopics`,
 #'            clusters is "cluster_cols" and can just be a vector of colors.
-#'
-#' groups = color spot piecharts based on a group or cell layer they belong to.
+#' @param groups color spot piecharts based on a group or cell layer they belong to.
 #'          Needs to be a character vector. Ex: c("0", "1", "0", ...).
-#' group_cols = color labels for the groups. Ex: c("0" = "gray", "1" = "red")
-#'
-#' r = radius of the circles. Adjust based on size of spots.
+#' @param group_cols color labels for the groups. Ex: c("0" = "gray", "1" = "red")
+#' @param r = radius of the circles. Adjust based on size of spots.
 #'     40 = merfish; 0.4 = mOB
+#' @param lwd = width of lines of the pie charts
 #'
-#' lwd = width of lines of the pie charts
+#' @export
 #'
 vizTopicClusters <- function(theta, pos, topicOrder, clusters,
                              groups = NA,
@@ -240,14 +236,67 @@ vizTopicClusters <- function(theta, pos, topicOrder, clusters,
 }
 
 
+# visualize gene counts in spots in space. Also see group assignment of
+# spots.
+#
+# df = data.frame where rows are spots and columns must be at least:
+#      "x", "y" for spot positions in space
+#      "gene" counts of a gene for each spot
+#
+# gene = column name of the gene counts in df to be visualized
+#
+# groups = a character vector of labels assigning spots to different groups.
+#          Ex: c("0", "1", "0", ...).
+# group_cols = a vector designating the spot border color to be used for
+#              group assignment. Ex: c("0" = "gray", "1" = "red").
+#
+vizGeneCounts <- function(df, gene,
+                          groups = NA, group_cols = NA,
+                          size = 7, stroke = 2,
+                          plotTitle = NA,
+                          showLegend = TRUE) {
 
-#' custom correlation color range for heatmap.2 correlation plots
+  counts <- df[,gene]
+
+  # color spots by group:
+  if (is.na(groups[1]) == TRUE) {
+    groups <- " "
+    stroke <- 0.5
+  } else {
+    groups <- as.character(groups)
+  }
+  if (is.na(group_cols[1]) == TRUE) {
+    group_cols <- c(" " = "gray")
+  }
+
+  p <- ggplot() +
+    geom_point(data = df, aes(x=x, y=y, fill=counts, color = groups),
+               shape = 21,
+               stroke = stroke, size = size) +
+    scale_fill_viridis(option = "A", direction = -1) +
+    scale_color_manual(values = group_cols) +
+    ggtitle("Granule txn C1")
+
+  if (showLegend == FALSE) {
+    p <- p + guides(fill=FALSE)
+  }
+  if (is.na(plotTitle) == FALSE) {
+    p <- p + ggtitle(plotTitle)
+  }
+
+  p <- p + theme_classic()
+  print(p)
+}
+
+
+
+# custom correlation color range for heatmap.2 correlation plots
 correlation_palette <- colorRampPalette(c("blue", "white", "red"))(n = 209)
 correlation_breaks = c(seq(-1,-0.01,length=100),
                        seq(-0.009,0.009,length=10),
                        seq(0.01,1,length=100))
 
-#' lighten and darken a color
+# lighten and darken a color
 lighten <- function(color, factor = 0.5) {
   if ((factor > 1) | (factor < 0)) stop("factor needs to be within [0,1]")
   col <- col2rgb(color)
@@ -264,7 +313,7 @@ darken <- function(color, factor=1.4){
 }
 
 
-#' color palette to replicate ggplot2
+# color palette to replicate ggplot2
 gg_color_hue <- function(n) {
   hues = seq(15, 375, length = n + 1)
   hcl(h = hues, l = 65, c = 100)[1:n]

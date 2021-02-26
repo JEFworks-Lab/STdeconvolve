@@ -12,3 +12,4 @@ LazyData: true
 Imports: 
     topicmodels,
     parallel
+RoxygenNote: 7.1.1
