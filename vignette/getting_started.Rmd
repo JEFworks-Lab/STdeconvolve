@@ -1,0 +1,31 @@
+---
+title: "Getting Started: Basic Usage"
+author: "Jean Fan"
+date: "2/26/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, eval=FALSE}
+## TODO: create mOB and MERFISH built in dataset
+## eval = FALSE until it works for package building purposes
+library(MERINGUE)
+library(Matrix)
+data(mOB)
+pos <- mOB$pos
+cd <- mOB$counts
+annot <- mOB$annot
+
+counts <- cleanCounts(cd, min.lib.size = 100, min.reads = 100)
+corpus <- restrictCorpus(counts, t = 1)
+lda <- fitLDA(corpus, Ks = seq(2, 10, by = 1))
+results <- getTopicsAndTerms(lda$models, kOpt = "8")
+order <- clusterTopics(results$beta, plot=TRUE) 
+vizAllTopics(results$theta, pos, 
+             topicOrder = order$order, 
+             r=0.4)
+
+```
