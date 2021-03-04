@@ -219,7 +219,7 @@ gg_color_hue <- function(n) {
 #'     as long as the cluster levels/values have been converted to colors.
 #'     This gets reordered wrt the topicOrder fyi. 
 #'
-#' groups = color spot piecharts based on a group or cell layer they belong to.
+#' groups = color spot piecharts group labels or cell layer they belong to.
 #'          Needs to be a character vector. Ex: c("0", "1", "0", ...).
 #' group_cols = color labels for the groups. Ex: c("0" = "gray", "1" = "red")
 #'
@@ -258,13 +258,13 @@ vizAllTopics <- function(theta, pos, topicOrder, cluster_cols,
   topicColumns <- colnames(theta_ordered_pos)[2:(dim(theta_ordered_pos)[2]-2)]
   
   # color of piechart groups (lines of piechart):
-  if (is.na(groups) == TRUE) {
+  if (is.na(groups[1]) == TRUE) {
     groups <- rep("0", dim(theta_ordered_pos)[1])
     theta_ordered_pos$groups <- groups
   } else {
     theta_ordered_pos$groups <- as.character(groups)
   }
-  if (is.na(group_cols) == TRUE) {
+  if (is.na(group_cols[1]) == TRUE) {
     group_cols <- c("0" = "gray")
   }
   
@@ -370,13 +370,13 @@ vizTopicClusters <- function(theta, pos, clusters,
     topic_colors <- append(topic_colors, c("gray"))
     
     # color of piechart groups (lines of piechart):
-    if (is.na(groups) == TRUE) {
+    if (is.na(groups[1]) == TRUE) {
       groups <- rep("0", dim(theta_pos)[1])
       theta_pos$groups <- groups
     } else {
       theta_pos$groups <- as.character(groups)
     }
-    if (is.na(group_cols) == TRUE) {
+    if (is.na(group_cols[1]) == TRUE) {
       group_cols <- c("0" = "gray")
     }
     
@@ -1545,7 +1545,7 @@ SPOTlightPredict <- function(nmfRef, stCounts) {
                                           mixture_transcriptome = stCounts,
                                           transf = "uv", 
                                           reference_profiles = ct_topic_profiles, 
-                                          min_cont = 0.09) # only keep topics if 9% or more in a spot
+                                          min_cont = 0.0) # only keep topics if 9% or more in a spot
   # note that last column is an additional columns for the residual error
   # cleanup to get actual spot-celltype predictions:
   rownames(decon_mtrx) <- colnames(stCounts)

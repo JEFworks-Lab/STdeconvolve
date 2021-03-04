@@ -1,0 +1,2374 @@
+---
+title: "compare_methods"
+author: "Brendan F. Miller"
+date: "3/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Comparisons:
+
+1. mOB cleanCounts
+
+LDA (set of OD genes, common set, 149)
+RCTD (method gets de genes via its own fold change calc)
+SL (uses de genes for each cluster computed by seurat plus 3000 variably expressed genes)
+
+compare:
+  mOB reference
+    - full set
+    - subtract OECs
+  
+  cortex ref
+
+
+correlations, theta and beta (if available)
+  pairs, and mean correlation
+          also box plot distributions of all pair correlations to do stats
+          
+
+look at the spots associated with a specific txn cell layer.
+  look at proportions of all cell types predicted in those for the different methods
+  
+  for removing OECs, or using different reference, see how these change.
+  
+  Trying to see what cell types end up in spots when the reference changes. Not necessarily assessing the actual classification accuracy but instead asking if the new predictions are biologically sound.
+  
+  So then if LDA accuracy is just as good as other methods, and correlates just as well as the reference-based methods, then can be quite usefule because then no reference needed and doesn't fall into trap of biologically incorrect assignments because of flaws in a reference. To Jean's point/example of cancer immune cells being missed.
+  
+  and for new cell types that pop up, like N2 for example, check marker genes.
+  Do the top genes match well with the region or do they become more spread out?
+
+
+Also correlations to the original TXN clusters...
+
+
+2. Then, after MOB, do Sens/Spec using MERFISH datasets. Probably good idea to use several bregmas? Start with one first
+
+
+NOTE:
+set sl to not filter out any topics (set min_cont = 0.09 to 0.0. So all topics predicted at any level for a spot are kept. RCTD and LDA keep all) Of course, I could set 0.09 filters on LDA and RCTD instead. But maybe it is more fair to keep everything?
+
+
+# MOB countsClean
+
+```{r}
+
+data(mOB)
+cd <- mOB$counts
+
+# countsClean
+
+countsClean <- MERINGUE::cleanCounts(counts = t(cd),
+                                       min.reads = 100, 
+                                       min.lib.size = 100, 
+                                       plot=TRUE,
+                                       verbose=TRUE)
+
+```
+
+# LDA mob_common
+
+```{r}
+
+dim(mob$corpus)
+dim(mob_rep1$corpus)
+dim(mob_rep2$corpus)
+dim(mob_rep3$corpus)
+
+```
+
+```{r}
+
+paths <- list()
+paths[[1]] <- t(cd)
+paths[[2]] <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep1_MOB_count_matrix-1.tsv"
+paths[[3]] <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep2_MOB_count_matrix-1.tsv"
+paths[[4]] <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/Rep3_MOB_count_matrix-1.tsv"
+
+filtMobGenes <- lapply(paths, function(p) {
+  
+  dat <- preprocess(p,
+            alignFile = NA, extractPos = FALSE,
+            nTopGenes = NA,
+            genes.to.remove = NA,
+            perc.spots = NA,
+            min.reads = 100,
+            min.lib.size = 100,
+            od.genes.alpha = 0.1,
+            gam.k = 5)
+  colnames(dat$corpus)
+  
+})
+
+commonGenes <- Reduce(intersect, filtMobGenes)
+length(commonGenes)
+
+```
+
+```{r}
+
+mobDataCommonSet <- lapply(paths, function(p) {
+  
+  dat <- preprocess(p,
+            alignFile = NA, extractPos = FALSE,
+            selected.genes = commonGenes,
+            nTopGenes = NA,
+            genes.to.remove = NA,
+            perc.spots = NA,
+            min.reads = 100,
+            min.lib.size = 100,
+            ODgenes = FALSE)
+  
+})
+
+mob_common <- mobDataCommonSet[[1]]
+mob_rep1_common <- mobDataCommonSet[[2]]
+mob_rep2_common <- mobDataCommonSet[[3]]
+mob_rep3_common <- mobDataCommonSet[[4]]
+
+dim(mob_common$corpus)
+dim(mob_rep1_common$corpus)
+dim(mob_rep2_common$corpus)
+dim(mob_rep3_common$corpus)
+
+sum(mob_common$corpus)
+sum(mob_rep1_common$corpus)
+sum(mob_rep2_common$corpus)
+sum(mob_rep3_common$corpus)
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+mob_common_LDAs <- fitLDA(mob_common$slm, k_, seed = 0)
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+```{r}
+
+mob_common_opt <- buildLDAobject(LDAmodel = optimalModel(mob_common_LDAs),
+                      deepSplit = 4,
+                      colorScheme = "ggplot")
+
+```
+
+```{r, fig.height=6, fig.width=9}
+
+pos <- mob$pos
+m <- mob_common_opt$theta
+
+cols <- as.factor(rainbow(75))
+names(cols) <- colnames(mob_common_opt$theta)
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = as.vector(cols),
+             groups = olfNerve,
+             group_cols = c("0" = "black", "1" = "white"), 
+             r = 0.4,
+             lwd = 0.15,
+             plotTitle = NA)
+
+```
+
+```{r, fig.height=6, fig.width=9}
+
+pos <- mob$pos
+m <- mob_common_opt$thetaCombn
+
+cols <- as.factor(rainbow(18))
+names(cols) <- colnames(mob_common_opt$thetaCombn)
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = as.vector(cols),
+             groups = olfNerve,
+             group_cols = c("0" = "black", "1" = "white"), 
+             r = 0.4,
+             lwd = 0.2,
+             plotTitle = NA)
+
+```
+
+# ----------------------------------
+
+# scRNAseq MOB
+
+## SL countsClean
+
+dim(cd)
+[1] 15928   262
+dim(countsClean)
+[1]  260 7365
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/mob_processed_sparseMatrix.RData")
+# mob_se
+
+mob_meta <- read.csv2("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_metaData_seurat.csv", sep = ",")
+
+wt_cells <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$"X"
+print(length(wt_cells))
+
+mob_se_wt <- mob_se[,wt_cells]
+
+meta.data.wt = mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]
+
+```
+
+```{r}
+
+mob_se_wt <- CreateSeuratObject(counts = mob_se_wt, project = "mob_wt_noN10",
+                                      meta.data = meta.data.wt)
+
+# a lot of metadata info not being added...? try doing manually:
+mob_se_wt[["ClusterName"]] <- meta.data.wt$ClusterName
+mob_se_wt[["percent.mito"]] <- meta.data.wt$percent.mito
+
+# Set the known clusters as the "active.indent"
+Seurat::Idents(object = mob_se_wt) <- mob_se_wt@meta.data$ClusterName
+
+# get cluster markers
+cluster_markers_mob_se_wt <- Seurat::FindAllMarkers(object = mob_se_wt,
+                                              assay = "RNA",
+                                              slot = "data",
+                                              verbose = TRUE,
+                                              only.pos = TRUE)
+
+# down samples cell from each cluster and select genes marker and variable genes
+se_sc_down_wt <- downsample_se_obj(se_obj = mob_se_wt,
+                                clust_vr = "ClusterName",
+                                cluster_markers = cluster_markers_mob_se_wt,
+                                cl_n = 100, # size to sample from each cluster
+                                hvg = 3000) # number or NULL. choose additional highly variable genes on top of cluster genes
+
+start_time <- Sys.time()
+nmf_mod_mob_wt_countsClean_ls <- train_nmf(cluster_markers = cluster_markers_mob_se_wt,
+                        se_sc = se_sc_down_wt,
+                        mtrx_spatial = t(countsClean), # the original mob st data
+                        clust_vr = "ClusterName",
+                        ntop = NULL, # number unique markers per cluster, otherwise all of them
+                        hvg = 3000, # number of highly variable genes in addition to the marker genes
+                        transf = "uv",
+                        method = "nsNMF")
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train NMF model was %smins", total_t))
+
+# save(nmf_mod_mob_wt_countsClean_ls, file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/spotlight_nmf_train_mob_wt_countsClean_ls.RData")
+
+```
+
+```{r}
+
+sl_countsClean <- SPOTlightPredict(nmfRef = nmf_mod_mob_wt_countsClean_ls, stCounts = t(countsClean))
+
+dim(sl_countsClean$topicBeta)
+dim(sl_countsClean$ctBeta)
+dim(sl_countsClean$ctTopicProps)
+dim(sl_countsClean$spotTopicTheta)
+dim(sl_countsClean$spotCtTheta)
+
+```
+
+```{r}
+
+sl_countsClean_mob_common <- filterSPOTlightMtxs(sl = sl_countsClean, lda_model = mob_common_opt)
+
+dim(sl_countsClean_mob_common$ctThetaFilt)
+dim(sl_countsClean_mob_common$topicThetaFilt)
+dim(sl_countsClean_mob_common$ctBetaFilt)
+dim(sl_countsClean_mob_common$topicBetaFilt)
+length(sl_countsClean_mob_common$shared_genes)
+
+```
+
+## SL countsClean noOEC
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/spotlight_nmf_train_mob_wt_countsClean_noOECs_ls.RData")
+# nmf_mod_mob_wt_countsClean_noOECs_ls
+
+```
+
+```{r}
+
+sl_countsClean_noOEC <- SPOTlightPredict(nmfRef = nmf_mod_mob_wt_countsClean_noOECs_ls, stCounts = t(countsClean))
+
+```
+
+## RCTD countsClean
+
+### make reference
+
+ load the processes sparse mtx
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/mob_processed_sparseMatrix.RData")
+# mob_se
+
+mob_meta <- read.csv2("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_metaData_seurat.csv", sep = ",")
+
+wt_cells <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$"X"
+print(length(wt_cells))
+
+mob_se_wt <- mob_se[,wt_cells]
+
+meta.data.wt = mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]
+
+mob_se_wt <- CreateSeuratObject(counts = mob_se_wt, project = "mob",
+                                meta.data = meta.data.wt)
+
+# a lot of metadata info not being added...? try doing manually:
+mob_se_wt[["ClusterName"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$ClusterName
+mob_se_wt[["percent.mito"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$percent.mito
+mob_se_wt[["nUMI"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$nUMI
+
+```
+
+```{r}
+
+# write.csv(x=mob_se_wt@meta.data[,c("ClusterName", "nUMI")], file="meta_data.csv")
+# write.csv(x=mob_se_wt@assays$RNA@counts, file="dge.csv")
+
+# write.csv(x = data.frame(Cluster = unique(mob_se_wt@meta.data$ClusterName),
+#            Name = unique(mob_se_wt@meta.data$ClusterName)), file = "cell_type_dict.csv") 
+
+refdir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mob_RCTD_ref/"
+mob_scRNAseq_RCTD_reference <- dgeToSeurat(refdir)
+
+```
+
+### countsClean data input
+
+```{r}
+
+# write.csv(x=t(countsClean), file="MappedDGEForR.csv")
+# write.csv(x=mob$pos, file="BeadLocationsForR.csv")
+
+```
+
+```{r}
+
+datadir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mob_RCTD_inputs/"
+mob_countsClean_SpatialRNA <- read.SpatialRNA(datadir)
+
+```
+
+```{r}
+
+barcodes <- colnames(mob_countsClean_SpatialRNA@counts)
+
+```
+
+### results
+
+```{r}
+
+RCTD_mob_countsClean <- create.RCTD(mob_countsClean_SpatialRNA,
+                        mob_scRNAseq_RCTD_reference,
+                        max_cores = 7, CELL_MIN_INSTANCE = 20)
+
+```
+
+```{r}
+
+RCTD_mob_countsClean_fit <- run.RCTD(RCTD_mob_countsClean, doublet_mode = TRUE)
+
+```
+
+```{r}
+
+RCTD_mob_results <- RCTD_mob_countsClean_fit@results
+# normalize the cell type proportions to sum to 1.
+RCTD_mob_results_norm <-  sweep(RCTD_mob_results$weights, 1, rowSums(RCTD_mob_results$weights), '/')
+
+# cell_type_names <- mob_RCTD_run@cell_type_info$info[[2]] #list of cell type names
+# mob_spatialRNA <- mob_RCTD_run@spatialRNA
+
+# puck_d <- get_decomposed_data(mob_RCTD_results$results_df,
+#                               mob_RCTD_run@internal_vars$gene_list_reg,
+#                               mob_spatialRNA, mob_RCTD_results$weights_doublet, 
+#                               mob_RCTD_run@cell_type_info$renorm)
+
+```
+
+## RCTD countsClean noOEC
+
+### no OEC scRNAseq ref
+
+```{r}
+
+# write.csv(x=mob_se_wt@meta.data[,c("ClusterName", "nUMI")], file="meta_data.csv")
+# write.csv(x=mob_se_wt@assays$RNA@counts, file="dge.csv")
+
+# write.csv(x = data.frame(Cluster = unique(mob_se_wt@meta.data$ClusterName),
+#            Name = unique(mob_se_wt@meta.data$ClusterName)), file = "cell_type_dict.csv") 
+
+refdir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mob_RCTD_noOEC_ref/"
+mob_scRNAseq_noOEC_RCTD_reference <- dgeToSeurat(refdir)
+
+```
+
+### results
+
+```{r}
+
+RCTD_noOEC_countsClean <- create.RCTD(mob_countsClean_SpatialRNA,
+                        mob_scRNAseq_noOEC_RCTD_reference,
+                        max_cores = 7, CELL_MIN_INSTANCE = 20)
+
+```
+
+```{r}
+
+RCTD_noOEC_countsClean_fit <- run.RCTD(RCTD_noOEC_countsClean, doublet_mode = TRUE)
+
+```
+
+```{r}
+
+RCTD_noOEC_results <- RCTD_noOEC_countsClean_fit@results
+# normalize the cell type proportions to sum to 1.
+RCTD_noOEC_results_norm <-  sweep(RCTD_noOEC_results$weights, 1, rowSums(RCTD_noOEC_results$weights), '/')
+
+```
+
+# ----------------------------------
+
+# scRNAseq Cortex
+
+```{r}
+
+path_to_data <- system.file(package = "SPOTlight")
+cortex_sc <- readRDS(glue::glue("{path_to_data}/allen_cortex_dwn.rds"))
+
+```
+
+```{r}
+
+set.seed(123)
+cortex_sc <- Seurat::SCTransform(cortex_sc, verbose = FALSE)
+
+```
+
+```{r}
+
+Seurat::Idents(object = cortex_sc) <- cortex_sc@meta.data$subclass
+cortex_cluster_markers <- Seurat::FindAllMarkers(object = cortex_sc, 
+                                              assay = "SCT",
+                                              slot = "data",
+                                              verbose = TRUE, 
+                                              only.pos = TRUE)
+
+```
+
+```{r}
+
+save(cortex_sc, cortex_cluster_markers,
+     file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/sl_cortex_sc_and_markers.RData")
+
+```
+
+# SL countsClean cortex ref
+
+```{r}
+
+# set.seed(123)
+# 
+# sl_cortexRef_countsClean_ls <- spotlight_deconvolution(
+#   se_sc = cortex_sc,
+#   counts_spatial = t(countsClean),
+#   clust_vr = "subclass", # Variable in sc_seu containing the cell-type annotation
+#   cluster_markers = cortex_cluster_markers, # Dataframe with the marker genes
+#   cl_n = 100, # number of cells per cell type to use
+#   hvg = 3000, # Number of HVG to use
+#   ntop = NULL, # How many of the marker genes to use (by default all)
+#   transf = "uv", # Perform unit-variance scaling per cell and spot prior to factorzation and NLS
+#   method = "nsNMF", # Factorization method
+#   min_cont = 0 # Remove those cells contributing to a spot below a certain threshold 
+#   )
+
+```
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/sl_cortexRef_countsClean_ls.RData")
+# sl_cortexRef_countsClean_ls
+
+# ran `spotlight_deconvolution()` instead of `train_nmf()
+# so first value in list is actually the nmf_mod_ls, and the second is the decon_mtx
+
+```
+
+```{r}
+
+sl_countsClean_cortexRef <- SPOTlightPredict(nmfRef = sl_cortexRef_countsClean_ls[[1]], stCounts = t(countsClean))
+
+```
+
+```{r}
+
+sl_countsClean_cortexRef_common <- filterSPOTlightMtxs(sl = sl_countsClean_cortexRef, lda_model = mob_common_opt)
+
+dim(sl_countsClean_cortexRef_common$ctThetaFilt)
+dim(sl_countsClean_cortexRef_common$topicThetaFilt)
+dim(sl_countsClean_cortexRef_common$ctBetaFilt)
+dim(sl_countsClean_cortexRef_common$topicBetaFilt)
+length(sl_countsClean_cortexRef_common$shared_genes)
+
+```
+
+# RCTD counts clean cortex ref
+
+### make reference
+
+```{r}
+
+cortex_sc[["ClusterName"]] <- cortex_sc@meta.data$subclass
+cortex_sc[["nUMI"]] <- cortex_sc@meta.data$nFeature_RNA
+
+```
+
+```{r}
+
+# write.csv(x=cortex_sc@meta.data[,c("ClusterName", "nUMI")], file="meta_data.csv")
+# write.csv(x=cortex_sc@assays$RNA@counts, file="dge.csv")
+# 
+# write.csv(x = data.frame(Cluster = unique(cortex_sc@meta.data$ClusterName),
+#             Name = unique(cortex_sc@meta.data$ClusterName)), file = "cell_type_dict.csv")
+
+```
+
+``` {r}
+
+refdir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/cortex_RCTD_ref/"
+cortex_scRNAseq_RCTD_reference <- dgeToSeurat(refdir)
+
+```
+
+### results
+
+```{r}
+
+RCTD_cortexRef_countsClean <- create.RCTD(mob_countsClean_SpatialRNA,
+                        cortex_scRNAseq_RCTD_reference,
+                        max_cores = 6, CELL_MIN_INSTANCE = 7)
+
+```
+
+```{r}
+
+RCTD_cortexRef_countsClean_fit <- run.RCTD(RCTD_cortexRef_countsClean, doublet_mode = TRUE)
+
+```
+
+```{r}
+
+RCTD_cortexRef_results <- RCTD_cortexRef_countsClean_fit@results
+# normalize the cell type proportions to sum to 1.
+RCTD_cortexRef_results_norm <-  sweep(RCTD_cortexRef_results$weights, 1, rowSums(RCTD_cortexRef_results$weights), '/')
+
+```
+
+# ====================
+
+# comparisons
+
+theta paired topic correlations
+(beta for SL and LDA)
+
+# 1. LDA vs SL (mob, full)
+
+## theta
+
+```{r}
+
+m1 <- sl_countsClean_mob_common
+m2 <- mob_common_opt
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$ctThetaFilt,
+                                      theta2 = m2$theta)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+lda_vs_sl_theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(lda_vs_sl_theta_cor_paired_cors, breaks = 10)
+mean(lda_vs_sl_theta_cor_paired_cors)
+sd(lda_vs_sl_theta_cor_paired_cors)
+
+```
+
+## beta
+
+```{r}
+
+m1 <- sl_countsClean_mob_common
+m2 <- mob_common_opt
+
+keep_genes <- colnames(sl_countsClean_mob_common$ctBetaFilt)
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+beta_cor <- correlationBetweenBetas(beta1 = m1$ctBetaFilt,
+                                      beta2 = m2$beta[,keep_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+lda_vs_sl_beta_cor_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+hist(lda_vs_sl_beta_cor_paired_cors, breaks = 10)
+mean(lda_vs_sl_beta_cor_paired_cors)
+sd(lda_vs_sl_beta_cor_paired_cors)
+
+```
+
+# 2. LDA vs RCTD (mob, full)
+
+SL did not report any of Mural2, so 37 cts instead of 38. Make the RCTD the same cts to compare equally
+
+## theta
+
+```{r}
+
+keep_cts <- colnames(RCTD_mob_results_norm)[which(colnames(RCTD_mob_results_norm) %in% colnames(sl_countsClean_mob_common$ctThetaFilt))]
+
+m1 <- RCTD_mob_results_norm
+m2 <- mob_common_opt
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1[,keep_cts],
+                                      theta2 = m2$theta)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+lda_vs_rctd_theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(lda_vs_rctd_theta_cor_paired_cors, breaks = 10)
+mean(lda_vs_rctd_theta_cor_paired_cors)
+sd(lda_vs_rctd_theta_cor_paired_cors)
+
+```
+
+# 3. SL vs RCTD (mob, full)
+
+## theta
+
+```{r}
+
+keep_cts <- colnames(RCTD_mob_results_norm)[which(colnames(RCTD_mob_results_norm) %in% colnames(sl_countsClean_mob_common$ctThetaFilt))]
+
+m1 <- sl_countsClean_mob_common
+m2 <- RCTD_mob_results_norm
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$ctThetaFilt,
+                                      theta2 = m2[,keep_cts])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+sl_vs_rctd_theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(sl_vs_rctd_theta_cor_paired_cors, breaks = 10)
+mean(sl_vs_rctd_theta_cor_paired_cors)
+sd(sl_vs_rctd_theta_cor_paired_cors)
+
+```
+
+# Compare Models
+
+```{r}
+
+cor_mob_summary <- data.frame(lda_vs_sl = lda_vs_sl_theta_cor_paired_cors,
+                              lda_vs_rctd = lda_vs_rctd_theta_cor_paired_cors,
+                              sl_vs_rctd = sl_vs_rctd_theta_cor_paired_cors)
+
+cor_mob_summary_gg <- mtx2ggplotDf(cor_mob_summary,
+                                       colLab = "method", rowLab = "spots", cellLab = "Correlation")
+
+my_comparisons <- list( c("lda_vs_sl", "lda_vs_rctd"), c("lda_vs_rctd", "sl_vs_rctd"), c("lda_vs_sl", "sl_vs_rctd") )
+ggplot(data = cor_mob_summary_gg, 
+       aes(x=method, y=Correlation, fill=method)) +
+  geom_boxplot() + 
+  stat_compare_means(comparisons = my_comparisons, method = "wilcox.test",
+                     label.y = c(1.02, 1.09, 1.19)) +
+  geom_point(position=position_jitterdodge())
+
+```
+
+# ----------------------------------
+
+original MOB TXN clusters
+
+```{r}
+
+counts <- MERINGUE::cleanCounts(counts = cd, 
+                      min.reads = 100, 
+                      min.lib.size = 100, 
+                      plot=TRUE,
+                      verbose=TRUE)
+
+```
+
+
+```{r, mob-qc, fig.width=8, fig.height=3}
+
+# CPM normalize
+countsClean_cpm <- MERINGUE::normalizeCounts(counts = t(countsClean), 
+                       log=FALSE,
+                       verbose=TRUE)
+
+```
+
+```{r}
+
+# Dimensionality reduction by PCA on log10 CPM expression values
+pcs.info <- prcomp(t(log10(as.matrix(countsClean_cpm)+1)), center=TRUE)
+nPcs <- 5
+pcs <- pcs.info$x[,1:nPcs]
+
+# 2D embedding by tSNE
+emb <- Rtsne::Rtsne(pcs,
+             is_distance=FALSE,
+             perplexity=30,
+             num_threads=1,
+             verbose=FALSE)$Y
+rownames(emb) <- rownames(pcs)
+
+# Graph-based cluster detection
+k <- 30
+com <- getClusters(pcs, k, weight=TRUE)
+
+# Manually annotate identified clusters with cell-types
+annot <- as.character(com); names(annot) <- names(com)
+annot[com==4] <- '1: Granule Cell Layer'
+annot[com==1] <- '2: Mitral Cell Layer'
+annot[com==3] <- '3: Outer Plexiform Layer'
+annot[com==2] <- '4: Glomerular Layer'
+annot[com==5] <- '5: Olfactory Nerve Layer'
+annot <- as.factor(annot)
+
+# Plot
+par(mfrow=c(1,2), mar=rep(1,4))
+plotEmbedding(emb, groups=annot, 
+              show.legend=TRUE, xlab=NA, ylab=NA,
+              verbose=FALSE)
+plotEmbedding(mob$pos, groups=annot, 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+
+```
+
+```{r}
+
+names(c(annot[which(annot == "5: Olfactory Nerve Layer")]))
+
+```
+
+```{r}
+
+olfNerve <- as.character(com)
+olfNerve[olfNerve != "5"] <- "0"
+olfNerve[olfNerve != "0"] <- "1"
+
+```
+
+
+# no OECs
+
+Look at the olfactory nerve cell layer spots and note how proportions of cell types shift
+
+Assess marker genes of primary cell types for full and no OEC. Makes sense biologically?
+
+don't think there is a need to quantify a correlation here
+
+# 1. SL full vs SL noOEC
+
+## `sl_countsClean`
+
+```{r, fig.height=6, fig.width=9}
+
+pos <- mob$pos
+m <- sl_countsClean_mob_common$ctThetaFilt # Mural2 removed after filtering b/c 0 in all spots
+
+# have a color for each of the initial 38 cts
+# but only use the colors for the cell types present (so here, Mural2 is skipped)
+cols <- as.factor(rainbow(38))
+names(cols) <- colnames(sl_countsClean$spotCtTheta)
+ctColIndices <- which(colnames(sl_countsClean$spotCtTheta) %in% colnames(sl_countsClean_mob_common$ctThetaFilt))
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = as.vector(cols[ctColIndices]),
+             groups = olfNerve,
+             group_cols = c("0" = "black", "1" = "white"), 
+             r = 0.4,
+             lwd = 0.15,
+             plotTitle = NA)
+
+```
+
+maybe consider coloring all non-olfNerve piecharts gray as "100% other", so just the olfNerve ones show proportions?
+
+Also including all cts even if they are predicted by a marginal amount results in hiding some patterns
+
+```{r}
+
+cols2 <- as.vector(cols[ctColIndices])
+names(cols2) <- colnames(sl_countsClean_mob_common$ctThetaFilt)
+cols2 <- as.factor(cols2)
+
+vizTopicClusters(theta = m,
+                pos = pos,
+                clusters = cols2,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+```{r}
+
+olfNerveSpots <- names(c(annot[which(annot == "5: Olfactory Nerve Layer")]))
+
+sl_olfNerve_ctMeans <- colMeans(sl_countsClean$spotCtTheta[olfNerveSpots,]) # use unfiltered to get Mural2 back (all 38 cts)
+
+sl_olfNerve_predictions <- mtx2ggplotDf(mtx = sl_countsClean$spotCtTheta[olfNerveSpots,],
+                                        colLab = "CellTypes",
+                                        rowLab = "spots",
+                                        cellLab = "proportions")
+
+ggplot(data = sl_olfNerve_predictions, aes(x = CellTypes, y = proportions)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+
+## `sl_countsClean_noOEC`
+
+```{r, fig.height=6, fig.width=9}
+
+pos <- mob$pos
+m <- sl_countsClean_noOEC$spotCtTheta # the 33 remaining cts are all present not including Mural2
+# have a color for each of the initial 38 cts
+# but only use the colors for the cell types present (so here, OEC1-5 is skipped)
+cols <- as.factor(rainbow(38))
+names(cols) <- colnames(sl_countsClean$spotCtTheta)
+ctColIndices <- which(colnames(sl_countsClean$spotCtTheta) %in% colnames(sl_countsClean_noOEC$spotCtTheta))
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = as.vector(cols[ctColIndices]),
+             groups = olfNerve,
+             group_cols = c("0" = "black", "1" = "white"), 
+             r = 0.4,
+             lwd = 0.15,
+             plotTitle = NA)
+
+```
+
+```{r}
+
+cols2 <- as.vector(cols[ctColIndices])
+names(cols2) <- colnames(sl_countsClean_noOEC$spotCtTheta)
+cols2 <- as.factor(cols2)
+
+vizTopicClusters(theta = sl_countsClean_noOEC$spotCtTheta,
+                pos = pos,
+                clusters = cols2,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+
+add back the OECs in same order, but they will all be 0
+But can compare with and without OECs visually and everything paired.
+
+Can drop the OECs entirely and just focus on the other cell types and how they change
+
+```{r}
+
+sl_noOEC_theta_allCts <- cbind(sl_countsClean_noOEC$spotCtTheta,
+                                                        OEC1 = 0,
+                                                        OEC2 = 0,
+                                                        OEC3 = 0,
+                                                        OEC4 = 0,
+                                                        OEC5 = 0)
+
+# reorder
+sl_noOEC_theta_allCts <- sl_noOEC_theta_allCts[,colnames(sl_countsClean$spotCtTheta)]
+
+```
+
+```{r}
+
+olfNerveSpots <- names(c(annot[which(annot == "5: Olfactory Nerve Layer")]))
+
+sl_olfNerve_noOEC_ctMeans <- colMeans(sl_noOEC_theta_allCts[olfNerveSpots,]) # use all 38 cts
+
+sl_olfNerve_nOEC_predictions <- mtx2ggplotDf(mtx = sl_noOEC_theta_allCts[olfNerveSpots,],
+                                        colLab = "CellTypes",
+                                        rowLab = "spots",
+                                        cellLab = "proportions")
+
+ggplot(data = sl_olfNerve_nOEC_predictions, aes(x = CellTypes, y = proportions)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+
+## compare
+
+stacked barplots and how they change.
+
+also do paired boxplots
+
+```{r}
+
+sl_compare <- rbind(sl_olfNerve_ctMeans, sl_olfNerve_noOEC_ctMeans)
+sl_compare <- mtx2ggplotDf(mtx = sl_compare,
+                          colLab = "CellTypes",
+                          rowLab = "References",
+                          cellLab = "proportions")
+
+ggplot(data = sl_compare, aes(x = References, y = proportions, fill = CellTypes)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values=rainbow(38))
+
+
+
+sl_olfNerve_ctMeans_removedOEC <- sl_olfNerve_ctMeans[!grepl("OEC", names(sl_olfNerve_ctMeans))]
+sl_olfNerve_ctMeans_removedOEC_adj <- sl_olfNerve_ctMeans_removedOEC/sum(sl_olfNerve_ctMeans_removedOEC)
+
+sl_olfNerve_noOEC_ctMeans_removedOEC <- sl_olfNerve_noOEC_ctMeans[!grepl("OEC", names(sl_olfNerve_noOEC_ctMeans))]
+sl_olfNerve_noOEC_ctMeans_removedOEC_adj <- sl_olfNerve_noOEC_ctMeans_removedOEC/sum(sl_olfNerve_noOEC_ctMeans_removedOEC)
+
+sl_compare_removedOEC <- rbind(sl_olfNerve_ctMeans_removedOEC_adj, sl_olfNerve_noOEC_ctMeans_removedOEC_adj)
+sl_compare_removedOEC <- mtx2ggplotDf(mtx = sl_compare_removedOEC,
+                          colLab = "CellTypes",
+                          rowLab = "References",
+                          cellLab = "proportions")
+
+ggplot(data = sl_compare_removedOEC, aes(x = References, y = proportions, fill = CellTypes)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values=rainbow(33))
+
+
+```
+
+```{r, fig.height=12, fig.width=12}
+
+sl_theta_allCts_olfNerve <- as.data.frame(sl_countsClean$spotCtTheta[olfNerveSpots,])
+# sl_noOEC_theta_allCts
+sl_theta_allCts_olfNerve$ref <- "all cts"
+
+sl_noOEC_theta_allCts_olfNerve <- as.data.frame(sl_noOEC_theta_allCts[olfNerveSpots,])
+sl_noOEC_theta_allCts_olfNerve$ref <- "no OECs"
+
+sl_theta_olfNerve_merged <- rbind(sl_theta_allCts_olfNerve, sl_noOEC_theta_allCts_olfNerve)
+
+# drop the OECs
+m <- sl_theta_olfNerve_merged[,!grepl("OEC", colnames(sl_theta_olfNerve_merged))]
+
+ggplot(data = melt(m), aes(x = ref, y = value, fill = ref)) +
+  geom_boxplot() +
+  facet_wrap(~variable) +
+  stat_compare_means(method = "wilcox.test", label.y = c(0.31), size=3)
+
+```
+
+N2 the biggest change
+
+Look at OEC genes and N2 genes
+
+N2
+```{r}
+
+# all the seurat cluster genes
+head(sl_countsClean$ctBeta["N2", order(sl_countsClean$ctBeta["N2",], decreasing = TRUE)])
+# intersecting genes with 221 OD genes in LDA corpus
+head(sl_countsClean_mob_common$ctBeta["N2", order(sl_countsClean_mob_common$ctBeta["N2",], decreasing = TRUE)])
+
+```
+
+OEC
+```{r}
+
+# all the seurat cluster genes
+head(sl_countsClean$ctBeta["OEC1", order(sl_countsClean$ctBeta["OEC1",], decreasing = TRUE)])
+# intersecting genes with 221 OD genes in LDA corpus
+head(sl_countsClean_mob_common$ctBeta["OEC1", order(sl_countsClean_mob_common$ctBeta["OEC1",], decreasing = TRUE)])
+
+# all the seurat cluster genes
+head(sl_countsClean$ctBeta["OEC2", order(sl_countsClean$ctBeta["OEC2",], decreasing = TRUE)])
+# intersecting genes with 221 OD genes in LDA corpus
+head(sl_countsClean_mob_common$ctBeta["OEC2", order(sl_countsClean_mob_common$ctBeta["OEC2",], decreasing = TRUE)])
+
+# # all the seurat cluster genes
+# head(sl_countsClean$ctBeta["OEC3", order(sl_countsClean$ctBeta["OEC3",], decreasing = TRUE)])
+# # intersecting genes with 221 OD genes in LDA corpus
+# head(sl_countsClean_mob_common$ctBeta["OEC3", order(sl_countsClean_mob_common$ctBeta["OEC3",], decreasing = TRUE)])
+
+# all the seurat cluster genes
+head(sl_countsClean$ctBeta["OEC4", order(sl_countsClean$ctBeta["OEC4",], decreasing = TRUE)])
+# intersecting genes with 221 OD genes in LDA corpus
+head(sl_countsClean_mob_common$ctBeta["OEC4", order(sl_countsClean_mob_common$ctBeta["OEC4",], decreasing = TRUE)])
+
+# # all the seurat cluster genes
+# head(sl_countsClean$ctBeta["OEC5", order(sl_countsClean$ctBeta["OEC5",], decreasing = TRUE)])
+# # intersecting genes with 221 OD genes in LDA corpus
+# head(sl_countsClean_mob_common$ctBeta["OEC5", order(sl_countsClean_mob_common$ctBeta["OEC5",], decreasing = TRUE)])
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+genes <- c("Sox11", "Igfbp5", "Ptn", "Npy", "Cd24a", "Igfbpl1", "Prokr2")
+genecounts <- t(cd[genes, rownames(mob$pos)])
+mobExp <- merge(as.data.frame(mob$pos), as.data.frame(genecounts), by=0)
+rownames(mobExp) <- mobExp$Row.names
+mobExp <- mobExp[,2:ncol(mobExp)]
+
+group_cols <- c("0" = "white", "1" = "black")
+
+# ---------------------------------------------------------------------------
+
+for (gene in genes) {
+  mainTitle <- paste0("Olfactory Nerve Cluster ", gene)
+  vizGeneCounts(df = mobExp, gene = gene,
+                groups = olfNerve, group_cols = group_cols,
+                plotTitle = mainTitle)
+}
+
+```
+
+# 2. RCTD full vs RCTD noOEC
+
+## `RCTD_mob_results_norm`
+
+```{r, fig.height=6, fig.width=9}
+
+pos <- mob$pos
+m <- RCTD_mob_results_norm
+
+# have a color for each of the initial 38 cts
+# but only use the colors for the cell types present (so here, Mural2 is skipped)
+cols <- as.factor(rainbow(38))
+names(cols) <- colnames(RCTD_mob_results_norm)
+ctColIndices <- which(colnames(RCTD_mob_results_norm) %in% colnames(RCTD_mob_results_norm))
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = as.vector(cols[ctColIndices]),
+             groups = olfNerve,
+             group_cols = c("0" = "black", "1" = "white"), 
+             r = 0.4,
+             lwd = 0.15,
+             plotTitle = NA)
+
+```
+
+```{r}
+
+cols2 <- as.vector(cols[ctColIndices])
+names(cols2) <- colnames(RCTD_mob_results_norm)
+cols2 <- as.factor(cols2)
+
+vizTopicClusters(theta = RCTD_mob_results_norm,
+                pos = pos,
+                clusters = cols2,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+```{r}
+
+olfNerveSpots <- names(c(annot[which(annot == "5: Olfactory Nerve Layer")]))
+
+rctd_olfNerve_ctMeans <- colMeans(RCTD_mob_results_norm[olfNerveSpots,]) # use unfiltered to get Mural2 back (all 38 cts)
+
+rctd_olfNerve_predictions <- mtx2ggplotDf(mtx = RCTD_mob_results_norm[olfNerveSpots,],
+                                        colLab = "CellTypes",
+                                        rowLab = "spots",
+                                        cellLab = "proportions")
+
+ggplot(data = rctd_olfNerve_predictions, aes(x = CellTypes, y = proportions)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+
+## `RCTD_noOEC_results_norm`
+
+```{r, fig.height=6, fig.width=9}
+
+pos <- mob$pos
+m <- RCTD_noOEC_results_norm
+
+# have a color for each of the initial 38 cts
+# but only use the colors for the cell types present (so here, Mural2 is skipped)
+cols <- as.factor(rainbow(38))
+names(cols) <- colnames(RCTD_mob_results_norm)
+ctColIndices <- which(colnames(RCTD_mob_results_norm) %in% colnames(RCTD_noOEC_results_norm))
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = as.vector(cols[ctColIndices]),
+             groups = olfNerve,
+             group_cols = c("0" = "black", "1" = "white"), 
+             r = 0.4,
+             lwd = 0.15,
+             plotTitle = NA)
+
+```
+
+```{r}
+
+cols2 <- as.vector(cols[ctColIndices])
+names(cols2) <- colnames(RCTD_noOEC_results_norm)
+cols2 <- as.factor(cols2)
+
+vizTopicClusters(theta = RCTD_noOEC_results_norm,
+                pos = pos,
+                clusters = cols2,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+```{r}
+
+rctd_noOEC_theta_allCts <- cbind(RCTD_noOEC_results_norm,
+                                              OEC1 = 0,
+                                              OEC2 = 0,
+                                              OEC3 = 0,
+                                              OEC4 = 0,
+                                              OEC5 = 0)
+
+# reorder
+rctd_noOEC_theta_allCts <- rctd_noOEC_theta_allCts[,colnames(RCTD_mob_results_norm)]
+
+```
+
+```{r}
+
+olfNerveSpots <- names(c(annot[which(annot == "5: Olfactory Nerve Layer")]))
+
+rctd_olfNerve_noOEC_ctMeans <- colMeans(rctd_noOEC_theta_allCts[olfNerveSpots,]) # use all 38 cts
+
+rctd_olfNerve_nOEC_predictions <- mtx2ggplotDf(mtx = rctd_noOEC_theta_allCts[olfNerveSpots,],
+                                        colLab = "CellTypes",
+                                        rowLab = "spots",
+                                        cellLab = "proportions")
+
+ggplot(data = rctd_olfNerve_nOEC_predictions, aes(x = CellTypes, y = proportions)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+
+## compare
+
+stacked barplots and how they change.
+
+also do paired boxplots
+
+```{r}
+
+rctd_compare <- rbind(rctd_olfNerve_ctMeans, rctd_olfNerve_noOEC_ctMeans)
+rctd_compare <- mtx2ggplotDf(mtx = rctd_compare,
+                          colLab = "CellTypes",
+                          rowLab = "References",
+                          cellLab = "proportions")
+
+ggplot(data = rctd_compare, aes(x = References, y = proportions, fill = CellTypes)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values=rainbow(38))
+
+```
+
+```{r, fig.height=12, fig.width=12}
+
+rctd_theta_allCts_olfNerve <- as.data.frame(RCTD_mob_results_norm[olfNerveSpots,])
+# sl_noOEC_theta_allCts
+rctd_theta_allCts_olfNerve$ref <- "all cts"
+
+rctd_noOEC_theta_allCts_olfNerve <- as.data.frame(rctd_noOEC_theta_allCts[olfNerveSpots,])
+rctd_noOEC_theta_allCts_olfNerve$ref <- "no OECs"
+
+rctd_theta_olfNerve_merged <- rbind(rctd_theta_allCts_olfNerve, rctd_noOEC_theta_allCts_olfNerve)
+
+# drop the OECs
+m <- rctd_theta_olfNerve_merged[,!grepl("OEC", colnames(rctd_theta_olfNerve_merged))]
+
+ggplot(data = melt(m), aes(x = ref, y = value, fill = ref)) +
+  geom_boxplot() +
+  facet_wrap(~variable) +
+  stat_compare_means(method = "wilcox.test", label.y = c(0.48), size=3)
+
+```
+
+again, N2 is the biggest change
+
+gene expression using the seurat reference? Get cluster genes for N2??
+
+```{r}
+
+n2_seurat_markers <- cluster_markers_mob_se_wt[cluster_markers_mob_se_wt$cluster == "N2",]
+
+n2_seurat_markers[order(n2_seurat_markers$p_val_adj, n2_seurat_markers$avg_log2FC),]
+
+```
+
+Prokr2 same story as other N2 markers done previously
+
+
+# ----------------------------------
+
+# cortex ref
+
+Compare predictions using the cortex reference to the original txn spot clusters and theta correlation with those?
+
+```{r}
+
+mob_txn_theta <- model.matrix(~ 0 + annot)
+colnames(mob_txn_theta) <- levels(annot)
+rownames(mob_txn_theta) <- names(annot)
+mob_txn_theta <- as.matrix(mob_txn_theta)
+
+```
+
+## `sl_countsClean_cortexRef`
+
+```{r}
+
+sl_countsClean_cortexRef # L5.IT not detected at all but other 22 were
+
+```
+
+```{r, fig.height=6, fig.width=9}
+
+pos <- mob$pos
+m <- sl_countsClean_cortexRef_common$ctThetaFilt
+
+cols <- as.factor(rainbow(23))
+names(cols) <- colnames(sl_countsClean_cortexRef$spotCtTheta)
+ctColIndices <- which(colnames(sl_countsClean_cortexRef$spotCtTheta) %in% colnames(sl_countsClean_cortexRef_common$ctThetaFilt))
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = as.vector(cols[ctColIndices]),
+             # groups = olfNerve,
+             # group_cols = c("0" = "black", "1" = "white"), 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = NA)
+
+```
+
+```{r}
+
+cols2 <- as.vector(cols[ctColIndices])
+names(cols2) <- colnames(sl_countsClean_cortexRef_common$ctThetaFilt)
+cols2 <- as.factor(cols2)
+
+vizTopicClusters(theta = m,
+                pos = pos,
+                clusters = cols2,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+```{r}
+
+m1 <- mob_txn_theta
+m2 <- sl_countsClean_cortexRef_common
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1,
+                                      theta2 = m2$ctThetaFilt)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+sl_cortexRef_theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(sl_cortexRef_theta_cor_paired_cors, breaks = 10)
+mean(sl_cortexRef_theta_cor_paired_cors)
+sd(sl_cortexRef_theta_cor_paired_cors)
+
+```
+
+## `RCTD_cortexRef_results_norm`
+
+```{r}
+
+RCTD_cortexRef_results_norm
+
+```
+
+```{r, fig.height=6, fig.width=9}
+
+pos <- mob$pos
+m <- RCTD_cortexRef_results_norm
+
+cols <- as.factor(rainbow(23))
+names(cols) <- colnames(RCTD_cortexRef_results_norm)
+ctColIndices <- which(colnames(RCTD_cortexRef_results_norm) %in% colnames(RCTD_cortexRef_results_norm))
+
+vizAllTopics(theta = m,
+             pos = pos,
+             topicOrder = seq_len(length(colnames(m))),
+             cluster_cols = as.vector(cols[ctColIndices]),
+             # groups = olfNerve,
+             # group_cols = c("0" = "black", "1" = "white"), 
+             r = 0.4,
+             lwd = 0.01,
+             plotTitle = NA)
+
+```
+
+```{r}
+
+cols2 <- as.vector(cols[ctColIndices])
+names(cols2) <- colnames(RCTD_cortexRef_results_norm)
+cols2 <- as.factor(cols2)
+
+vizTopicClusters(theta = m,
+                pos = pos,
+                clusters = cols2,
+                sharedCol = TRUE,
+                r = 0.4,
+                lwd = 0.01)
+
+```
+
+```{r}
+
+m1 <- mob_txn_theta
+m2 <- RCTD_cortexRef_results_norm
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1,
+                                      theta2 = m2)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+rctd_cortexRef_theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(rctd_cortexRef_theta_cor_paired_cors, breaks = 10)
+mean(rctd_cortexRef_theta_cor_paired_cors)
+sd(rctd_cortexRef_theta_cor_paired_cors)
+
+```
+
+VLMC assigned to Olfactory Nerve region
+
+VLMC
+```{r}
+
+# all the seurat cluster genes
+head(sl_countsClean_cortexRef$ctBeta["VLMC", order(sl_countsClean_cortexRef$ctBeta["VLMC",], decreasing = TRUE)])
+# intersecting genes with 221 OD genes in LDA corpus
+head(sl_countsClean_cortexRef_common$ctBeta["VLMC", order(sl_countsClean_cortexRef_common$ctBeta["VLMC",], decreasing = TRUE)])
+
+```
+
+```{r, fig.height=6, fig.width=8}
+
+genes <- c("Laptm4a", "Ptn", "Apod", "Pcca")
+genecounts <- t(cd[genes, rownames(mob$pos)])
+mobExp <- merge(as.data.frame(mob$pos), as.data.frame(genecounts), by=0)
+rownames(mobExp) <- mobExp$Row.names
+mobExp <- mobExp[,2:ncol(mobExp)]
+
+group_cols <- c("0" = "white", "1" = "black")
+
+# ---------------------------------------------------------------------------
+
+for (gene in genes) {
+  mainTitle <- paste0("Olfactory Nerve Cluster ", gene)
+  vizGeneCounts(df = mobExp, gene = gene,
+                groups = olfNerve, group_cols = group_cols,
+                plotTitle = mainTitle)
+}
+
+```
+
+also Meis2 and the Granular cell layer...
+
+## SL vs RCTD correlation of predictions
+
+```{r}
+
+m1 <- sl_countsClean_cortexRef_common
+m2 <- RCTD_cortexRef_results_norm
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$ctThetaFilt, #22 of 23
+                                      theta2 = m2) # all 23
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+lda_vs_sl_theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(lda_vs_sl_theta_cor_paired_cors, breaks = 10)
+mean(lda_vs_sl_theta_cor_paired_cors)
+sd(lda_vs_sl_theta_cor_paired_cors)
+
+```
+
+# ====================
+
+# MERFISH (RMSE)
+
+Based on predictions, compute RMSE between predicted proportions and true proportions of cell types.
+
+Stick with major cell types (could expand to Excitatory/Inhibitory cell types later)
+
+For LDA, pick topics that pair or correlate base with given cell type (in terms of beta? And/or theta?)
+
+For SL and RCTD, already has the reference.
+
+Use MERFISH corpus as the scRNAseq reference.
+
+With multiple bregmas, can have a lot of data points...each is 256 spots (data points)
+Recall that the RMSE will be based on the prediction of 9 different major cell classes of the MERFISH data
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mpoa_merfish_clean.RData")
+# has `annot.table`, `counts`, and `features`
+# annot.table: table of the individual cells and data like coordinates, cell types, bregma, animal
+# features: has cells and additional features. Also dataset they belong to
+# counts: gene counts of cell in annot.table for 130 merfish genes profiled
+
+# select cells that are part of given dataset:
+selected_cells <- rownames(features)[features$dataset_name %in% c('171021_FN7_2_M22_M26')]
+
+spatial_position_and_class <- annot.table[selected_cells, c('Centroid_X', 'Centroid_Y', 'Bregma', "Cell_class", "Neuron_cluster_ID")]
+spatial_position_and_class <- na.omit(spatial_position_and_class) # remove rows with NA
+
+dim(spatial_position_and_class)
+# [1] 36329     5
+
+```
+
+```{r}
+
+FN7_2_M22_M26_hash <- build_bregma_hash_table(spatial_position_and_class, 100)
+
+```
+
+# ----------------------------------
+
+# -0.04 Bregma
+
+# SL bregma -0.04 model
+
+```{r}
+
+bregma04 <- extractBregmaCorpus(FN7_2_M22_M26_hash, "-0.04")
+
+# the input spatial matrix
+# t(as.matrix(bregma04$sim))
+
+```
+
+```{r}
+
+# cell and their class ("Cell_class)
+bregma04_metadata <- FN7_2_M22_M26_hash[["-0.04"]]$bregmaFullDf
+
+# the scRNAseq mtx for the merfish data
+bregma04_sc_mtx <- FN7_2_M22_M26_hash[["-0.04"]]$cellGeneCounts
+
+# remove "blanks"
+bregma04_sc_mtx <- bregma04_sc_mtx[,!grepl("Blank", colnames(bregma04_sc_mtx))]
+
+# cells in patches
+# stick to the cells that are just in the patches. Idea is to
+# restrict the models to the same exact information that the LDA uses.
+# Otherwise if use all the cells, then more individual cells of each cell class to inform the models
+# or maybe it doesn't matter?
+bregma_cell_ids <- rownames(bregma04_metadata[which(!bregma04_metadata$patch_id == ""),])
+
+# cells in patches:
+bregma04_sc_mtx <- bregma04_sc_mtx[bregma_cell_ids,]
+# 4688  125
+
+```
+
+```{r}
+
+bregma04_se <- CreateSeuratObject(counts = t(bregma04_sc_mtx), project = "bregma04",
+                                  meta.data = bregma04_metadata[bregma_cell_ids,])
+
+```
+
+```{r}
+
+# Set the known clusters as the "active.indent"
+Seurat::Idents(object = bregma04_se) <- bregma04_se@meta.data$Cell_class
+
+# get cluster markers
+cluster_markers_bregma04_se <- Seurat::FindAllMarkers(object = bregma04_se,
+                                              assay = "RNA",
+                                              slot = "data",
+                                              verbose = TRUE,
+                                              only.pos = TRUE)
+
+```
+
+```{r}
+
+set.seed(123)
+
+sl_bregma04 <- spotlight_deconvolution(
+  se_sc = bregma04_se,
+  counts_spatial = t(as.matrix(bregma04$sim)),
+  clust_vr = "Cell_class", # Variable in sc_seu containing the cell-type annotation
+  cluster_markers = cluster_markers_bregma04_se, # Dataframe with the marker genes
+  cl_n = 100, # number of cells per cell type to use
+  hvg = 0, # Only 125 total genes so no need to get highly variable genes on top of this
+  ntop = NULL, # How many of the marker genes to use (by default all)
+  transf = "uv", # Perform unit-variance scaling per cell and spot prior to factorzation and NLS
+  method = "nsNMF", # Factorization method
+  min_cont = 0 # Remove those cells contributing to a spot below a certain threshold 
+  )
+
+# note that this wrapper also performs the down sampling of the data. Is this fair? Uses 100 cells of each of the classes. But could use more.
+
+save(sl_bregma04, file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/sl_bregma04.RData")
+
+```
+
+really fast...makes me think that the number of genes is the real determinant of time and not really number of cells. Esp since it downsamples cells anyways.
+
+```{r}
+
+sl_bregma04_predict <- SPOTlightPredict(nmfRef = sl_bregma04[[1]], stCounts = t(as.matrix(bregma04$sim)))
+
+dim(sl_bregma04_predict$topicBeta)
+dim(sl_bregma04_predict$ctBeta)
+dim(sl_bregma04_predict$spotTopicTheta)
+dim(sl_bregma04_predict$spotCtTheta)
+# length(sl_bregma04_predict$shared_genes)
+
+```
+
+```{r}
+
+sl_bregma04_predict_filt <- filterSPOTlightMtxs(sl = sl_bregma04_predict, lda_model = bregma04_opt)
+
+dim(sl_bregma04_predict_filt$ctThetaFilt)
+dim(sl_bregma04_predict_filt$topicThetaFilt)
+dim(sl_bregma04_predict_filt$ctBetaFilt)
+dim(sl_bregma04_predict_filt$topicBetaFilt)
+length(sl_bregma04_predict_filt$shared_genes)
+
+```
+
+Seems that of the 125 genes, 112 were differentially expressed cell class marker genes determined by seurat
+
+# RCTD bregma -0.04 model
+
+## reference
+
+```{r}
+
+# write.csv(x=bregma04_se@meta.data[,c("Cell_class", "nFeature_RNA")], file="meta_data.csv")
+# write.table(x=bregma04_se@assays$RNA@counts, file="dge.csv", sep = ",", col.names = colnames(bregma04_se@assays$RNA@counts))
+
+# write.csv(x = data.frame(Cluster = unique(bregma04_se@meta.data$Cell_class),
+#            Name = unique(bregma04_se@meta.data$Cell_class)), file = "cell_type_dict.csv")
+
+```
+
+```{r}
+
+refdir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/bregma04_RCTD_ref/"
+bregma04_RCTD_reference <- dgeToSeurat(refdir)
+
+```
+
+## data input
+
+```{r}
+
+# write.table(x=t(as.matrix(bregma04$sim)), file="MappedDGEForR.csv", sep = ",",
+#             col.names = colnames(t(as.matrix(bregma04$sim))))
+# 
+# write.table(x=bregma04$gtDocTopics[,c("x", "y")],
+#             file="BeadLocationsForR.csv", sep = ",",
+#             row.names = bregma04$gtDocTopics$Row.names)
+
+```
+
+```{r}
+
+datadir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/bregma04_RCTD_inputs/"
+bregma04_SpatialRNA <- read.SpatialRNA(datadir)
+
+```
+
+## results
+
+```{r}
+
+RCTD_bregma04 <- create.RCTD(bregma04_SpatialRNA,
+                        bregma04_RCTD_reference,
+                        max_cores = 7, CELL_MIN_INSTANCE = 8)
+
+```
+
+```{r}
+
+RCTD_bregma04_fit <- run.RCTD(RCTD_bregma04, doublet_mode = TRUE)
+
+```
+
+```{r}
+
+RCTD_bregma04_results <- RCTD_bregma04_fit@results
+# normalize the cell type proportions to sum to 1.
+RCTD_bregma04_results_norm <-  sweep(RCTD_bregma04_results$weights, 1, rowSums(RCTD_bregma04_results$weights), '/')
+
+```
+
+
+```{r}
+
+# ground truths
+bregma04$gtDocTopics[,4:12]
+
+# SL predictions
+sl_bregma04_predict$spotCtTheta
+
+# RCTD predictions
+RCTD_bregma04_results_norm
+
+```
+
+# -----------
+
+# SL vs gtDocTopics
+
+### correlations and pairing
+
+```{r}
+
+m1 <- bregma04
+m2 <- sl_bregma04_predict_filt
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$gtDocTopics[,4:12],
+                                      theta2 = m2$ctThetaFilt)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+sl_theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(sl_theta_cor_paired_cors, breaks = 10)
+mean(sl_theta_cor_paired_cors)
+sd(sl_theta_cor_paired_cors)
+
+```
+
+### rmse
+
+for all 9 cts across all spots (256 x 9 = 2304 predictions)
+
+```{r}
+
+rmse(preds = as.vector(sl_bregma04_predict_filt$ctThetaFilt),
+     actuals = do.call("c", bregma04$gtDocTopics[,4:12]))
+
+```
+
+for each spot individually:
+
+```{r}
+
+truth <- bregma04$gtDocTopics[,4:12]
+
+sl_spot_rmse <- unlist(lapply(seq(dim(truth)[1]), function(i){
+  
+  actual <- as.vector(truth[i,])
+  predict <- as.vector(sl_bregma04_predict_filt$ctThetaFilt[i,])
+  
+  rmse(preds = predict, actuals = actual)
+}))
+
+```
+
+# RCTD vs gtDocTopics
+
+### correlations and pairing
+
+```{r}
+
+m1 <- bregma04
+m2 <- RCTD_bregma04_results_norm
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$gtDocTopics[,4:12],
+                                      theta2 = m2)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+rctd_theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(rctd_theta_cor_paired_cors, breaks = 10)
+mean(rctd_theta_cor_paired_cors)
+sd(rctd_theta_cor_paired_cors)
+
+```
+
+### rmse
+
+for all 9 cts across all spots (256 x 9 = 2304 predictions)
+
+```{r}
+
+rmse(preds = as.vector(RCTD_bregma04_results_norm),
+     actuals = do.call("c", bregma04$gtDocTopics[,4:12]))
+
+```
+
+for each spot individually:
+
+```{r}
+
+truth <- bregma04$gtDocTopics[,4:12]
+
+rctd_spot_rmse <- unlist(lapply(seq(dim(truth)[1]), function(i){
+  
+  actual <- as.vector(truth[i,])
+  predict <- as.vector(RCTD_bregma04_results_norm[i,])
+  
+  rmse(preds = predict, actuals = actual)
+}))
+
+```
+
+# LDA vs gtDocTopics
+
+### correlations and pairing
+
+```{r}
+
+m1 <- bregma04
+m2 <- bregma04_opt
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$gtDocTopics[,4:12],
+                                      theta2 = m2$theta)
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(theta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(theta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+lda_theta_cor_paired_cors <- diag(theta_cor[pairs$rowix, pairs$colsix])
+
+hist(lda_theta_cor_paired_cors, breaks = 10)
+mean(lda_theta_cor_paired_cors)
+sd(lda_theta_cor_paired_cors)
+
+```
+
+### rmse
+
+get topics that match to gt
+
+in terms of theta
+
+```{r}
+
+m1 <- bregma04
+m2 <- bregma04_opt
+
+theta_cor <- correlationBetweenThetas(theta1 = m1$gtDocTopics[,4:12],
+                                      theta2 = m2$theta)
+
+pairs <- lsatPairs(theta_cor)
+pairs$colsix
+
+```
+
+```{r}
+
+bregma04_opt_theta_paired <- bregma04_opt$theta[,pairs$colsix]
+
+```
+
+
+in terms of beta
+
+```{r}
+
+keep_genes <- colnames(bregma04$gtTopicWords)[which(colnames(bregma04$gtTopicWords) %in% colnames(bregma04_opt$beta))]
+
+```
+
+
+```{r}
+
+m1 <- bregma04
+m2 <- bregma04_opt
+
+
+# -------------------------------------------------------
+# sl predicted cell types
+
+beta_cor <- correlationBetweenBetas(beta1 = m1$gtTopicWords[,keep_genes],
+                                      beta2 = m2$beta[,keep_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(beta_cor)
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$colsix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$rowix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          # main = "sl_countsClean_mob_common vs mob_common_opt ct theta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+```
+
+best matched topics are essentially the same for beta and theta, except for Ambiguous paired topics, which are 70 and 6.
+
+```{r}
+
+bregma04_opt_theta_paired
+
+```
+
+for all 9 cts across all spots (256 x 9 = 2304 predictions)
+
+```{r}
+
+rmse(preds = as.vector(bregma04_opt_theta_paired),
+     actuals = do.call("c", bregma04$gtDocTopics[,4:12]))
+
+```
+
+for each spot individually:
+
+```{r}
+
+truth <- bregma04$gtDocTopics[,4:12]
+
+lda_spot_rmse <- unlist(lapply(seq(dim(truth)[1]), function(i){
+  
+  actual <- as.vector(truth[i,])
+  predict <- as.vector(bregma04_opt_theta_paired[i,])
+  
+  rmse(preds = predict, actuals = actual)
+}))
+
+```
+
+# Compare Models
+
+## rmse
+
+```{r}
+
+rmse_breg04_summary <- data.frame(sl = sl_spot_rmse,
+                                  rctd = rctd_spot_rmse,
+                                  lda = lda_spot_rmse)
+
+rmse_breg04_summary_gg <- mtx2ggplotDf(rmse_breg04_summary,
+                                       colLab = "method", rowLab = "spots", cellLab = "RMSE")
+
+my_comparisons <- list( c("lda", "rctd"), c("lda", "sl"), c("rctd", "sl") )
+ggplot(data = rmse_breg04_summary_gg, 
+       aes(x=method, y=RMSE, fill=method)) +
+  geom_boxplot() + 
+  stat_compare_means(comparisons = my_comparisons, method = "wilcox.test", 
+                     label.y = c(0.35, 0.375, 0.41)) +
+  geom_point(position=position_jitterdodge())
+
+```
+
+## correlations
+
+```{r}
+
+sl_theta_cor_paired_cors
+
+rctd_theta_cor_paired_cors
+
+lda_theta_cor_paired_cors
+
+```
+
+```{r}
+
+cor_breg04_summary <- data.frame(sl = sl_theta_cor_paired_cors,
+                                  rctd = rctd_theta_cor_paired_cors,
+                                  lda = lda_theta_cor_paired_cors)
+
+cor_breg04_summary_gg <- mtx2ggplotDf(cor_breg04_summary,
+                                       colLab = "method", rowLab = "spots", cellLab = "Correlation")
+
+my_comparisons <- list( c("lda", "rctd"), c("lda", "sl"), c("rctd", "sl") )
+ggplot(data = cor_breg04_summary_gg, 
+       aes(x=method, y=Correlation, fill=method)) +
+  geom_boxplot() + 
+  stat_compare_means(comparisons = my_comparisons, method = "wilcox.test",
+                     label.y = c(1.09, 1.16, 1.25)) +
+  geom_point(position=position_jitterdodge())
+
+```
+
+again, for SL, did not filter out any topics that were below 9%. Kept all. This is definitely important because with the filtering, SL did worse wrt RMSE
+
+# ----------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -8958,6 +8958,130 @@ sd(beta_cor_paired_cors)
 
 ```
 
+# LDA vs scRNAseq clusters
+
+```{r}
+
+# W_countsClean <- nmf_mod_mob_wt_countsClean_ls[[1]]@fit@W
+
+keep_genes <- colnames(scRNAseq_mob_cluster_gexp)[colnames(scRNAseq_mob_cluster_gexp) %in% colnames(mob_opt$beta)]
+length(keep_genes)
+
+```
+
+```{r}
+
+m1 <- scRNAseq_mob_cluster_gexp
+m2 <- mob_opt
+
+# -------------------------------------------------------
+# sl topics in W
+
+# make sure only the shared genes in the same order are used
+beta_cor <- correlationBetweenBetas(beta1 = m1[,keep_genes],
+                                      beta2 = m2$beta[,keep_genes])
+
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor,
+          # Rowv = m1$dendro,
+          # Colv = m2$dendro,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols),
+          # ColSideColors = as.vector(m2$ctcols),
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "scRNAseq vs sl_countsClean W beta",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+pairs <- lsatPairs(t(beta_cor))
+
+# recall the individual topics colored by their cluster.
+# when ordered based on matches and not dendro, colors will appear mixed
+par(mfrow=c(1,1), mar=c(8,8,3,2))
+heatmap.2(beta_cor[pairs$colsix, pairs$rowix],
+          Rowv = NULL,
+          Colv = NULL,
+          density.info = "none",
+          trace = "none",
+          # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+          # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+          col = correlation_palette,
+          breaks = correlation_breaks,
+          cexRow=1,cexCol=1,margins=c(6,3),
+          main = "scRNAseq vs sl_countsClean W beta paired",
+          lhei = c(1,3),
+          key.xlab = "Correlation",
+          key.title = NA)
+
+# correlations along diagonal (after assigning best matches)
+beta_cor_paired_cors <- diag(beta_cor[pairs$colsix, pairs$rowix])
+
+hist(beta_cor_paired_cors, breaks = 10)
+mean(beta_cor_paired_cors)
+sd(beta_cor_paired_cors)
+
+# # -------------------------------------------------------
+# # sl ct in ctBeta (from topic gene weights but combined wrt topic proportions in cell types)
+# 
+# m1 <- scRNAseq_mob_cluster_gexp
+# m2 <- sl_countsClean$ctBeta
+# 
+# # make sure only the shared genes in the same order are used
+# beta_cor <- correlationBetweenBetas(beta1 = m1[,keep_genes],
+#                                       beta2 = m2[,keep_genes])
+# 
+# par(mfrow=c(1,1), mar=c(8,8,3,2))
+# heatmap.2(beta_cor,
+#           # Rowv = m1$dendro,
+#           # Colv = m2$dendro,
+#           density.info = "none",
+#           trace = "none",
+#           # RowSideColors = as.vector(m1$cols),
+#           # ColSideColors = as.vector(m2$ctcols),
+#           col = correlation_palette,
+#           breaks = correlation_breaks,
+#           cexRow=1,cexCol=1,margins=c(6,3),
+#           main = "scRNAseq vs sl_countsClean ctBeta",
+#           lhei = c(1,3),
+#           key.xlab = "Correlation",
+#           key.title = NA)
+# 
+# pairs <- lsatPairs(beta_cor)
+# 
+# # recall the individual topics colored by their cluster.
+# # when ordered based on matches and not dendro, colors will appear mixed
+# par(mfrow=c(1,1), mar=c(8,8,3,2))
+# heatmap.2(beta_cor[pairs$rowix, pairs$colsix],
+#           Rowv = NULL,
+#           Colv = NULL,
+#           density.info = "none",
+#           trace = "none",
+#           # RowSideColors = as.vector(m1$cols)[pairs$rowix],
+#           # ColSideColors = as.vector(m2$ctcols)[pairs$colsix], # order now based on lsat
+#           col = correlation_palette,
+#           breaks = correlation_breaks,
+#           cexRow=1,cexCol=1,margins=c(6,3),
+#           main = "scRNAseq vs sl_countsClean ctBeta paired",
+#           lhei = c(1,3),
+#           key.xlab = "Correlation",
+#           key.title = NA)
+# 
+# # correlations along diagonal (after assigning best matches)
+# beta_cor_paired_cors <- diag(beta_cor[pairs$rowix, pairs$colsix])
+# 
+# hist(beta_cor_paired_cors, breaks = 10)
+# mean(beta_cor_paired_cors)
+# sd(beta_cor_paired_cors)
+
+
+
+```
+
+
 ```{r}
 
 m1 <- scRNAseq_mob_cluster_gexp
