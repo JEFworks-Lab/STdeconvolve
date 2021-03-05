@@ -1,58 +1,30 @@
-#' Convert a matrix to a long form data frame for easy plotting via ggplot2
-#' Jean: Brendan, please check if this function is necessary
-#' or could be replaced with reshape2::melt
+#' Visualize all topic proportions across spots with `scatterpie`
 #'
-#' @param mtx the matrix to be converted
-#' @param colLab df column label for the mtx columns
-#' @param rowLab df row label for the row labels
-#' @param cellLab label for the cell values
+#' @description Note: visualizes all topics in theta at once (could be
+#'     individual topics or topic clusters) so for accuracy of the proportions
+#'     of each topic in a spot, the row (spot) should sum to 1.
 #'
-mtx2ggplotDf <- function(mtx, colLab = "columns", rowLab = "rows", cellLab = "cells") {
-
-  if (is.null(colnames(mtx))) {
-    colvals <- 1:ncol(mtx)
-  } else {
-    colvals <- colnames(mtx)
-  }
-
-  if (is.null(rownames(mtx))) {
-    rowvals <- 1:nrow(mtx)
-  } else {
-    rowvals <- rownames(mtx)
-  }
-
-  dat <- data.frame(columns = factor(rep(colvals, dim(mtx)[1])), # columns
-                    rows = factor(rep(rowvals, each = dim(mtx)[2])), # rows
-                    cells = as.vector(t(mtx))) # cell values
-
-  colnames(dat) <- c(as.character(colLab),
-                     as.character(rowLab),
-                     as.character(cellLab))
-  return(dat)
-}
-
-
-#' Visualize topic proportions across spots with `scatterpie`
-#'
-#' @param theta document x topic proportion matrix
+#' @param theta document (spot) x topic proportion matrix
 #' @param pos position of documents, x and y columns
-#' @param topicOrder order of topics based on dendrogram; a numeric vector
-#'             from: (clusterTopics$order)
-#' @param cluster_cols vector of colors for each of the topics
-#'     can use factor of clusters for each topic (via clusterTopics$clusters)
-#'     as long as the cluster levels/values have been converted to colors.
-#'     This gets reordered wrt the topicOrder fyi.
-#' @param groups color spot piecharts based on a group or cell layer they belong to.
-#'          Needs to be a character vector. Ex: c("0", "1", "0", ...).
+#' @param topicOrder order of topics in theta to visualize as a numeric vector
+#'     and same length as topicCols ( default: seq(ncol(theta)) )
+#' @param topicCols vector of colors for each of the topics to be visualized.
+#'     Same length and order as topicOrder ( default: rainbow(ncol(theta)) )
+#' @param groups colors the spot piechart lines based on a group or cell layer
+#'     they belong to. Needs to be a character vector in the order of the spot
+#'     rows in theta. Ex: c("0", "1", "0", ...)
 #' @param group_cols color labels for the groups. Ex: c("0" = "gray", "1" = "red")
-#' @param r = radius of the circles. Adjust based on size of spots.
-#' @param lwd = width of lines of the pie charts
+#' @param r radius of the circles. Adjust based on size of spots. (default: 1)
+#' @param lwd width of lines of the pie charts. Increasing helps visualize
+#'     group_cols if being used.
+#' @param showLegend Boolean to show the legend indicating topics and their color
+#' @plotTitle add title to the resulting plot (default: NA)
 #'
 #' @export
 #'
 vizAllTopics <- function(theta, pos,
                          topicOrder=seq(ncol(theta)),
-                         cluster_cols=rainbow(ncol(theta)),
+                         topicCols=rainbow(ncol(theta)),
                          groups = NA,
                          group_cols = NA,
                          r = 1,
@@ -60,18 +32,13 @@ vizAllTopics <- function(theta, pos,
                          showLegend = TRUE,
                          plotTitle = NA) {
 
-  # reorder colors of topics wrt the dendrogram
-  #colors_ordered <- as.vector(cluster_cols[topicOrder])
-  colors_ordered <- cluster_cols
-
   # doc-topic distribution reordered based on topicOrder
   theta_ordered <- theta[, topicOrder]
   theta_ordered <- as.data.frame(theta_ordered)
   # colnames(theta_ordered) <- paste0("Topic.", topicOrder)
   colnames(theta_ordered) <- paste0("Topic.", colnames(theta_ordered))
 
-  # add columns with document positions
-  # colnames(pos) <- c("x", "y")
+  # add columns "x", "y" with document positions from `pos`
   theta_ordered_pos <- merge(data.frame(theta_ordered),
                              data.frame(pos), by=0)
 
@@ -83,13 +50,13 @@ vizAllTopics <- function(theta, pos,
   topicColumns <- colnames(theta_ordered_pos)[2:(dim(theta_ordered_pos)[2]-2)]
 
   # color of piechart groups (lines of piechart):
-  if (is.na(groups) == TRUE) {
+  if (is.na(groups[1]) == TRUE) {
     groups <- rep("0", dim(theta_ordered_pos)[1])
     theta_ordered_pos$groups <- groups
   } else {
     theta_ordered_pos$groups <- as.character(groups)
   }
-  if (is.na(group_cols) == TRUE) {
+  if (is.na(group_cols[1]) == TRUE) {
     group_cols <- c("0" = "gray")
   }
 
@@ -110,7 +77,7 @@ vizAllTopics <- function(theta, pos,
                     data = theta_ordered_pos,
                     cols = topicColumns,
                     legend_name = "Topics") +
-    scale_fill_manual(values=colors_ordered) +
+    scale_fill_manual(values = topicCols) +
     scale_color_manual(values = group_cols)
   coord_equal()
 
@@ -126,47 +93,56 @@ vizAllTopics <- function(theta, pos,
 }
 
 
-#' Visualize proportions of topic clusters
+#' Visualize proportions of topic clusters individually
+#' 
+#' @description Similar to `vizAllTopics` but will generate a separate plot for
+#'     each topic or topic-cluster where the other topics or clusters will be
+#'     colored gray. In this way, the actual proportions of each topic in a spot
+#'     will be maintained such that spot topic proportions still sum to 1.
 #'
-#' @param theta document topic proportion matrix
+#' @param theta document (spot) x topic proportion matrix
 #' @param pos position of documents, x and y columns
-#' @param topicOrder order of topics based on dendrogram; a numeric vector
-#' @param clusters factor of the color (topic cluster) each cluster is assigned to
-#'            In this case, the levels should be colors. In `vizAllTopics`,
-#'            clusters is "cluster_cols" and can just be a vector of colors.
-#' @param groups color spot piecharts based on a group or cell layer they belong to.
-#'          Needs to be a character vector. Ex: c("0", "1", "0", ...).
+#' @param clusters factor of the color (i.e., topic cluster) each cluster is
+#'     assigned to. In this case, the levels should be colors. In `vizAllTopics`,
+#'     clusters is "topicCols" and can just be a vector of colors.
+#' @sharedCol Boolean indicating if the topics ina cluster will be plotted with
+#'     the same color or if each topic will be colored by its own shade to also
+#'     show how the topics in a cluster are distributed in space wrt each other.
+#' @param groups colors the spot piechart lines based on a group or cell layer
+#'     they belong to. Needs to be a character vector in the order of the spot
+#'     rows in theta. Ex: c("0", "1", "0", ...)
 #' @param group_cols color labels for the groups. Ex: c("0" = "gray", "1" = "red")
-#' @param r = radius of the circles. Adjust based on size of spots.
-#'     40 = merfish; 0.4 = mOB
-#' @param lwd = width of lines of the pie charts
+#' @param r = radius of the circles. Adjust based on size of spots. (default: 1)
+#' @param lwd = width of lines of the pie charts. Increasing helps visualize
+#'     group_cols if being used.
+#' @param showLegend Boolean to show the legend indicating topics and their color
+#' @plotTitle add title to the resulting plot (default: NA)
 #'
 #' @export
 #'
-vizTopicClusters <- function(theta, pos, topicOrder, clusters,
+vizTopicClusters <- function(theta, pos, clusters,
+                             sharedCol = FALSE,
                              groups = NA,
                              group_cols = NA,
-                             sharedCol = FALSE,
-                             r = 40,
+                             r = 1,
                              lwd = 0.5,
+                             showLegend = TRUE,
                              plotTitle = NA) {
-
-  # reorder factor wrt the dendrogram
-  clusters_ordered <- clusters[topicOrder]
 
   print("Topic cluster members:")
   # produce a plot for each topic cluster:
   for (cluster in levels(clusters)) {
 
-    # select the topics in the cluster in the same order of the dendrogram
-    topics <- labels(clusters_ordered[which(clusters_ordered == cluster)])
+    # select the topics in the cluster
+    topics <- labels(clusters[which(clusters == cluster)])
 
     cat(cluster, ":", topics, "\n")
 
     # doc-topic distribution reordered based on topicOrder and selected cluster topics
     theta_ordered <- theta[, topics]
 
-    # get percentage of other topics not in cluster
+    # get percentage of other topics not in cluster to maintain actual
+    # spot proportions that sum to 1
     if (is.null(dim(theta_ordered))) {
       other <- 1 - theta_ordered
     } else {
@@ -179,10 +155,14 @@ vizTopicClusters <- function(theta, pos, topicOrder, clusters,
 
     # if any topics not represented at all, drop them
     # Apparently if a topic is 0 for all pie charts, it is not plotted
-    # and doesn't appear in the legend. So it messes with the colors.
+    # and doesn't appear in the legend and messes with the colors such that
     # "other" takes one of the colors of the topics and is not gray
-    theta_ordered <- theta_ordered[,which(!colSums(theta_ordered) == 0)]
-
+    if ( length(which(colSums(theta_ordered) == 0)) > 0 ) {
+      missing_topics <- colnames(theta_ordered)[which(colSums(theta_ordered) == 0)]
+      cat("NOTE:", missing_topics, "not present in any spots and will be dropped.", "\n")
+      theta_ordered <- theta_ordered[,which(!colSums(theta_ordered) == 0)]
+    }
+    
     # add columns with document positions
     rownames(theta_ordered) <- rownames(pos)
     theta_ordered_pos <- merge(data.frame(theta_ordered),
@@ -192,33 +172,42 @@ vizTopicClusters <- function(theta, pos, topicOrder, clusters,
     # problem is that data frame will replace "-" and " " with "."
     topicColumns <- colnames(theta_ordered_pos)[2:(dim(theta_ordered_pos)[2]-2)]
 
-    # get a hue of colors representing the cluster color
+    # get a hue of colors for each topic in topic-cluster
     if (sharedCol){
       color_ramp <- colorRampPalette(c(cluster, cluster))
     } else {
       color_ramp <- colorRampPalette(c(lighten(cluster, factor = 0.8), darken(cluster, factor = 1)))
     }
 
-    # topic_colors <- viridis_pal(option = "C")(length(blue_cluster))
-    topic_colors <- color_ramp(ncol(theta_ordered) - 1) # don't count "other"
-    topic_colors <- append(topic_colors, c("gray"))
+    topic_colors <- color_ramp(ncol(theta_ordered) - 1) # don't count "other" here
+    topic_colors <- append(topic_colors, c("gray")) # add gray to other here
 
     # color of piechart groups (lines of piechart):
-    if (is.na(groups) == TRUE) {
+    if (is.na(groups[1]) == TRUE) {
       groups <- rep("0", dim(theta_ordered_pos)[1])
       theta_ordered_pos$groups <- groups
     } else {
       theta_ordered_pos$groups <- as.character(groups)
     }
-    if (is.na(group_cols) == TRUE) {
+    if (is.na(group_cols[1]) == TRUE) {
       group_cols <- c("0" = "gray")
     }
 
     p <- ggplot() +
-      theme(panel.background = element_rect(fill = "black"),
-            panel.grid = element_blank()) +
+      # theme(panel.background = element_rect(fill = "black"),
+      #       panel.grid = element_blank()) +
       # theme_classic() +
-      geom_scatterpie(aes(x=x, y=y, group=Row.names, r = r, color = groups), # r=40 for MERFISH 0.4 mOB
+      theme(
+        #panel.background = element_rect(fill = "white"),
+        panel.grid = element_blank(),
+        axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()) +
+      geom_scatterpie(aes(x=x, y=y, group=Row.names, r = r, color = groups),
                       lwd = lwd,
                       data=theta_ordered_pos,
                       cols = topicColumns,
@@ -227,6 +216,10 @@ vizTopicClusters <- function(theta, pos, topicOrder, clusters,
       scale_fill_manual(values=topic_colors) +
       scale_color_manual(values = group_cols)
 
+    if (showLegend == FALSE) {
+      p <- p + guides(fill=FALSE)
+    }
+    
     if (is.na(plotTitle) == FALSE) {
       p <- p + ggtitle(plotTitle)
     }
@@ -236,22 +229,31 @@ vizTopicClusters <- function(theta, pos, topicOrder, clusters,
 }
 
 
-# visualize gene counts in spots in space. Also see group assignment of
-# spots.
-#
-# df = data.frame where rows are spots and columns must be at least:
-#      "x", "y" for spot positions in space
-#      "gene" counts of a gene for each spot
-#
-# gene = column name of the gene counts in df to be visualized
-#
-# groups = a character vector of labels assigning spots to different groups.
-#          Ex: c("0", "1", "0", ...).
-# group_cols = a vector designating the spot border color to be used for
-#              group assignment. Ex: c("0" = "gray", "1" = "red").
-#
+#' Visualize gene counts in spots in space. Can also see group assignment of
+#' spots.
+#' 
+#' @description Note: visualized one gene at a time. Can set up a loop to plot
+#'    a different gene column in df individually.
+#'
+#' @param df data.frame where rows are spots and columns must be at least:
+#'      "x", "y" for spot positions in space and "gene" column that is counts
+#'      of a gene for each spot.
+#' @param gene column name of the gene counts in df to be visualized
+#' @param groups colors the spots lines based on a group or cell layer
+#'     they belong to. Needs to be a character vector in the order of the spot
+#'     rows in df. Ex: c("0", "1", "0", ...)
+#' @param group_cols color labels for the groups. Ex: c("0" = "gray", "1" = "red")
+#' @param size size of the geom_points to plot (default: 7)
+#' @param stroke thickness of the geom_point lines to help in emphasizing groups
+#'     (default: 2)
+#' @param plotTitle option to add a title to the plot
+#' @param showLegend Boolean to show the plot legend
+#' 
+#' @export
+#'
 vizGeneCounts <- function(df, gene,
-                          groups = NA, group_cols = NA,
+                          groups = NA,
+                          group_cols = NA,
                           size = 7, stroke = 2,
                           plotTitle = NA,
                           showLegend = TRUE) {
@@ -274,16 +276,15 @@ vizGeneCounts <- function(df, gene,
                shape = 21,
                stroke = stroke, size = size) +
     scale_fill_viridis(option = "A", direction = -1) +
-    scale_color_manual(values = group_cols) +
-    ggtitle("Granule txn C1")
-
+    scale_color_manual(values = group_cols)
+  
   if (showLegend == FALSE) {
     p <- p + guides(fill=FALSE)
   }
   if (is.na(plotTitle) == FALSE) {
     p <- p + ggtitle(plotTitle)
   }
-
+  
   p <- p + theme_classic()
   print(p)
 }

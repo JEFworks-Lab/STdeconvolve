@@ -148,9 +148,9 @@ getBetaTheta <- function(lda) {
 #'
 #' @return A list that contains
 #' \itemize{
-#' \item order = vector of the dendrogram index order for the topics
-#' \item clusters = factor of the topics (names) and their assigned cluster (levels)
-#' \item dendro = dendrogram of the clusters
+#' \item order: vector of the dendrogram index order for the topics
+#' \item clusters: factor of the topics (names) and their assigned cluster (levels)
+#' \item dendro: dendrogram of the clusters
 #' }
 #'
 #' @export
@@ -218,14 +218,14 @@ clusterTopics <- function(beta,
 #' Collapse topics in the same cluster into a single topic
 #' 
 #' @description Note: for the beta matrix, each row is a topic, each column
-#' is a gene. The topic row is a distribution of terms that sums to 1. So
-#' combining topic row vectors, these should be adjusted such that the
-#' rowSum == 1. As in, take average of the terms after combining. However, the
-#' theta matrix (after inversion) will have topic rows and each column is a
-#' document. Because the topic can be represented at various proportions in
-#' each doc and these will not necessarily add to 1, should not take average.
-#' Just sum topic row vectors together. This way, each document column still
-#' adds to 1 when considering the proportion of each topic-cluster in the document.
+#'     is a gene. The topic row is a distribution of terms that sums to 1. So
+#'     combining topic row vectors, these should be adjusted such that the
+#'     rowSum == 1. As in, take average of the terms after combining. However, the
+#'     theta matrix (after inversion) will have topic rows and each column is a
+#'     document. Because the topic can be represented at various proportions in
+#'     each doc and these will not necessarily add to 1, should not take average.
+#'     Just sum topic row vectors together. This way, each document column still
+#'     adds to 1 when considering the proportion of each topic-cluster in the document.
 #' 
 #' @param mtx either a beta (topic-gene distribution matrix) or a
 #'     theta (spot-topic distribution matrix)
@@ -310,6 +310,11 @@ optimalModel <- function(models, opt) {
 #' theta (spot-topic distribution) for individual topic and combined topic-clusters
 #' for an LDA model in `fitLDA` output list.
 #' 
+#' @description combines the functions `getBetaTheta`, `clusterTopics`,
+#'     `combineTopics` and slots of the topicmodels::LDA object to return a list
+#'     that contains the most relevant components of a given LDA model for ease
+#'     of analysis and visualization.
+#' 
 #' @param LDAmodel LDA model from fitLDA
 #' @param deepSplit parameter for `clusterTopics` for dynamic tree splitting
 #'     when clustering topics (default: 4)
@@ -325,11 +330,13 @@ optimalModel <- function(models, opt) {
 #'     is the topic composition for a given spot
 #' \item topicFreq: overall proportion of each topic in the entire corpus of
 #'     spots
-#' \item clusters = factor of the topics (names) and their assigned cluster (levels)
-#' \item dendro = dendrogram of the clusters
-#' \item cols = factor of colors for each topic where colors correspond to their assigned cluster
-#' \item betaCombn = topic (rows) by gene (columns) distribution matrix for combined topic-clusters
-#' \item thetaCombn = spot (rows) by topic (columns) distribution matrix for combined topic-clusters
+#' \item clusters: factor of the topics (names) and their assigned cluster (levels)
+#' \item dendro: dendrogram of the clusters
+#' \item cols: factor of colors for each topic where colors correspond to their assigned cluster
+#' \item betaCombn: topic (rows) by gene (columns) distribution matrix for combined topic-clusters
+#' \item thetaCombn: spot (rows) by topic (columns) distribution matrix for combined topic-clusters
+#' \item clustCols: factor of colors for each topic-cluster
+#' \item k: number of topics K of the model
 #' }
 #'
 #' @export
