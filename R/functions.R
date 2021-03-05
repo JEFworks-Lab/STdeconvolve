@@ -36,8 +36,15 @@ restrictCorpus <- function(counts,
 
 
 #' Find the optimal number of topics K for topic modeling
+#' 
+#' @description The input for topicmodels::LDA needs to be a
+#'     slam::as.simple_triplet_matrix (docs x words). Access a given model in
+#'     the returned list via: lda$models[[k]][1]. The models are objects from
+#'     the library `topicmodels`. The LDA models have slots with additional
+#'     information.
 #'
-#' @param counts Gene expression counts with genes as rows
+#' @param counts Gene expression counts with genes as rows or
+#'     slam::simple_triplet_matrix where spots were rows and genes were columns
 #' @param Ks vector of K parameters to search
 #' @param seed Random seed
 #' @param ncores Number of cores for parallelization
@@ -45,7 +52,7 @@ restrictCorpus <- function(counts,
 #'
 #' @return A list that contains
 #' \itemize{
-#' \item models: each fitted LDA model
+#' \item models: each fitted LDA model for a given K
 #' \item kOpt1: the optimal K based on Kneed algorithm
 #' \item kOpt2: the optimal K based on minimum
 #' \item perplexities: perplexity scores for each model
@@ -58,12 +65,14 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
                    ncores = parallel::detectCores(logical = TRUE) - 1,
                    plot = TRUE) {
 
-  # topic modeling
-  corpus <- slam::as.simple_triplet_matrix(t(as.matrix(counts)))
-
+  if (slam::is.simple_triplet_matrix(counts) == TRUE){
+    corpus <- counts
+  } else {
+    corpus <- slam::as.simple_triplet_matrix(t(as.matrix(counts)))
+  }
+  
   controls <- list(seed = seed,
-                   verbose = 1, keep = 1,
-                   alpha = 1, estimate.alpha = TRUE)
+                   verbose = 1, keep = 1, estimate.alpha = TRUE)
 
   fitted_models <- parallel::mclapply(Ks, function(k) {
     topicmodels::LDA(corpus, k=k, control = controls)
@@ -96,30 +105,41 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
 }
 
 
-#' Pull out topics and terms from fitted topic models from fitLDA
-#' Jean: Brendan, the use of theta and beta vs topics and terms
-#' across different functions is quite confusing
-#' Please update for consistency
+#' Pull out topic proportions across spots (theta) and
+#' topic gene probabilities (beta) matrices from fitted topic models from fitLDA
+#' 
+#' @param lda an LDA model from `topicmodels`. From list of models returned by
+#'     fitLDA
+#'
+#' @return A list that contains
+#' \itemize{
+#' \item beta: topic (rows) by gene (columns) distribution matrix.
+#'     Each row is a probability distribution of a topic expressing each gene
+#'     in the corpus
+#' \item theta: spot (rows) by topics (columns) distribution matrix. Each row
+#'     is the topic composition for a given spot
+#' \item topicFreq: overall proportion of each topic in the entire corpus of
+#'     spots
+#' }
 #'
 #' @export
 #'
 getBetaTheta <- function(lda) {
 
-  lda.tmResult <- topicmodels::posterior(lda)
-  theta <- lda.tmResult$topics
-  beta <- lda.tmResult$terms
+  result <- topicmodels::posterior(lda)
+  theta <- result$topics
+  beta <- result$terms
   topicFreqsOverall <- colSums(theta) / length(lda@documents)
 
   return(list(beta = beta,
               theta = theta,
               topicFreq = topicFreqsOverall))
-
 }
 
 
 #' Cluster topics together using dynamic tree cutting.
 #'
-#' @param beta Beta matrix (topic-word distributions)
+#' @param beta Beta matrix (topic-gene distribution matrix)
 #' @param distance Distance measure to be used (default: euclidean)
 #' @param clustering Clustering agglomeration method to be used (default: ward.D)
 #' @param dynamic Dynamic tree cutting method to be used (default: hybrid)
@@ -195,56 +215,58 @@ clusterTopics <- function(beta,
 }
 
 
-#' combine topics within same cluster.
-#' the term beta distriubtions are added
-#' or the theta document proportions are added
-#'
-#' mtx = needs to be topic (row) x feature (term or document) (column) format
-#' clusters = factor of the topics (names) and their assigned cluster (levels)
-#'
-#' mtxType = either "b" (beta) or "t" (theta). Affects the adjustment to the
-#'           combined topic vectors. "b" divides summed topic vectors by number
-#'           of combined topics.
-#'
-combineTopics <- function(mtx, clusters, mtxType) {
-
-  if (mtxType == "t") {
+#' Collapse topics in the same cluster into a single topic
+#' 
+#' @description Note: for the beta matrix, each row is a topic, each column
+#' is a gene. The topic row is a distribution of terms that sums to 1. So
+#' combining topic row vectors, these should be adjusted such that the
+#' rowSum == 1. As in, take average of the terms after combining. However, the
+#' theta matrix (after inversion) will have topic rows and each column is a
+#' document. Because the topic can be represented at various proportions in
+#' each doc and these will not necessarily add to 1, should not take average.
+#' Just sum topic row vectors together. This way, each document column still
+#' adds to 1 when considering the proportion of each topic-cluster in the document.
+#' 
+#' @param mtx either a beta (topic-gene distribution matrix) or a
+#'     theta (spot-topic distribution matrix)
+#' @param clusters factor of the topics (names) and their assigned cluster (levels)
+#' @param type either "t" or "b". Affects the adjustment to the combined
+#'     topic vectors. "b" divides summed topic vectors by number of combined topics.
+#' 
+#' @return matrix where topics are now topic-clusters
+#' 
+#' @export
+combineTopics <- function(mtx, clusters, type) {
+  
+  if (!type %in% c("t", "b")){
+    stop("`type` must be either 't' or 'b'")
+  }
+  
+  # if mtx is theta, transpose so topics are rows
+  if (type == "t") {
     mtx <- t(mtx)
   }
 
   combinedTopics <- do.call(rbind, lapply(levels(clusters), function(cluster) {
-    # select the topics in the cluster in the same order of the dendrogram
+    
+    # get topics in a given cluster
     topics <- labels(clusters[which(clusters == cluster)])
 
     print(cluster)
     print(length(topics))
 
-    # topic-term distribution reordered based on dendro and selected cluster topics
+    # matrix slice for the topics in the cluster
     mtx_slice <- mtx[topics,]
 
     if (length(topics) == 1) {
       topicVector <- mtx_slice
     } else if (length(topics) > 1) {
       mtx_slice <- as.data.frame(mtx_slice)
-
-      # for the beta matrix, each row is a topic, each column is a gene.
-      # The topic row is a distribution of terms that sums to 1.
-      # So combining topic row vectors, these should be adjusted such that the
-      # rowSum == 1. As in, take average of the terms after combining.
-
-      # However, the theta matrix (after inversion) will have topic rows
-      # and each column is a document. Because the topic can be represented
-      # at various proportions in each doc and these will not necessarily add
-      # to 1, should not take average. Just sum topic row vectors together.
-      # This way, each document column still adds to 1 when considering the
-      # proportion of each topic-cluster that makes up each the document.
-
-      if (mtxType == "b") {
+      if (type == "b") {
         topicVector <- colSums(mtx_slice) / length(topics)
-      } else if (mtxType == "t") {
+      } else if (type == "t") {
         topicVector <- colSums(mtx_slice)
       }
-
     }
     topicVector
 
@@ -252,12 +274,109 @@ combineTopics <- function(mtx, clusters, mtxType) {
   rownames(combinedTopics) <- levels(clusters)
   colnames(combinedTopics) <- colnames(mtx)
   print("topics combined.")
-
-  if (mtxType == "t") {
+  
+  # if theta, make topics the columns again
+  if (type == "t") {
     combinedTopics <- t(combinedTopics)
   }
-
   return(combinedTopics)
 }
+
+
+#' Get the optimal LDA model
+#' 
+#' @param models list returned from fitLDA
+#' @param opt either "kneed" (kOpt1) or "min" (kOpt2)
+#' 
+#' @return optimal LDA model fitted to the K based on `opt`
+#' 
+#' @export
+optimalModel <- function(models, opt) {
+  
+  if (!opt %in% c("kneed", "min")){
+    stop("`opt` must be either 'kneed' or 'min'")
+  }
+  if (opt == "kneed"){
+    m <- models$models[[which(sapply(models$models, slot, "k") == models$kOpt1)]]
+  }
+  if (opt == "min"){
+    m <- models$models[[which(sapply(models$models, slot, "k") == models$kOpt2)]]
+  }
+  return(m)
+}
+
+
+#' Wrapper to extract beta (topic-gene distribution matrix),
+#' theta (spot-topic distribution) for individual topic and combined topic-clusters
+#' for an LDA model in `fitLDA` output list.
+#' 
+#' @param LDAmodel LDA model from fitLDA
+#' @param deepSplit parameter for `clusterTopics` for dynamic tree splitting
+#'     when clustering topics (default: 4)
+#' @param colorScheme color scheme for generating colors assigned to topic
+#'     clusters for visualizing. Either "rainbow" or "ggplot" (default: "rainbow")
+#' 
+#' @return A list that contains
+#' \itemize{
+#' \item beta: topic (rows) by gene (columns) distribution matrix.
+#'     Each row is a probability distribution of a topic expressing each gene
+#'     in the corpus
+#' \item theta: spot (rows) by topics (columns) distribution matrix. Each row
+#'     is the topic composition for a given spot
+#' \item topicFreq: overall proportion of each topic in the entire corpus of
+#'     spots
+#' \item clusters = factor of the topics (names) and their assigned cluster (levels)
+#' \item dendro = dendrogram of the clusters
+#' \item cols = factor of colors for each topic where colors correspond to their assigned cluster
+#' \item betaCombn = topic (rows) by gene (columns) distribution matrix for combined topic-clusters
+#' \item thetaCombn = spot (rows) by topic (columns) distribution matrix for combined topic-clusters
+#' }
+#'
+#' @export
+buildLDAobject <- function(LDAmodel,
+                           deepSplit = 4,
+                           colorScheme = "rainbow"){
+  
+  # get beta and theta list object from the LDA model
+  m <- getBetaTheta(LDAmodel)
+  
+  # cluster topics
+  clust <- clusterTopics(beta = m$beta,
+                         deepSplit = deepSplit)
+  
+  # add cluster information to the list
+  m$clusters <- clust$clusters
+  m$dendro <- clust$dendro
+  
+  # colors for the topics. Essentially colored by the cluster they are in
+  cols <- m$clusters
+  if (colorScheme == "rainbow"){
+    levels(cols) <- rainbow(length(levels(cols)))
+  }
+  if (colorScheme == "ggplot"){
+    levels(cols) <- gg_color_hue(length(levels(cols)))
+  }
+  m$cols <- cols
+  
+  # construct beta and thetas for the topic clusters
+  m$betaCombn <- combineTopics(m$beta, clusters = m$clusters, type = "b")
+  m$thetaCombn <- combineTopics(m$theta, clusters = m$clusters, type = "t")
+  
+  # colors for the topic clusters
+  # separate factor for ease of use with vizTopicClusters and others
+  # note that these color assignments are different than the
+  # cluster color assignments in the levels of `cols`
+  clusterCols <- as.factor(colnames(m$thetaCombn))
+  names(clusterCols) <- colnames(m$thetaCombn)
+  levels(clusterCols) <- levels(m$cols)
+  m$clustCols <- clusterCols
+  
+  m$k <- LDAmodel@k
+  
+  return(m)
+  
+}
+
+
 
 
