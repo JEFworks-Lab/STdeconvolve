@@ -182,9 +182,9 @@ clusterTopics <- function(beta,
   #d_ <- dist(beta, method = distance)
   ## Jean: use correlation instead
   d_ <- as.dist(1-cor(t(beta)))
-  hc_ <- hclust(d_, method = clustering)
+  hc_ <- stats::hclust(d_, method = clustering)
 
-  groups <- cutreeDynamic(hc_,
+  groups <- dynamicTreeCut::cutreeDynamic(hc_,
                           method = dynamic,
                           distM = as.matrix(d_),
                           deepSplit = deepSplit,
@@ -331,7 +331,7 @@ optimalModel <- function(models, opt) {
 #' \item topicFreq: overall proportion of each topic in the entire corpus of
 #'     spots
 #' \item clusters: factor of the topics (names) and their assigned cluster (levels)
-#' \item dendro: dendrogram of the clusters
+#' \item dendro: dendrogram of the clusters. Returned from `stats::hclust()` in `clusterTopics`
 #' \item cols: factor of colors for each topic where colors correspond to their assigned cluster
 #' \item betaCombn: topic (rows) by gene (columns) distribution matrix for combined topic-clusters
 #' \item thetaCombn: spot (rows) by topic (columns) distribution matrix for combined topic-clusters
@@ -385,5 +385,38 @@ buildLDAobject <- function(LDAmodel,
 }
 
 
-
+#' Function to get Hungarian sort pairs via clue::lsat
+#' 
+#' @description Finds best matches between topics that correlate between
+#'     beta or theta matrices that have been compared via `getCorrMtx`.
+#'     Each row is paired with a column in the output matrix from `getCorrMtx`.
+#'     If there are less rows than columns, then some columns will not be
+#'     matched and not part of the output.
+#' 
+#' @param mtx output correlation matrix from `getCorrMtx`. Must not have more rows
+#'     than columns
+#' 
+#' @return A list that contains
+#' \itemize{
+#' \item pairs: output of clue::solve_LSAP. A vectorized object where for each
+#'     position the first element is a row and the second is the paired column.
+#' \item rowix: the indices of the rows. Essentially seq_along(pairing)
+#' \item colsix: the indices of each column paired to each row
+#' }
+#' 
+#' @export
+#' 
+lsatPairs <- function(mtx){
+  # must have equal or more rows than columns
+  # values in matrix converted to 0-1 scale relative to all values in mtx
+  pairing <- clue::solve_LSAP(scale0_1(mtx), maximum = TRUE)
+  # clue::lsat returns vector where for each position the first element is a row
+  # and the second is the paired column
+  rowsix <- seq_along(pairing)
+  colsix <- as.numeric(pairing)
+  
+  return(list(pairs = pairing,
+              rowix = rowsix,
+              colsix = colsix))
+}
 
