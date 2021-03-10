@@ -137,9 +137,9 @@ scale0_1 <- function(x) {
 #' 
 #' @return A list that contains
 #' \itemize{
-#' \item corpus = (spots x genes) matrix of the counts of the selected genes 
-#' \item slm = slam::as.simple_triplet_matrix(corpus); required format for topicmodels::LDA input
-#' \item positions = matrix of x and y coordinates of spots. rownames = spots, colnames = "x", "y"
+#' \item corpus: (spots x genes) matrix of the counts of the selected genes 
+#' \item slm: slam::as.simple_triplet_matrix(corpus); required format for topicmodels::LDA input
+#' \item positions: matrix of x and y coordinates of spots. rownames = spots, colnames = "x", "y"
 #' }
 #' 
 #' @export
@@ -147,7 +147,7 @@ preprocess <- function(dat,
                        alignFile = NA,
                        extractPos = FALSE,
                        selected.genes = NA,
-                       nTopGenes = NA
+                       nTopGenes = NA,
                        genes.to.remove = NA,
                        perc.spots = NA,
                        min.reads = 100,

@@ -1,0 +1,586 @@
+---
+title: "Figure1_proof_of_concept"
+author: "Brendan F. Miller"
+date: "3/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# MERFISH mPOA
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mpoa_merfish_clean.RData")
+# has `annot.table`, `counts`, and `features` objects
+
+# annot.table: table of the individual cells and data like coordinates, cell types, bregma, animal
+# features: has cells and additional features. Also dataset they belong to
+# counts: gene counts of cell in annot.table for 130 merfish genes profiled
+
+# unique(features$dataset_name)
+#  [1] "170908_FN3_2_M22_M26"    "170917_MN1_1pp_M22_M26" 
+#  [3] "170919_FN4_1_M22_M26"    "170921_FN4_2_M22_M26"   
+#  [5] "170923_FN4_1pp_M22_M26"  "170925_MN2_1p_M22_M26"  
+#  [7] "171021_FN7_2_M22_M26"    "171023_FN7_1_M22_M26"   
+#  [9] "171024_MN5_2p_M22_M26"   "171027_MN5_1p_M22_M26"  
+# [11] "171104_MN6_2_M22_M26"    "171112_MN8_2pppp"       
+# [13] "171114_MN8_M22_M26_2pp"  "171208_MN9_2ppp_M22_M26"
+# [15] "171118_BD3_1pp"          "171119_BD5_1pp"         
+# [17] "171121_BD5_1"            "171123_BD5_2p"          
+# [19] "171124_BD6_2ppp"         "171126_BD6_1pppp"       
+# [21] "171128_BD7_1ppp"         "171129_BD7_1ppp_actual" 
+# [23] "171201_BD_2ppp"          "171203_BD8_1pp"         
+# [25] "171210_BD9_1pp"          "171211_BD9_2ppp_M22_M26"
+# [27] "171214_BD10_2_M22_M26"   "171216_BD11_1_M22_M26"  
+# [29] "171217_BD11_2_M22_M26"   "171219_BD12_1p_M22_M26" 
+# [31] "171221_BD12_2p_M22_M26"  "171223_BD13_2p_M22_M26" 
+
+```
+
+Simulate ST spots for each bregma slice for a given MERFISH experiment data set
+
+171021_FN7_2_M22_M26
+
+```{r}
+
+# select cells that are part of given data set:
+selected_cells <- rownames(features)[features$dataset_name %in% c('171021_FN7_2_M22_M26')]
+
+spatial_position_and_class <- annot.table[selected_cells,
+                                          c('Centroid_X', 'Centroid_Y', 'Bregma', "Cell_class", "Neuron_cluster_ID")]
+
+# remove rows with NA
+spatial_position_and_class <- na.omit(spatial_position_and_class) 
+
+```
+
+```{r}
+
+# reduce set of major cell class labels. Convert OD types to "OD" and
+# "Endothelial types to "Endothelial"
+spatial_position_and_class[grep(pattern = "OD",
+                                x = spatial_position_and_class$Cell_class),]$Cell_class <- "OD"
+
+spatial_position_and_class[grep(pattern = "Endothelial",
+                                x = spatial_position_and_class$Cell_class),]$Cell_class <- "Endothelial"
+
+# number of cells in the experiment across bregmas
+dim(spatial_position_and_class)
+# [1] 36329     5
+
+# gene counts for individual cells
+bregmaCellsGexp <- counts[rownames(spatial_position_and_class),]
+
+# remove "Blanks" from data
+bregmaCellsGexp <- bregmaCellsGexp[,!grepl("Blank", colnames(bregmaCellsGexp))]
+
+```
+
+```{r}
+
+# to expand to neuronal subtypes, make a secondary vector of "Cell_class" where
+# "Excitatory and "Inhibitory" are replaces with the respective "Neuron_cluster_ID"
+
+Cell_class_major <- spatial_position_and_class$Cell_class
+
+Cell_class_with_neuronal <- unlist(lapply(rownames(spatial_position_and_class), function(cell){
+  class <- spatial_position_and_class[cell,]$Cell_class
+  neuron <- spatial_position_and_class[cell,]$Neuron_cluster_ID
+  if (neuron != ""){
+    i <- neuron
+  } else {
+    i <- class
+  }
+  i
+}))
+
+length(Cell_class_with_neuronal)
+
+```
+
+The `buildBregmaCorpus` output contains a "gtCtGenes" ground truth cell type - gene expression matrix, but this is built by combining cells of the same Cell_class in the given bregma (and therefore may also be missing reference for cell types not present).
+
+Let's also make a reference using all the cells across the bregmas.
+
+```{r}
+
+cellTypes <- spatial_position_and_class$Cell_class
+cells <- rownames(spatial_position_and_class)
+
+mat <- bregmaCellsGexp[cells,]
+mm <- model.matrix(~ 0 + factor(cellTypes))
+colnames(mm) <- levels(factor(cellTypes))
+gtCtGenes <- t(t(as.matrix(mat)) %*% mm)
+# remove "Blanks" from data:
+# gtCtGenes <- gtCtGenes[,!grepl("Blank", colnames(gtCtGenes))]
+gtCtGenes <- gtCtGenes/rowSums(gtCtGenes)
+
+dim(gtCtGenes)
+
+```
+
+```{r}
+
+# simulate spots for each bregma and contain in a hash table
+FN7_2_M22_M26 <- simulateBregmaSpots(spatial_position_and_class,
+                                          counts = bregmaCellsGexp,
+                                          patch_size = 100)
+
+# now simulate but use all the neural types as well
+spatial_position_and_class$Cell_class <- Cell_class_with_neuronal
+FN7_2_M22_M26_neuro <- simulateBregmaSpots(spatial_position_and_class,
+                                          counts = bregmaCellsGexp,
+                                          patch_size = 100)
+
+```
+
+Let's also make a reference for all of the cell types including the neuronal ones
+
+```{r}
+
+cellTypes <- spatial_position_and_class$Cell_class
+cells <- rownames(spatial_position_and_class)
+
+mat <- bregmaCellsGexp[cells,]
+mm <- model.matrix(~ 0 + factor(cellTypes))
+colnames(mm) <- levels(factor(cellTypes))
+gtCtNeuronalGenes <- t(t(as.matrix(mat)) %*% mm)
+# remove "Blanks" from data:
+# gtCtNeuronalGenes <- gtCtNeuronalGenes[,!grepl("Blank", colnames(gtCtNeuronalGenes))]
+gtCtNeuronalGenes <- gtCtNeuronalGenes/rowSums(gtCtNeuronalGenes)
+
+dim(gtCtNeuronalGenes)
+
+```
+
+Construct corpuses using the simulations with the 9 major cell classes, or expanded to all of the neuronal subtypes
+
+```{r}
+
+simBregmas <- lapply(keys(FN7_2_M22_M26), function(ix){
+  bregmma <- buildBregmaCorpus(hashTable = FN7_2_M22_M26, 
+                                bregmaID = ix)
+  print(bregma04$sim)
+  print(dim(bregmma$gtSpotTopics))
+  print(dim(bregmma$gtCtGenes))
+  bregmma
+})
+names(simBregmas) <- keys(FN7_2_M22_M26)
+
+simBregmas_neuro <- lapply(keys(FN7_2_M22_M26_neuro), function(ix){
+  bregmma <- buildBregmaCorpus(hashTable = FN7_2_M22_M26_neuro, 
+                                bregmaID = ix)
+  print(bregma04$sim)
+  print(dim(bregmma$gtSpotTopics))
+  print(dim(bregmma$gtCtGenes))
+  bregmma
+})
+names(simBregmas_neuro) <- keys(FN7_2_M22_M26_neuro)
+
+```
+
+Recall that the `$gtSpotTopics` are of primary interest to compare the fitted models to for each bregma. The `$gtCtGenes` for these corpuses are based only using the cells that were in the given bregma and in simulated patches.
+
+
+When comparing to reference-dependent methods, could use a single scRNAseq reference made from all of the individual cells in `bregmaCellsGexp`. Or for each bregma, can make a reference based on the individual cells that were present in the spots. So that the models are restricted to the identical data that the LDA is presented,
+
+```{r}
+
+# "scRNAseq" reference using all the cells:
+bregmaFullSeur <- CreateSeuratObject(counts = t(bregmaCellsGexp), project = "bregmaFull scRNAseq Ref")
+
+# add cell class labels to the meta.data for assigning clusters later
+bregmaFullSeur[["Major_class"]] <- Cell_class_major
+bregmaFullSeur[["All_classes"]] <- Cell_class_with_neuronal
+
+```
+
+```{r}
+
+# if using a "scRNAseq" reference for a given bregma in order to restrict to the same data as LDA:
+
+# vectors of the class labels for the cells in the bregma patches:
+breg_Cell_class_major <- simBregmas$`-0.04`$annotDf$Cell_class
+breg_Cell_class_with_neuronal <- unlist(lapply(rownames(simBregmas$`-0.04`$annotDf), function(cell){
+  class <- simBregmas$`-0.04`$annotDf[cell,]$Cell_class
+  neuron <- simBregmas$`-0.04`$annotDf[cell,]$Neuron_cluster_ID
+  if (neuron != ""){
+    i <- neuron
+  } else {
+    i <- class
+  }
+  i
+}))
+
+# cells in the bregma patches:
+breg_patch_cells <- rownames(simBregmas$`-0.04`$annotDf)
+
+# the gene counts for the bregma patch cells
+breg_scRNAseq <- FN7_2_M22_M26[["-0.04"]]$cellGexp[breg_patch_cells,]
+
+# "scRNAseq" reference using all the cells:
+bregmaSeur <- CreateSeuratObject(counts = t(breg_scRNAseq), project = "bregma scRNAseq Ref")
+
+# add cell class labels to the meta.data for assigning clusters later
+bregmaSeur[["Major_class"]] <- breg_Cell_class_major
+bregmaSeur[["All_classes"]] <- breg_Cell_class_with_neuronal
+
+```
+
+# MOB
+
+Using the mOB from MERIGNUE and the 12 Stahl et al mOB replicates (13 total data sets), find a common set of genes to use in the corpus for each replicate so that they can be compared equally
+
+```{r}
+
+data(mOB) # from `MERIGNUE`
+cd <- mOB$counts # 15928 genes   262 spots
+
+```
+
+```{r}
+
+# list of either the mob data sets or paths to the data for inputs into `preprocess`
+
+mob_paths <- list()
+mob_paths[[1]] <- t(cd) # preprocess input needs to be spot x genes
+
+# paths to Stahl data:
+p <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/"
+stahlMobDatPaths <- list.files(path = p, pattern = "*MOB_count_matrix-1.tsv", full.names = FALSE)
+# add to the list
+i <- 1
+while(i < length(stahlMobDatPaths) + 1){
+  mob_paths[[i+1]] <- paste0(p, stahlMobDatPaths[i])
+  i <- i + 1
+}
+
+```
+
+```{r}
+
+mobRepGenes <- lapply(mob_paths, function(p) {
+  dat <- preprocess(p,
+                   alignFile = NA,
+                   extractPos = FALSE,
+                   selected.genes = NA,
+                   nTopGenes = NA,
+                   genes.to.remove = NA,
+                   perc.spots = NA,
+                   min.reads = 100,
+                   min.lib.size = 100,
+                   ODgenes = TRUE, # select the overdispersed genes
+                   od.genes.alpha = 0.25, # increase due to filtering by intersection of reps
+                   gam.k = 5)
+  colnames(dat$corpus)
+})
+
+commonMobGenes <- Reduce(intersect, mobRepGenes)
+length(commonMobGenes)
+
+```
+
+Now construct corpuses for each mob dataset using the common set of mob genes
+
+```{r}
+
+# first do the Stahl data because can get positional information from the spot IDs
+mobCorpus <- lapply(mob_paths[2:13], function(p) {
+  dat <- preprocess(p,
+                   alignFile = NA,
+                   extractPos = TRUE,
+                   selected.genes = commonMobGenes,
+                   nTopGenes = NA,
+                   genes.to.remove = NA,
+                   perc.spots = NA,
+                   min.reads = 100,
+                   min.lib.size = 100,
+                   ODgenes = FALSE,
+                   od.genes.alpha = 0.05, # ODgenes ignored; so is this
+                   gam.k = 5) # ODgenes ignored; so is this
+  dat
+})
+
+names(mobCorpus) <- unlist(strsplit(stahlMobDatPaths, "_MOB_count_matrix-1.tsv"))
+
+```
+
+```{r}
+
+# now do the MERINGUE mob. Positions added in separately
+mobCorpus[["mob"]] <- preprocess(mob_paths[[1]],
+                                 alignFile = NA,
+                                 extractPos = FALSE,
+                                 selected.genes = commonMobGenes,
+                                 nTopGenes = NA,
+                                 genes.to.remove = NA,
+                                 perc.spots = NA,
+                                 min.reads = 100,
+                                 min.lib.size = 100,
+                                 ODgenes = FALSE,
+                                 od.genes.alpha = 0.05, # ODgenes ignored; so is this
+                                 gam.k = 5) # ODgenes ignored; so is this
+
+# positions already included in `mOB$pos` but make sure only use the filtered positions in the corpus
+mobCorpus[["mob"]]$pos <- mOB$pos[rownames(mobCorpus[["mob"]]$corpus), ]
+
+```
+
+# Figure 1
+
+```{r}
+
+fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/figures/"
+
+```
+
+
+## A - Merfish mPOA (-0.04)
+
+Show the individual cells in the bregma colored by the major cell class and overlay the simulated spot boundaries
+
+```{r}
+
+breg <- simBregmas$`-0.04`
+
+ggplot() +
+  geom_point(data = breg$annotDf,
+             aes(x = Centroid_X, y = Centroid_Y, color = Cell_class)) +
+  scale_fill_manual(values = breg$classColors) +
+  theme(
+        #panel.background = element_rect(fill = "white"),
+        panel.grid = element_blank(),
+        axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank())
+ggsave(filename = filename = "Fig1_A-1_breg04_mjrcts.pdf",
+       device = "pdf",
+       path = fig_path,
+       scale = 1.5,
+       width = 5,
+       height = 4,
+       units = c("in"),
+       dpi = 600)
+
+ggplot() +
+  geom_point(data = breg$annotDf,
+             aes(x = Centroid_X, y = Centroid_Y, color = Cell_class)) +
+  scale_fill_manual(values = breg$classColors) +
+  geom_rect(data = breg$cellCounts,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black") +
+  theme(
+        #panel.background = element_rect(fill = "white"),
+        panel.grid = element_blank(),
+        axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank())
+ggsave(filename = "Fig1_A-2_breg04_mjrcts_patches.pdf",
+       device = "pdf",
+       path = fig_path,
+       scale = 1.5,
+       width = 5,
+       height = 4,
+       units = c("in"),
+       dpi = 600)
+
+# for all neuronal cell types 
+# 72 types now so legend and assigned colors gets messy
+breg <- simBregmas_neuro$`-0.04`
+
+ggplot() +
+  geom_point(data = breg$annotDf,
+             aes(x = Centroid_X, y = Centroid_Y, color = Cell_class)) +
+  scale_fill_manual(values = breg$classColors) +
+  theme(
+        #panel.background = element_rect(fill = "white"),
+        panel.grid = element_blank(),
+        axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank(),
+        legend.position = "none")
+ggsave(filename = "Fig1_A-3_breg04_neurocts.pdf",
+       device = "pdf",
+       path = fig_path,
+       scale = 1.5,
+       width = 5,
+       height = 4,
+       units = c("in"),
+       dpi = 600)
+
+ggplot() +
+  geom_point(data = breg$annotDf,
+             aes(x = Centroid_X, y = Centroid_Y, color = Cell_class)) +
+  scale_fill_manual(values = breg$classColors) +
+  geom_rect(data = breg$cellCounts,
+            aes(xmin = x - 0, xmax = x + 100,
+                ymin = y - 0, ymax = y + 100),
+            fill = NA, color = "black") +
+  theme(
+        #panel.background = element_rect(fill = "white"),
+        panel.grid = element_blank(),
+        axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank(),
+        legend.position = "none")
+ggsave(filename = "Fig1_A-4_breg04_neurocts_patches.pdf",
+       device = "pdf",
+       path = fig_path,
+       scale = 1.5,
+       width = 5,
+       height = 4,
+       units = c("in"),
+       dpi = 600)
+
+```
+
+## B - LDA results
+
+Fit LDA models
+
+```{r}
+
+# fit models to a range of K's that include 9 (for 9 major cell types) and
+# 75 (for all the cell types including neuronal)
+ks <- seq(from = 2, to = 10, by = 1)
+ks <- c(ks, seq(from = 15, to = 75, by = 10))
+
+```
+
+Recall that `simBregmas$`-0.04`$sim` and `simBregmas_neuro$`-0.04`$sim` have the same corpus, but the assigned ground truths constructed in "buildBregmaCorpus" differ because one used the 9 major cts and the other used major plus extended neuros.
+
+So can use either "simBregmas" or "simBregmas_neuro" input corpuses to fit.
+
+### -0.04
+
+```{r}
+
+start_time <- Sys.time()
+
+pdf(file = paste0(fig_path, "Fig1_B-1_breg04_mjrcts_lda_fit.pdf"))
+bregma04_LDAs <- fitLDA(counts = simBregmas$`-0.04`$sim,
+                        Ks = ks,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+dev.off()
+
+total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+print(sprintf("Time to train LDA models was %smins", total_t))
+
+```
+
+Get beta, theta matrices and clusters of topics for model assessment and visualization
+
+#### k = 9
+
+```{r}
+
+bregma04_k9 <- buildLDAobject(LDAmodel = optimalModel(bregma04_LDAs, opt = 9),
+                      deepSplit = 4,
+                      colorScheme = "rainbow")
+
+```
+
+#### viz predictions
+
+```{r}
+
+m <- bregma04_k9$theta # theta for the k=9 fitted LDA for bregma -0.04
+p <- simBregmas$`-0.04`$cellCounts[,c("x", "y")] # the positions of sim spots for the bregma -0.04
+
+vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=randomcoloR::distinctColorPalette(ncol(m)),
+             groups = NA,
+             group_cols = NA,
+             r = 40,
+             lwd = 0.5,
+             showLegend = TRUE,
+             plotTitle = NA)
+ggsave(filename = "Fig1_B-2_breg04_k9_predict.pdf",
+       device = "pdf",
+       path = fig_path,
+       scale = 1.5,
+       width = 5,
+       height = 4,
+       units = c("in"),
+       dpi = 600)
+
+
+m <- simBregmas$`-0.04`$gtSpotTopics # The ground truth proportions for 9 major cts
+p <- simBregmas$`-0.04`$cellCounts[,c("x", "y")] # the positions of sim spots for the bregma -0.04
+
+vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=randomcoloR::distinctColorPalette(ncol(m)),
+             groups = NA,
+             group_cols = NA,
+             r = 40,
+             lwd = 0.5,
+             showLegend = TRUE,
+             plotTitle = NA)
+ggsave(filename = "Fig1_B-3_breg04_gt_mjrcts.pdf",
+       device = "pdf",
+       path = fig_path,
+       scale = 1.5,
+       width = 5,
+       height = 4,
+       units = c("in"),
+       dpi = 600)
+
+```
+
+Individual topics visualized
+
+```{r}
+
+
+
+```
+
+#### theta correlation
+
+
+
+#### beta correlation
+
+
+
+
+
+## - Example ependymal
+
+## - MOB 
+
+## - LDA results
+
+## 
+
+
+
+
+
+

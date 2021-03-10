@@ -72,7 +72,7 @@ vizAllTopics <- function(theta, pos,
       axis.title.y=element_blank(),
       panel.background=element_blank()) +
     # theme_classic() +
-    geom_scatterpie(aes(x=x, y=y, group=Row.names, r=r, color = groups),
+    scatterpie::geom_scatterpie(aes(x=x, y=y, group=Row.names, r=r, color = groups),
                     lwd = lwd,
                     data = theta_ordered_pos,
                     cols = topicColumns,
@@ -207,7 +207,7 @@ vizTopicClusters <- function(theta, pos, clusters,
         axis.title.x=element_blank(),
         axis.title.y=element_blank(),
         panel.background=element_blank()) +
-      geom_scatterpie(aes(x=x, y=y, group=Row.names, r = r, color = groups),
+      scatterpie::geom_scatterpie(aes(x=x, y=y, group=Row.names, r = r, color = groups),
                       lwd = lwd,
                       data=theta_ordered_pos,
                       cols = topicColumns,

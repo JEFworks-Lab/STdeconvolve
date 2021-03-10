@@ -73,13 +73,16 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
   
   controls <- list(seed = seed,
                    verbose = 1, keep = 1, estimate.alpha = TRUE)
-
+  
+  start_time <- Sys.time()
   fitted_models <- parallel::mclapply(Ks, function(k) {
     topicmodels::LDA(corpus, k=k, control = controls)
   },
   mc.cores = ncores
   )
   names(fitted_models) <- Ks
+  total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+  print(sprintf("Time to train LDA models was %smins", total_t))
 
   pScores <- unlist(lapply(fitted_models, function(model){
     p <- topicmodels::perplexity(model, corpus)
@@ -92,9 +95,10 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
   kOpt2 <- Ks[which(pScores == min(pScores))]
 
   if(plot) {
-    plot(Ks, pScores)
+    plot(Ks, pScores, ylab = "perplexity", xlab = "K")
     abline(v = kOpt1, col='blue')
     abline(v = kOpt2, col='red')
+    legend(legend = c("kneed", "min"), col = c("blue", "red"))
   }
 
   return(list(models = fitted_models,
@@ -205,7 +209,10 @@ clusterTopics <- function(beta,
          Colv=as.dendrogram(hc_),
          Rowv=as.dendrogram(rc_),
          ColSideColors = fac2col(groups),
-         col = correlation_palette)
+         col = correlation_palette,
+         xlab = "Topics",
+         ylab = "Genes",
+         main = "Predicted topics and clusters")
   }
 
   return(list(clusters = groups,
@@ -286,21 +293,21 @@ combineTopics <- function(mtx, clusters, type) {
 #' Get the optimal LDA model
 #' 
 #' @param models list returned from fitLDA
-#' @param opt either "kneed" (kOpt1) or "min" (kOpt2)
+#' @param opt either "kneed" (kOpt1) or "min" (kOpt2), or designate a specific K
 #' 
 #' @return optimal LDA model fitted to the K based on `opt`
 #' 
 #' @export
 optimalModel <- function(models, opt) {
   
-  if (!opt %in% c("kneed", "min")){
-    stop("`opt` must be either 'kneed' or 'min'")
-  }
   if (opt == "kneed"){
     m <- models$models[[which(sapply(models$models, slot, "k") == models$kOpt1)]]
-  }
-  if (opt == "min"){
+  } else if (opt == "min"){
     m <- models$models[[which(sapply(models$models, slot, "k") == models$kOpt2)]]
+  } else if (opt %in% sapply(models$models, slot, "k")){
+    m <- models$models[[which(sapply(models$models, slot, "k") == opt)]]
+  } else {
+    stop("`opt` must be either 'kneed',  'min', or int of a fitted K")
   }
   return(m)
 }
@@ -310,7 +317,7 @@ optimalModel <- function(models, opt) {
 #' theta (spot-topic distribution) for individual topic and combined topic-clusters
 #' for an LDA model in `fitLDA` output list.
 #' 
-#' @description combines the functions `getBetaTheta`, `clusterTopics`,
+#' @description Wrapper that combines the functions `getBetaTheta`, `clusterTopics`,
 #'     `combineTopics` and slots of the topicmodels::LDA object to return a list
 #'     that contains the most relevant components of a given LDA model for ease
 #'     of analysis and visualization.
