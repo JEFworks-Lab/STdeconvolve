@@ -105,7 +105,7 @@ vizAllTopics <- function(theta, pos,
 #' @param clusters factor of the color (i.e., topic cluster) each cluster is
 #'     assigned to. In this case, the levels should be colors. In `vizAllTopics`,
 #'     clusters is "topicCols" and can just be a vector of colors.
-#' @sharedCol Boolean indicating if the topics ina cluster will be plotted with
+#' @sharedCol Boolean indicating if the topics in a cluster will be plotted with
 #'     the same color or if each topic will be colored by its own shade to also
 #'     show how the topics in a cluster are distributed in space wrt each other.
 #' @param groups colors the spot piechart lines based on a group or cell layer
@@ -176,7 +176,7 @@ vizTopicClusters <- function(theta, pos, clusters,
     if (sharedCol){
       color_ramp <- colorRampPalette(c(cluster, cluster))
     } else {
-      color_ramp <- colorRampPalette(c(lighten(cluster, factor = 0.8), darken(cluster, factor = 1)))
+      color_ramp <- colorRampPalette(c(lighten(cluster, factor = 0.5), darken(cluster, factor = 2)))
     }
 
     topic_colors <- color_ramp(ncol(theta_ordered) - 1) # don't count "other" here
@@ -263,7 +263,7 @@ vizGeneCounts <- function(df, gene,
   # color spots by group:
   if (is.na(groups[1]) == TRUE) {
     groups <- " "
-    stroke <- 0.5
+    # stroke <- 0.5
   } else {
     groups <- as.character(groups)
   }
@@ -285,7 +285,18 @@ vizGeneCounts <- function(df, gene,
     p <- p + ggtitle(plotTitle)
   }
   
-  p <- p + theme_classic()
+  p <- p +
+    theme(
+      #panel.background = element_rect(fill = "white"),
+      panel.grid = element_blank(),
+      axis.line=element_blank(),
+      axis.text.x=element_blank(),
+      axis.text.y=element_blank(),
+      axis.ticks=element_blank(),
+      axis.title.x=element_blank(),
+      axis.title.y=element_blank(),
+      panel.background=element_blank())
+    # theme_classic()
   print(p)
 }
 

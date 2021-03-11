@@ -98,7 +98,8 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
     plot(Ks, pScores, ylab = "perplexity", xlab = "K")
     abline(v = kOpt1, col='blue')
     abline(v = kOpt2, col='red')
-    legend(legend = c("kneed", "min"), col = c("blue", "red"))
+    legend("topright",
+           legend = c("kneed", "min"), col = c("blue", "red"))
   }
 
   return(list(models = fitted_models,
