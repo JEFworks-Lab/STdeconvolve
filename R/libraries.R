@@ -11,3 +11,5 @@ library(dynamicTreeCut)
 library(Seurat) # for building scRNAseq references
 library(hash) # for organizing and processing MERFISH bregmas
 library(gplots) # for `heatmap.2`
+library(SPOTlight) # for comparison to SPOTlight
+library(RCTD) # for comparison to RCTD

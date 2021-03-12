@@ -24,7 +24,7 @@ getCorrMtx <- function(m1, m2, type, thresh = NULL) {
     
     # make sure the same spots are being compared
     keep_spots <- intersect(rownames(m1), rownames(m2))
-    cat(length(keep_spots), "shared spots between m1 and m2.", "\n")
+    cat("topic correlations based on", length(keep_spots), "shared spots between m1 and m2.", "\n")
     
     corMtx <- do.call(rbind, lapply(1:ncol(m1), function(i) {
       sapply(1:ncol(m2), function(j) {
@@ -41,7 +41,7 @@ getCorrMtx <- function(m1, m2, type, thresh = NULL) {
     
     # make sure the same genes are being compared
     keep_genes <- intersect(colnames(m1), colnames(m2))
-    cat(length(keep_genes), "shared genes between m1 and m2.", "\n")
+    cat("topic correlations based on", length(keep_genes), "shared genes between m1 and m2.", "\n")
     
     if (is.numeric(thresh)){
       cat("comparing genes with topic probability >", thresh, "\n")

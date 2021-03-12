@@ -235,7 +235,158 @@ buildBregmaCorpus <- function (hashTable, bregmaID) {
 }
 
 
-
+#' Wrapper around functions in `SPOTlight::spotlight_deconvolution()`
+#' that take place subsequently after training the NMF model.
+#' 
+#' @description Allows for applying a trained NMF model to additional
+#'     ST datasets without retraining a new NMF in spotlight, which can take
+#'     a very long time (hours depending on number of genes and clusters in scRNAseq ref).
+#'     
+#'     Additionally, other useful matrices and information can also be collected
+#'     that are not returned by `SPOTlight::spotlight_deconvolution()`.
+#'     
+#'     This does come with a caveat that one must be careful about:
+#'     WARNING: SPOTlight functions crash the R session if you use a corpus with a gene set
+#'     that is not in the NMF W. I think this happens in `SPOTlight::predict_spatial_mixtures()`
+#'     during the nnls step at the end. Because it generates the full W matrix after selecting
+#'     genes in the ST mtrx. When the NMF was trained, there was a step that made it only
+#'     train on the intersecting genes with the ST data set. So under normal circumstances this would not be noticed
+#'     because all genes should match between W and ST mtrx. But if one were to use a different
+#'     ST mtrx on the trained NMF, then I bet it would crash because the matrices end up not being comparable shapes.
+#' 
+#' 
+#' @param nmfRef the list returned from `SPOTlight::train_nmf()`. In `SPOTlight::spotlight_deconvolution()`,
+#'     this returned list actually has this nmf input list as its first element
+#' @param stCounts ST count matrix to deconvolve, genes x spots
+#' 
+#' @return a list that contains
+#' \itemize{
+#' \item betaTopics: t(w), # topic x gene weights that sum to 1 (all genes and topics)
+#' \item betaCt: ct_beta, # CellType x gene weights that sum to 1 (all genes and topics)
+#' \item ctTopicProps: ct_topics, # topic proportion for each cell type
+#' \item thetaTopics: t(topics_in_spots_norm), # proportion of each topic in each spot (all topics)
+#' \item thetaCt: ct_in_spots_clean)) # spot x cell type proportions (all spots and cell types)
+#' }
+#'
+#' @export
+SPOTlightPredict <- function(nmfRef, stCounts) {
+  
+  # get basis matrix W [genes x topics]
+  w <- basis(nmfRef[[1]])
+  colnames(w) <- paste("Topic", 1:ncol(w), sep = "_")
+  # get coefficient matrix H [topics x cells]
+  h <- coef(nmfRef[[1]])
+  
+  
+  # reference for which cell type(s) a topic represents
+  # ct_topic_profiles = [topics x CellTypes] (seurat clusters)
+  # values are coefficients
+  # uses the H matrix and the cluster labels to get a new mtx where topic x cluster,
+  # Cell types can be made up of multiple topics...
+  ct_topic_profiles <- topic_profile_per_cluster_nmf(h = h,
+                                                     train_cell_clust = nmfRef[[2]])
+  
+  # convert to topic proportions for each cell type
+  ct_topic_profiles_r <- round(ct_topic_profiles, 4)
+  ct_topics <- do.call(cbind, lapply(seq(ncol(ct_topic_profiles_r)), function(i){
+    ct <- ct_topic_profiles_r[,i]
+    ct/sum(ct)
+  }))
+  rownames(ct_topics) <- paste("Topic", 1:nrow(ct_topic_profiles_r), sep = "_")
+  colnames(ct_topics) <- colnames(ct_topic_profiles_r)
+  
+  # now that we have the proportion of each topic for a cell type,
+  # use this information to get gene weights (sum to 1) for each cell type
+  # (w is gene weights for each topic)
+  # do this by getting the topic-gene vectors from w for topics that make up a given cell type and
+  # merge the gene values of these vectors based on the proportion that the topic contributes to the cell type
+  ct_beta <- do.call(rbind, lapply(seq(ncol(ct_topics)), function(ct){
+    # topics for the given cell type in ct_topics
+    ts <- ct_topics[,ct]
+    # topics that contribute to the cell type and their proportions
+    ts <- ts[which(ts > 0)]
+    # w topics-gene vectors (rows = genes, cols = topics for given ct)
+    g <- w[,names(ts)]
+    if (length(ts) > 1){
+      # if more than 1 topic contributes to ct, g will be mtx with multiple columns (one for each topic)
+      # mtx multiply to multiply first column (topic) gene values by first (topic proportion),
+      # second col by second proportion, etc
+      g <- g %*% diag(ts)
+    }
+    # after adjusting gene values for each topic column by the proportion the given topic contributes to a cell type,
+    # sum the adjusted topic gene vectors together
+    if (is.null(dim(g)) == FALSE){
+      g <- rowSums(g)
+    }
+    
+    # final adjustment to make topic gene proportions sum to 1
+    g <- g/sum(g)
+    g
+  }))
+  rownames(ct_beta) <- colnames(ct_topics)
+  
+  
+  # [topics x spots]; topic coefficients for each spot
+  # This function appears to account for that only using genes in ST that are also in W
+  # NNLS to get topic coefficients for each spot based on genes associated with each topic (W)
+  topics_in_spots <- predict_spatial_mixtures_nmf(nmf_mod = nmfRef[[1]],
+                                                  mixture_transcriptome = stCounts,
+                                                  transf = "uv")
+  # normalize coefficients to get topic proportions in each spot
+  topics_in_spots_norm <- do.call(cbind, lapply(seq(ncol(topics_in_spots)), function(i){
+    ct <- topics_in_spots[,i]
+    ct/sum(ct)
+  }))
+  rownames(topics_in_spots_norm) <- paste("Topic", 1:nrow(topics_in_spots), sep = "_")
+  colnames(topics_in_spots_norm) <- colnames(topics_in_spots)
+  
+  # returns [spot x CellType]; proportion of each cell type in each spot
+  # topics below `min_cont` are not counted in a spot
+  # within this function, `topics_in_spots` is also made but not returned
+  ct_in_spots <- mixture_deconvolution_nmf(nmf_mod = nmfRef[[1]],
+                                           mixture_transcriptome = stCounts,
+                                           transf = "uv", 
+                                           reference_profiles = ct_topics, 
+                                           min_cont = 0.0) # only keep topics if 9% or more in a spot
+  # note that last column is an additional columns for the residual error
+  # cleanup to get actual spot-celltype predictions:
+  rownames(ct_in_spots) <- colnames(stCounts)
+  ct_in_spots_clean <- ct_in_spots[,1:(ncol(ct_in_spots)-1)] # last column is residuals
+  # note: all spots and cell types.
+  # Possible some cell type will not be detected at all and be 0 for all spots
+  
+  return(list(betaTopics = t(w), # topic x gene weights that sum to 1 (all genes and topics)
+              betaCt = ct_beta, # CellType x gene weights that sum to 1 (all genes and topics)
+              ctTopicProps = ct_topics, # topic proportion for each cell type
+              thetaTopics = t(topics_in_spots_norm), # proportion of each topic in each spot (all topics)
+              thetaCt = ct_in_spots_clean)) # spot x celltype proportions (all spots and cell types)
+  
+  # if made with original raw `stCounts` then will have thousands of genes and all spots.
+  # so when comparing, will need to make sure the betas or thetas have same spots and genes as
+  # the `stCounts` they might actually be compared to (corpus for a given topic model)
+  # however, a raw `stCounts` can be used to make the SPOTlight predictions at first, and
+  # after the betas and theta can be filtered. OR, a processed corpus could be used for
+  # SPOTlight, which will probably affect the predicted topics because the gene set used
+  # will be smaller. Worth comparing both cases.
+  
+  # WARNING: SPOTlight functions crash the session if use a corpus with a gene set
+  # that is not in the NMF. I think this happens in `SPOTlight::predict_spatial_mixtures()`
+  # during the nnls step at the end. Because it generates the full W matrix after selecting
+  # genes in the ST mtrx. When the NMF was trained, there was a step that made it only
+  # train on the intersecting genes. So under normal circumstances this would not be noticed
+  # because all genes should match between W and ST mtrx.
+  # But if one were to use a different ST mtrx on the trained NMF, then I bet it would crash
+  # because the matrices end up not being comparable shapes.
+  
+  # looking at the code, it seems the cd is bigger than w. So actually cd is being trimmed
+  # such that it's genes equal W. If other way around it all crashes
+  
+  # remember that during training of the NMF, it got cluster genes, and then only kept
+  # those that were in cd.
+  # with the corpuses, genes could come up as variable genes that were not picked
+  # as cluster genes for the NMF, and thus would not be in the NMF at all
+  
+}
 
 
 
