@@ -40,7 +40,6 @@
 #' }
 #' 
 #' @export
-#' 
 simulateBregmaSpots <- function (cellCentroidsAndClass, counts, patch_size = 100) {
   
   # dictionary hash table
@@ -160,7 +159,6 @@ simulateBregmaSpots <- function (cellCentroidsAndClass, counts, patch_size = 100
 #' }
 #' 
 #' @export
-#'
 buildBregmaCorpus <- function (hashTable, bregmaID) {
   
   bregmaID <- as.character(bregmaID)

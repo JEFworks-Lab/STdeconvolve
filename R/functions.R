@@ -1,7 +1,6 @@
 #' Restrict to informative words (genes) for topic modeling
 #'
 #' @export
-#'
 restrictCorpus <- function(counts,
                            t = 0.9,
                            alpha = 0.05,
@@ -60,7 +59,6 @@ restrictCorpus <- function(counts,
 #' }
 #'
 #' @export
-#'
 fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
                    ncores = parallel::detectCores(logical = TRUE) - 1,
                    plot = TRUE) {
@@ -83,7 +81,8 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
   names(fitted_models) <- Ks
   total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
   print(sprintf("Time to train LDA models was %smins", total_t))
-
+  
+  print("Computing perplexity for each fitted model...")
   pScores <- unlist(lapply(fitted_models, function(model){
     p <- topicmodels::perplexity(model, corpus)
     return(p)
@@ -128,7 +127,6 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
 #' }
 #'
 #' @export
-#'
 getBetaTheta <- function(lda) {
 
   result <- topicmodels::posterior(lda)
@@ -159,7 +157,6 @@ getBetaTheta <- function(lda) {
 #' }
 #'
 #' @export
-#'
 clusterTopics <- function(beta,
                           #distance = "euclidean",
                           clustering = "ward.D",
@@ -413,7 +410,6 @@ buildLDAobject <- function(LDAmodel,
 #' }
 #' 
 #' @export
-#' 
 lsatPairs <- function(mtx){
   # must have equal or more rows than columns
   # values in matrix converted to 0-1 scale relative to all values in mtx

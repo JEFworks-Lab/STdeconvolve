@@ -18,10 +18,11 @@
 #' @param lwd width of lines of the pie charts. Increasing helps visualize
 #'     group_cols if being used.
 #' @param showLegend Boolean to show the legend indicating topics and their color
-#' @plotTitle add title to the resulting plot (default: NA)
+#' @param plotTitle add title to the resulting plot (default: NA)
+#' @param overlay plot the scatterpies on top of a raster image of the H&E tissue
+#'     (default: NA)
 #'
 #' @export
-#'
 vizAllTopics <- function(theta, pos,
                          topicOrder=seq(ncol(theta)),
                          topicCols=rainbow(ncol(theta)),
@@ -30,7 +31,8 @@ vizAllTopics <- function(theta, pos,
                          r = 1,
                          lwd = 0.5,
                          showLegend = TRUE,
-                         plotTitle = NA) {
+                         plotTitle = NA,
+                         overlay = NA) {
 
   # doc-topic distribution reordered based on topicOrder
   theta_ordered <- theta[, topicOrder]
@@ -59,7 +61,31 @@ vizAllTopics <- function(theta, pos,
   if (is.na(group_cols[1]) == TRUE) {
     group_cols <- c("0" = "gray")
   }
-
+  
+  if (is.na(overlay[1]) == FALSE){
+    p <- ggplot(mapping = aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
+      coord_equal(xlim = c(0,dim(overlay)[2]), ylim = c(0, dim(overlay)[1]), expand = FALSE) +
+      theme(
+        #panel.background = element_rect(fill = "white"),
+        panel.grid = element_blank(),
+        axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()) +
+      # geom_point(aes(x = c(0,dim(overlay)[2]), y = c(0, dim(overlay)[1]))) +
+      annotation_raster(overlay, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) +
+      # theme_classic() +
+      scatterpie::geom_scatterpie(aes(x=x, y=y, group=Row.names, r=r, color = groups),
+                                  lwd = lwd,
+                                  data = theta_ordered_pos,
+                                  cols = topicColumns,
+                                  legend_name = "Topics") +
+      scale_fill_manual(values = topicCols) +
+      scale_color_manual(values = group_cols)
+  } else {
   p <- ggplot() +
     theme(
       #panel.background = element_rect(fill = "white"),
@@ -79,7 +105,7 @@ vizAllTopics <- function(theta, pos,
                     legend_name = "Topics") +
     scale_fill_manual(values = topicCols) +
     scale_color_manual(values = group_cols)
-  coord_equal()
+  }
 
   if (showLegend == FALSE) {
     p <- p + guides(fill=FALSE)
@@ -89,7 +115,7 @@ vizAllTopics <- function(theta, pos,
     p <- p + ggtitle(plotTitle)
   }
 
-  print(p)
+  return(p)
 }
 
 
@@ -116,10 +142,11 @@ vizAllTopics <- function(theta, pos,
 #' @param lwd = width of lines of the pie charts. Increasing helps visualize
 #'     group_cols if being used.
 #' @param showLegend Boolean to show the legend indicating topics and their color
-#' @plotTitle add title to the resulting plot (default: NA)
-#'
+#' @param plotTitle add title to the resulting plot (default: NA)
+#' @param overlay plot the scatterpies on top of a raster image of the H&E tissue
+#'     (default: NA)
+#'     
 #' @export
-#'
 vizTopicClusters <- function(theta, pos, clusters,
                              sharedCol = FALSE,
                              groups = NA,
@@ -127,7 +154,8 @@ vizTopicClusters <- function(theta, pos, clusters,
                              r = 1,
                              lwd = 0.5,
                              showLegend = TRUE,
-                             plotTitle = NA) {
+                             plotTitle = NA,
+                             overlay = NA) {
 
   print("Topic cluster members:")
   # produce a plot for each topic cluster:
@@ -152,7 +180,7 @@ vizTopicClusters <- function(theta, pos, clusters,
     theta_ordered <- as.data.frame(theta_ordered)
     colnames(theta_ordered) <- paste0("Topic.", topics)
     theta_ordered$other <- other
-
+    
     # if any topics not represented at all, drop them
     # Apparently if a topic is 0 for all pie charts, it is not plotted
     # and doesn't appear in the legend and messes with the colors such that
@@ -161,6 +189,11 @@ vizTopicClusters <- function(theta, pos, clusters,
       missing_topics <- colnames(theta_ordered)[which(colSums(theta_ordered) == 0)]
       cat("NOTE:", missing_topics, "not present in any spots and will be dropped.", "\n")
       theta_ordered <- theta_ordered[,which(!colSums(theta_ordered) == 0)]
+      # if the entire cluster/topic is represented in no spots, skip
+      if (is.null(dim(theta_ordered))){
+        cat("No spots contain this topic-cluster. Skipping", "\n")
+        next
+      }
     }
     
     # add columns with document positions
@@ -180,7 +213,8 @@ vizTopicClusters <- function(theta, pos, clusters,
     }
 
     topic_colors <- color_ramp(ncol(theta_ordered) - 1) # don't count "other" here
-    topic_colors <- append(topic_colors, c("gray")) # add gray to other here
+    # topic_colors <- append(topic_colors, c("gray")) # add gray to other here
+    topic_colors <- append(topic_colors, c(transparentCol("white", percent = 60)))
 
     # color of piechart groups (lines of piechart):
     if (is.na(groups[1]) == TRUE) {
@@ -191,30 +225,55 @@ vizTopicClusters <- function(theta, pos, clusters,
     }
     if (is.na(group_cols[1]) == TRUE) {
       group_cols <- c("0" = "gray")
+      # group_cols <- c("0" = transparentCol("white", percent = 90))
     }
 
-    p <- ggplot() +
-      # theme(panel.background = element_rect(fill = "black"),
-      #       panel.grid = element_blank()) +
-      # theme_classic() +
-      theme(
-        #panel.background = element_rect(fill = "white"),
-        panel.grid = element_blank(),
-        axis.line=element_blank(),
-        axis.text.x=element_blank(),
-        axis.text.y=element_blank(),
-        axis.ticks=element_blank(),
-        axis.title.x=element_blank(),
-        axis.title.y=element_blank(),
-        panel.background=element_blank()) +
-      scatterpie::geom_scatterpie(aes(x=x, y=y, group=Row.names, r = r, color = groups),
-                      lwd = lwd,
-                      data=theta_ordered_pos,
-                      cols = topicColumns,
-                      legend_name = "Topics") +
-      coord_equal() +
-      scale_fill_manual(values=topic_colors) +
-      scale_color_manual(values = group_cols)
+    if (is.na(overlay[1]) == FALSE){
+      p <- ggplot(mapping = aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
+        coord_equal(xlim = c(0,dim(overlay)[2]), ylim = c(0, dim(overlay)[1]), expand = FALSE) +
+        theme(
+          #panel.background = element_rect(fill = "white"),
+          panel.grid = element_blank(),
+          axis.line=element_blank(),
+          axis.text.x=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),
+          panel.background=element_blank()) +
+        # geom_point(aes(x = c(0,dim(overlay)[2]), y = c(0, dim(overlay)[1]))) +
+        annotation_raster(overlay, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) +
+        # theme_classic() +
+        scatterpie::geom_scatterpie(aes(x=x, y=y, group=Row.names, r = r, color = groups),
+                                    lwd = lwd,
+                                    data=theta_ordered_pos,
+                                    cols = topicColumns,
+                                    legend_name = "Topics") +
+        # coord_equal() +
+        scale_fill_manual(values=topic_colors) +
+        scale_color_manual(values = group_cols)
+    } else {
+      p <- ggplot() +
+        theme(
+          #panel.background = element_rect(fill = "white"),
+          panel.grid = element_blank(),
+          axis.line=element_blank(),
+          axis.text.x=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),
+          panel.background=element_blank()) +
+        # theme_classic() +
+        scatterpie::geom_scatterpie(aes(x=x, y=y, group=Row.names, r = r, color = groups),
+                                    lwd = lwd,
+                                    data=theta_ordered_pos,
+                                    cols = topicColumns,
+                                    legend_name = "Topics") +
+        # coord_equal() +
+        scale_fill_manual(values=topic_colors) +
+        scale_color_manual(values = group_cols)
+    }
 
     if (showLegend == FALSE) {
       p <- p + guides(fill=FALSE)
@@ -250,11 +309,10 @@ vizTopicClusters <- function(theta, pos, clusters,
 #' @param showLegend Boolean to show the plot legend
 #' 
 #' @export
-#'
 vizGeneCounts <- function(df, gene,
                           groups = NA,
                           group_cols = NA,
-                          size = 7, stroke = 2,
+                          size = 7, stroke = 0.5,
                           plotTitle = NA,
                           showLegend = TRUE) {
 
@@ -268,7 +326,7 @@ vizGeneCounts <- function(df, gene,
     groups <- as.character(groups)
   }
   if (is.na(group_cols[1]) == TRUE) {
-    group_cols <- c(" " = "gray")
+    group_cols <- c(" " = "white")
   }
 
   p <- ggplot() +
@@ -329,5 +387,27 @@ gg_color_hue <- function(n) {
   hues = seq(15, 375, length = n + 1)
   hcl(h = hues, l = 65, c = 100)[1:n]
 }
+
+
+# transparent version of color
+transparentCol <- function(color, percent = 50, name = NULL) {
+  #       color = color name
+  #       percent = % transparency
+  #       name = an optional name for the color
+  
+  ## Get RGB values for named color
+  rgb.val <- col2rgb(color)
+  
+  ## Make new color using input color as base and alpha set by transparency
+  t.col <- rgb(rgb.val[1], rgb.val[2], rgb.val[3],
+               max = 255,
+               alpha = (100 - percent) * 255 / 100,
+               names = name)
+  
+  ## Save the color
+  invisible(t.col)
+}
+
+
 
 
