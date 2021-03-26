@@ -87,7 +87,7 @@ getCorrMtx <- function(m1, m2, type, thresh = NULL) {
 #' @return vector or matrix with values adjusted to 0-1 scale
 #' @export
 scale0_1 <- function(x) {
-  xAdj <- (x - min(x)) / diff(range(x))
+  xAdj <- (x - min(x, na.rm = T)) / diff(range(x, na.rm = T))
   return(xAdj)
 }
 
@@ -267,4 +267,22 @@ preprocess <- function(dat,
               slm = corpus_slm,
               pos = positions))
 }
+
+
+
+nrmse_func <-  function(obs, pred, type = "sd") {
+  
+  squared_sums <- sum((obs - pred)^2)
+  mse <- squared_sums/length(obs)
+  rmse <- sqrt(mse)
+  if (type == "sd") nrmse <- rmse/sd(obs)
+  if (type == "mean") nrmse <- rmse/mean(obs)
+  if (type == "maxmin") nrmse <- rmse/ (max(obs) - min(obs))
+  if (type == "iq") nrmse <- rmse/ (quantile(obs, 0.75) - quantile(obs, 0.25))
+  if (!type %in% c("mean", "sd", "maxmin", "iq")) message("Wrong type!")
+  nrmse <- round(nrmse, 3)
+  return(nrmse)
+  
+}
+
 

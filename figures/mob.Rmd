@@ -1,0 +1,1082 @@
+---
+title: "Untitled"
+author: "Brendan F. Miller"
+date: "3/23/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+# all of the trained models for mob:
+save(mob_k15, # LDA model of the mob data with k=15 and 93 common OD genes across the 12 MOB samples
+     mob_k38, # LDA model ofthe mob data with k=38 and 93 common OD genes across the 12 MOB samples
+     mobCorpus, # corpus of all the mob datasets and also has the spot positions
+     mobProxyTheta, # table of mob 260 spots and which of the 5 txn clusters it was assigned
+     countsClean, # 260 x 7365 genes of mob corpus after removing bad spots and genes
+     nmf_mod_mob_wt_countsClean_ls, # SL fitted model trained with log-norm `mob_se_wt_obj` and `countsClean` ST data
+     sl_countsClean, # above model after cleanup. 6338 genes kept that were in ST data and the scRNAseq. 38 cts but Mural2 is 0
+     RCTD_mob_results_norm, # RCTD model trained with `mob_se_wt_raw_obj` and deconvolved `countsClean` ST. 28 cts
+     nmf_mod_mob_wt_countsClean_noOECs_ls, # SL trained with log-norm `mob_se_wt_obj` and `countsClean` ST data but no OEC so 6317 genes and 33 cts
+     sl_countsClean_noOEC, # above model after cleanup.
+     RCTD_mob_noOEC_results_norm, # RCTD # RCTD model trained with `mob_se_wt_raw_obj` and deconvolved `countsClean` ST. but 33 cts now
+     sl_cortexRef_countsClean_ls, # SL on cortex SCT data and on `countsClean`. 7072 shared genes with ST and 23 cts
+     sl_countsClean_cortexRef, # above model after cleanup. but L5.IT is 0
+     RCTD_cortexRef_results_norm, # RCTD on raw counts of cortex scRNAseq and `countsClean`. 23 cts
+     file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mob_fitted_models.RData")
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mob_fitted_models.RData")
+
+
+# sl_ctTheta <- sl_countsClean$thetaCt[,which(!colnames(sl_countsClean$thetaCt) %in% c("Mural2"))]
+# sl_countsClean$thetaCt but no Mural2 because 0 in all spots
+
+# for assessing beta values
+save(mob_se_wt, # processed data matrix for 17709 wt cells and 18560 genes (filtered genes during the processing)
+     mob_se_wt_obj, # seurat object of the processed data and meta data
+     mob_se_wt_raw, # raw counts of the 17709 wt cells and 18560 genes
+     mob_se_wt_raw_obj_sct, # seurat object of raw data, and also my own SCT processing (but turned out different than the supplied data)
+     cluster_markers_mob_se_wt, # Seurat::FindAllMarkers for the processed wt cells and 38 clusters
+     cluster_markers_mob_se_wt_raw, # Seurat::FindAllMarkers for the raw counts wt cells and 38 clusters
+     mobWtCellProxyBeta, # averaged relative counts for the 38 clusters for 18560 genes by averaging the processed log-norm data
+     mobWtCellProxyBetaRaw, # averaged relative counts for the 38 clusters for 18560 genes by averaging the raw counts
+     mob_k15, # LDA model of the mob data with k=15 and 93 common OD genes across the 12 MOB samples
+     sl_countsClean, # SL model trained on `mob_se_wt_obj` and `countsClean` ST data of the `mOB` data (260 spots and 6336 shared genes)
+     sl_ctTheta, # thetaCt of the above model, but Mural2 removed because 0 in all spots
+     W_countsClean, # betaTopics of the sl_countsClean; the W matrix of the NMF fitted model
+     file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mob_data_to_assess_beta.RData")
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mob_data_to_assess_beta.RData")
+
+cortexProxyBetaRaw <- readRDS("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/cortexProxyBetaRaw.Rds")
+# 23 29093 average raw gene counts from the cortex_sc seurat object. The 23 subclasses
+
+```
+
+# Compare models
+
+## LDA vs SL
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = sl_ctTheta,
+                         m2 = mob_k38$theta,
+                         type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(2,4))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(2,4))
+# dev.off()
+
+# correlations along diagonal (after assigning best matches)
+lda_vs_sl_theta <- diag(corMtx[pairs$rowix, pairs$colsix])
+
+# hist(lda_vs_sl_theta, breaks = 10)
+mean(lda_vs_sl_theta)
+sd(lda_vs_sl_theta)
+
+```
+
+## RCTD vs SL
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = as.matrix(RCTD_mob_results_norm),
+                     m2 = sl_ctTheta,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "SL",
+                  ylab = "RCTD",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,5))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "SL",
+                  ylab = "RCTD",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,5))
+# dev.off()
+
+# correlations along diagonal (after assigning best matches)
+rctd_vs_sl_theta <- diag(corMtx[pairs$rowix, pairs$colsix])
+
+# hist(rctd_vs_sl_theta, breaks = 10)
+mean(rctd_vs_sl_theta)
+sd(rctd_vs_sl_theta)
+
+```
+
+## RCTD vs LDA
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = as.matrix(RCTD_mob_results_norm),
+                     m2 = mob_k38$theta,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "STdeconvolve",
+                  ylab = "RCTD",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,5))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "STdeconvolve",
+                  ylab = "RCTD",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,5))
+# dev.off()
+
+# correlations along diagonal (after assigning best matches)
+rctd_vs_lda_theta <- diag(corMtx[pairs$rowix, pairs$colsix])
+
+# hist(rctd_vs_sl_theta, breaks = 10)
+mean(rctd_vs_lda_theta)
+sd(rctd_vs_lda_theta)
+
+```
+
+## summarize
+
+```{r}
+
+cor_mob_summary <- list("STdeconvolve vs RCTD" = rctd_vs_lda_theta,
+                        "RCTD vs SL" = rctd_vs_sl_theta,
+                        "STdeconvolve vs SL" = lda_vs_sl_theta)
+
+# reshape2::melt(plyr::ldply(cor_mob_summary, rbind))
+
+# my_comparisons <- list( c("lda_vs_sl", "lda_vs_rctd"), c("lda_vs_rctd", "sl_vs_rctd"), c("lda_vs_sl", "sl_vs_rctd") )
+
+# `plyr::ldply` combines vectors in list of different lenghts into dataframe
+# then `reshape2::melt` into long form dataframe for ggplot
+
+ggplot(data = reshape2::melt(plyr::ldply(cor_mob_summary, rbind)), 
+       aes(x=.id, y=value, fill=.id)) +
+  geom_boxplot() + 
+  # stat_compare_means(comparisons = my_comparisons, method = "wilcox.test",
+  #                    label.y = c(1.02, 1.09, 1.19)) +
+  geom_point(position=position_jitterdodge()) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Method Correlations between best matched predicted cell types",
+       x = "Method", y = "Correlation")
+
+```
+
+Maybe SL and RCTD correlate with each other because using same scRNAseq ref? But some cell types correlate poorly. Which ones? Are they predicted to be at low proportions overall?
+
+```{r}
+
+bottom <- order(rctd_vs_sl_theta, decreasing = FALSE)[1:5]
+
+corMtx <- getCorrMtx(m1 = as.matrix(RCTD_mob_results_norm), # rows
+                           m2 = sl_ctTheta, # columns
+                           type = "t")
+pairs <- lsatPairs(corMtx)
+
+rctd_order <- rownames(corMtx[pairs$rowix, pairs$colsix])
+rctd_means <- colMeans(as.matrix(RCTD_mob_results_norm))[rctd_order]
+
+sl_order <- colnames(corMtx[pairs$rowix, pairs$colsix])
+sl_means <- colMeans(sl_ctTheta)[sl_order]
+
+df <- data.frame("RCTD mean" = rctd_means,
+                 "SL mean" = sl_means,
+                 "RCTD ct" = rctd_order,
+                 "SL ct" = sl_order,
+                 "correlation" = rctd_vs_sl_theta,
+                 "rank" = rank(rctd_vs_sl_theta))
+
+corMtx[pairs$rowix[bottom], pairs$colsix[bottom]]
+df
+
+ggplot(data = df) +
+  geom_point(aes(x = RCTD.mean, y = SL.mean, color = correlation)) +
+  scale_color_viridis(option = "A", direction = -1) +
+  theme_classic() +
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Correlation of predicted proportions of paired cell types",
+       x = "RCTD mean spot proportion", y = "SPOTlight mean spot proportion")
+
+```
+
+Recall that RCTD returned only 28 detected cts whereas SPOTlight returned predictions for all 38.
+
+```{r}
+
+bottom <- order(rctd_vs_lda_theta, decreasing = FALSE)[1:5]
+
+corMtx <- getCorrMtx(m1 = as.matrix(RCTD_mob_results_norm), # rows
+                           m2 = mob_k38$theta, # columns
+                           type = "t")
+pairs <- lsatPairs(corMtx)
+
+rctd_order <- rownames(corMtx[pairs$rowix, pairs$colsix])
+rctd_means <- colMeans(as.matrix(RCTD_mob_results_norm))[rctd_order]
+
+lda_order <- colnames(corMtx[pairs$rowix, pairs$colsix])
+lda_means <- colMeans(mob_k38$theta)[lda_order]
+
+df <- data.frame("RCTD mean" = rctd_means,
+                 "STdeconvolve mean" = lda_means,
+                 "RCTD ct" = rctd_order,
+                 "STdeconvolve ct" = lda_order,
+                 "correlation" = rctd_vs_lda_theta,
+                 "rank" = rank(rctd_vs_lda_theta))
+
+corMtx[pairs$rowix[bottom], pairs$colsix[bottom]]
+df
+
+ggplot(data = df) +
+  geom_point(aes(x = RCTD.mean, y = STdeconvolve.mean, color = correlation)) +
+  scale_color_viridis(option = "A", direction = -1) +
+  theme_classic() +
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Correlation of predicted proportions of paired cell types",
+       x = "RCTD mean spot proportion", y = "STdeconvolve mean spot proportion")
+
+```
+
+```{r}
+
+bottom <- order(lda_vs_sl_theta, decreasing = FALSE)[1:5]
+
+corMtx <- getCorrMtx(m1 = sl_ctTheta, # rows
+                           m2 = mob_k38$theta, # columns
+                           type = "t")
+pairs <- lsatPairs(corMtx)
+
+sl_order <- rownames(corMtx[pairs$rowix, pairs$colsix])
+sl_means <- colMeans(sl_ctTheta)[sl_order]
+
+lda_order <- colnames(corMtx[pairs$rowix, pairs$colsix])
+lda_means <- colMeans(mob_k38$theta)[lda_order]
+
+df <- data.frame("SL mean" = sl_means,
+                 "STdeconvolve mean" = lda_means,
+                 "SL ct" = sl_order,
+                 "STdeconvolve ct" = lda_order,
+                 "correlation" = lda_vs_sl_theta,
+                 "rank" = rank(lda_vs_sl_theta))
+
+corMtx[pairs$rowix[bottom], pairs$colsix[bottom]]
+df
+
+ggplot(data = df) +
+  geom_point(aes(x = SL.mean, y = STdeconvolve.mean, color = correlation)) +
+  scale_color_viridis(option = "A", direction = -1) +
+  theme_classic() +
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Correlation of predicted proportions of paired cell types",
+       x = "SPOTlight mean spot proportion", y = "STdeconvolve mean spot proportion")
+
+```
+
+# Remove OECs
+
+## SL Before
+
+```{r, fig.height=8, fig.width=10}
+
+corMtx <- getCorrMtx(m1 = as.matrix(mobProxyTheta),
+                         m2 = sl_ctTheta,
+                         type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_E-3_mob_k15_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Predicted topics",
+                  # ylab = "Cell layer",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,11)) # margins for labels
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_E-3_mob_k15_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Predicted topics",
+                  # ylab = "Cell layer",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,11))
+# dev.off()
+
+```
+
+OECs correlate with the Olfactory Nerve Layer
+
+N2 correlates with the Granule Cell Layer.
+
+```{r}
+
+m <- sl_ctTheta[,c("OEC1","OEC2","OEC3","OEC4","OEC5", "N2")]
+p <- mobCorpus$mob$pos
+
+cc <- as.factor(rainbow(ncol(m)))
+names(cc) <- colnames(m)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc,
+                 sharedCol = TRUE,
+                 groups = as.character(mobProxyTheta$`Olfactory Nerve Layer`),
+                 group_cols = c("0" = "white", "1" = "black"),
+                 r = 0.4, # different size piecharts for mOB data sets
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+
+# make OECs the same cluster/level
+cc_OECs <- c("#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000")
+names(cc_OECs) <- c("OEC1","OEC2","OEC3","OEC4","OEC5")
+cc_OECs <- as.factor(cc_OECs)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc_OECs,
+                 sharedCol = TRUE,
+                 groups = as.character(mobProxyTheta$`Olfactory Nerve Layer`),
+                 group_cols = c("0" = "white", "1" = "black"),
+                 r = 0.4, # different size piecharts for mOB data sets
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+
+cc_OECs <- c("#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF00FF")
+names(cc_OECs) <- c("OEC1","OEC2","OEC3","OEC4","OEC5", "N2")
+cc_OECs <- as.factor(cc_OECs)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc_OECs,
+                 sharedCol = TRUE,
+                 groups = as.character(mobProxyTheta$`Granule Cell Layer`),
+                 group_cols = c("0" = "white", "1" = "black"),
+                 r = 0.4, # different size piecharts for mOB data sets
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+
+
+```
+
+## SL After
+
+```{r, fig.height=8, fig.width=10}
+
+corMtx <- getCorrMtx(m1 = as.matrix(mobProxyTheta),
+                         m2 = sl_countsClean_noOEC$thetaCt,
+                         type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_E-3_mob_k15_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Predicted topics",
+                  # ylab = "Cell layer",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,11)) # margins for labels
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_E-3_mob_k15_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Predicted topics",
+                  # ylab = "Cell layer",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,11))
+# dev.off()
+
+```
+
+N2 shifts to Olfactory Nerve Layer
+
+```{r}
+
+m <- sl_countsClean_noOEC$thetaCt
+p <- mobCorpus$mob$pos
+
+# cc <- as.factor(rainbow(ncol(m)))
+# names(cc) <- colnames(m)
+
+cc <- c("#FF00FF")
+names(cc) <- c("N2")
+cc <- as.factor(cc)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc,
+                 sharedCol = TRUE,
+                 groups = as.character(mobProxyTheta$`Granule Cell Layer`),
+                 group_cols = c("0" = "white", "1" = "black"),
+                 r = 0.4, # different size piecharts for mOB data sets
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc,
+                 sharedCol = TRUE,
+                 groups = as.character(mobProxyTheta$`Olfactory Nerve Layer`),
+                 group_cols = c("0" = "white", "1" = "black"),
+                 r = 0.4, # different size piecharts for mOB data sets
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+
+```
+
+Is N2 transcriptionally similar to OECs?
+
+## transcriptional similarity
+
+```{r, fig.height=8, fig.width=8}
+
+corMtx <- getCorrMtx(m1 = sl_countsClean$betaCt,
+                         m2 = sl_countsClean$betaCt, # gt made from cells in bregma
+                         type = "b")
+
+# pdf(file = paste0(fig_path, "Fig1_B-5_FN7_k8_mjrcts_betaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 0.9,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+```
+
+N2 does cluster with the OECs. So makes sense model would assign this in place of the OECs. It's interesting that it ends up in the Granule Cell Layer otherwise.
+
+And for the actual scRNAseq data:
+
+```{r, fig.height=8, fig.width=8}
+
+corMtx <- getCorrMtx(m1 = mobWtCellProxyBetaRaw[,colnames(sl_countsClean$betaCt)], # reduce 18560 genes to the 6336
+                         m2 = mobWtCellProxyBetaRaw[,colnames(sl_countsClean$betaCt)],
+                         type = "b")
+
+# pdf(file = paste0(fig_path, "Fig1_B-5_FN7_k8_mjrcts_betaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 0.9,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+heatmap(x = corMtx)
+
+```
+
+N2 does fall in with OECs here too. Makes sense. SL NMFs fitted with the same scRNAseq data.
+
+It is interesting comparing the auto-correlations of the SL beta (the W) and the actual raw scRNAseq cluster average gene counts.
+
+## RCTD Before
+
+```{r, fig.height=8, fig.width=10}
+
+corMtx <- getCorrMtx(m1 = as.matrix(mobProxyTheta),
+                         m2 = as.matrix(RCTD_mob_results_norm),
+                         type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_E-3_mob_k15_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Predicted topics",
+                  # ylab = "Cell layer",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,11)) # margins for labels
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_E-3_mob_k15_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Predicted topics",
+                  # ylab = "Cell layer",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,11))
+# dev.off()
+
+```
+
+OECs correspond to Olfactory Nerve Layer as expected.
+N2 was not one of the detected 28 cell type clusters.
+
+
+```{r}
+
+m <- as.matrix(RCTD_mob_results_norm)[,c("OEC1","OEC2","OEC3","OEC4","OEC5")]
+p <- mobCorpus$mob$pos
+
+cc <- as.factor(rainbow(ncol(m)))
+names(cc) <- colnames(m)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc,
+                 sharedCol = TRUE,
+                 groups = as.character(mobProxyTheta$`Olfactory Nerve Layer`),
+                 group_cols = c("0" = "white", "1" = "black"),
+                 r = 0.4, # different size piecharts for mOB data sets
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+
+# make OECs the same cluster/level
+cc <- c("#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000")
+names(cc) <- c("OEC1","OEC2","OEC3","OEC4","OEC5")
+cc <- as.factor(cc)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc,
+                 sharedCol = TRUE,
+                 groups = as.character(mobProxyTheta$`Olfactory Nerve Layer`),
+                 group_cols = c("0" = "white", "1" = "black"),
+                 r = 0.4, # different size piecharts for mOB data sets
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+
+cc_OECs <- c("#FF0000", "#FF0000", "#FF0000", "#FF0000", "#FF0000")
+names(cc_OECs) <- c("OEC1","OEC2","OEC3","OEC4","OEC5")
+cc_OECs <- as.factor(cc_OECs)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc_OECs,
+                 sharedCol = TRUE,
+                 groups = as.character(mobProxyTheta$`Granule Cell Layer`),
+                 group_cols = c("0" = "white", "1" = "black"),
+                 r = 0.4, # different size piecharts for mOB data sets
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+
+```
+
+## RCTD After
+
+```{r, fig.height=8, fig.width=10}
+
+corMtx <- getCorrMtx(m1 = as.matrix(mobProxyTheta),
+                         m2 = as.matrix(RCTD_mob_noOEC_results_norm),
+                         type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_E-3_mob_k15_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Predicted topics",
+                  # ylab = "Cell layer",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,11)) # margins for labels
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_E-3_mob_k15_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Predicted topics",
+                  # ylab = "Cell layer",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 1,
+                  # lhei = c(1,3),
+                  margins = c(6,11))
+# dev.off()
+
+```
+
+N2 strongly correlates with Olfactory Nerve Layer now.
+
+```{r}
+
+m <- as.matrix(RCTD_mob_noOEC_results_norm)
+p <- mobCorpus$mob$pos
+
+# cc <- as.factor(rainbow(ncol(m)))
+# names(cc) <- colnames(m)
+
+cc <- c("#FF00FF")
+names(cc) <- c("N2")
+cc <- as.factor(cc)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc,
+                 sharedCol = TRUE,
+                 groups = as.character(mobProxyTheta$`Granule Cell Layer`),
+                 group_cols = c("0" = "white", "1" = "black"),
+                 r = 0.4, # different size piecharts for mOB data sets
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc,
+                 sharedCol = TRUE,
+                 groups = as.character(mobProxyTheta$`Olfactory Nerve Layer`),
+                 group_cols = c("0" = "white", "1" = "black"),
+                 r = 0.4, # different size piecharts for mOB data sets
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+
+```
+
+# Cortex Reference
+
+## SL
+
+```{r}
+
+# L5.IT not present at all in SL so drop
+sl_cortex_ctTheta <- sl_countsClean_cortexRef$thetaCt[,which(!colnames(sl_countsClean_cortexRef$thetaCt) %in% c("L5.IT"))]
+
+# 22 cell types now
+
+```
+
+```{r, fig.height=8, fig.width=10}
+
+corMtx <- getCorrMtx(m1 = sl_cortex_ctTheta,
+                         m2 = sl_ctTheta,
+                         type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_E-3_mob_k15_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "MOB",
+                  ylab = "Cortex",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,8)) # margins for labels
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_E-3_mob_k15_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "MOB",
+                  ylab = "Cortex",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 1,
+                  # lhei = c(1,3),
+                  margins = c(6,8))
+# dev.off()
+
+```
+
+Above is wrt theta, so predicted positions. VLMC is being placed where the OECs are assigned (the Olfactory Nerve Layer)
+
+```{r}
+
+m <- sl_cortex_ctTheta
+p <- mobCorpus$mob$pos
+
+# cc <- as.factor(rainbow(ncol(m)))
+# names(cc) <- colnames(m)
+
+cc <- c("#FF00FF")
+names(cc) <- c("VLMC")
+cc <- as.factor(cc)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc,
+                 sharedCol = TRUE,
+                 groups = as.character(mobProxyTheta$`Olfactory Nerve Layer`),
+                 group_cols = c("0" = "white", "1" = "black"),
+                 r = 0.4, # different size piecharts for mOB data sets
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+
+```
+
+```{r, fig.height=8, fig.width=10}
+
+corMtx <- getCorrMtx(m1 = sl_countsClean_cortexRef$betaCt,
+                         m2 = sl_countsClean$betaCt,
+                         type = "b")
+
+# pdf(file = paste0(fig_path, "Fig1_E-3_mob_k15_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "MOB",
+                  ylab = "Cortex",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,8)) # margins for labels
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_E-3_mob_k15_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "MOB",
+                  ylab = "Cortex",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 1,
+                  # lhei = c(1,3),
+                  margins = c(6,8))
+# dev.off()
+
+```
+
+Transcriptionally, VLMC actually pairs with Mes1 the best. Some weak correlation with OECs, particularly 1 and 2, which are most abundant of the OECs in the original mob SL prediction.
+
+```{r}
+
+m <- sl_ctTheta
+p <- mobCorpus$mob$pos
+
+# cc <- as.factor(rainbow(ncol(m)))
+# names(cc) <- colnames(m)
+
+cc <- c("#FF00FF")
+names(cc) <- c("Mes1")
+cc <- as.factor(cc)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc,
+                 sharedCol = TRUE,
+                 groups = as.character(mobProxyTheta$`Olfactory Nerve Layer`),
+                 group_cols = c("0" = "white", "1" = "black"),
+                 r = 0.4, # different size piecharts for mOB data sets
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+
+```
+
+Mes1 slightly correlates with VLMC in terms of spatial proportions but only because VLMC touches it at the top.
+
+
+Lets take a look at VLMC and how it relates transcriptionally to the mob clusters using the scRNAseq gene counts
+
+```{r, fig.height=8, fig.width=8}
+
+# in terms of cluster genes for the mob and cortex cts
+corMtx <- getCorrMtx(m1 = cortexProxyBetaRaw[,colnames(sl_countsClean_cortexRef$betaCt)],
+                     m2 = mobWtCellProxyBetaRaw[,colnames(sl_countsClean$betaCt)],
+                     type = "b")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "MOB",
+                  ylab = "Cortex",
+                  key.title = NA,
+                  cexRow = 0.8,
+                  cexCol = 0.8,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "MOB",
+                  ylab = "Cortex",
+                  key.title = NA,
+                  cexRow = 0.8,
+                  cexCol = 0.8,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+heatmap(corMtx)
+
+```
+
+Transcriptionally, VLMC highly similar to Mes1
+
+## RCTD
+
+```{r, fig.height=8, fig.width=8}
+
+corMtx <- getCorrMtx(m1 = as.matrix(RCTD_cortexRef_results_norm),
+                     m2 = as.matrix(RCTD_mob_results_norm),
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "MOB",
+                  ylab = "Cortex",
+                  key.title = NA,
+                  cexRow = 0.8,
+                  cexCol = 0.8,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "MOB",
+                  ylab = "Cortex",
+                  key.title = NA,
+                  cexRow = 0.8,
+                  cexCol = 0.8,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+```
+
+VLMC also correlates in terms of proportions with Mes1 and OECs.
+
+Again, likely due to its transcriptional similarity, at least to Mes1. Partial correlation with OECs, but interesting not very strong.
+
+Looking at the scRNAseq data, transcriptionally, the OECs don't correlate that strongly with anything except maybe VLMC and the Astros, which may hve been assigned elsewhere.
+
+```{r}
+
+m <- as.matrix(RCTD_cortexRef_results_norm)
+p <- mobCorpus$mob$pos
+
+# cc <- as.factor(rainbow(ncol(m)))
+# names(cc) <- colnames(m)
+
+cc <- c("#FF00FF")
+names(cc) <- c("VLMC")
+cc <- as.factor(cc)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc,
+                 sharedCol = TRUE,
+                 groups = as.character(mobProxyTheta$`Olfactory Nerve Layer`),
+                 group_cols = c("0" = "white", "1" = "black"),
+                 r = 0.4, # different size piecharts for mOB data sets
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+
+```
+
+
+
+

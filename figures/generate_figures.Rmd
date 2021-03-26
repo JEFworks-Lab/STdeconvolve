@@ -675,6 +675,124 @@ dim(mobWtCellProxyBeta)
 
 ```
 
+## raw counts
+
+```{r}
+
+# mob raw counts data
+# mob_se_raw <- read.table("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_6_runs.raw.dge.csv", sep = ",", header = TRUE, row.names = 1)
+
+# mob_se_wt_raw <- as.sparse(mob_se_raw[,wt_cells])
+
+# mob_se_wt_raw_obj <- CreateSeuratObject(counts = mob_se_wt_raw, project = "mob scRNAseq raw")
+
+# mob_se_wt_raw_obj[["perc.mito"]] <- meta.data.wt$percent.mito
+
+# genes per cell > 200 (keep cells with more than 200 genes detected) as per paper methods
+# turns out they are all above 200
+# mob_se_wt_raw_obj_filt <- subset(mob_se_wt_raw_obj, subset = (nFeature_RNA >= 200))
+
+# scale and log-normalize and regress on percent mito and number of molecules per cell
+# to remove batch effects as per paper methods
+# mob_se_wt_raw_obj_sct <- SCTransform(mob_se_wt_raw_obj_filt, vars.to.regress = c("perc.mito", "nCount_RNA"))
+
+```
+
+The SCT data is definitely log transformed but also likely other transformations as well. Probably not recommended to to log10^mat for example. Also, the SCT processed data I generated is different from that of the supplied processed data. They probably did other transformations too
+
+```{r}
+
+# mob_se_wt_obj@assays$RNA@counts
+
+
+# some genes dropped and some counts for genes adjusted after SCT
+# x <- mob_se_wt_raw_obj@assays$RNA@counts
+# y <- mob_se_wt_raw_obj_sct@assays$SCT@counts
+# plot(rowSums(x[rownames(y),]), rowSums(y))
+# 
+# # data scaled differently - looks like log transformed
+# x <- mob_se_wt_raw_obj@assays$RNA@counts
+# y <- mob_se_wt_raw_obj_sct@assays$SCT@data
+# plot(rowSums(x[rownames(y),]), rowSums(y))
+# 
+# # same scaling trend for the processed scRNAseq data provided. also log but different from mine
+# x <- mob_se_wt_raw_obj@assays$RNA@counts
+# y <- mob_se_wt_obj@assays$RNA@counts
+# plot(rowSums(x[rownames(y),]), rowSums(y))
+# 
+# # the two are close, but some differences in the overall scaling between the provided processed data 
+# # and the data after processing myself. Not sure what.
+# x <- mob_se_wt_obj@assays$RNA@counts
+# y <- mob_se_wt_raw_obj_sct@assays$SCT@data
+# plot(rowSums(x[rownames(y),]), rowSums(y))
+
+```
+
+save the raw data
+```{r}
+
+# save(mob_se_wt_raw_obj_sct, file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/mob_raw_to_seurat_SCTassay.RData")
+
+# save(mob_se_raw, file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/mob_raw_sparseMatrix.RData")
+
+```
+
+Take the raw counts, select just the WT cells, then filter for poor genes and cells. Use the raw counts to build the proxy matrix for testing the correspondance between beta values
+
+Also, as it happens, RCTD should be untransformed count level data anyways. SPOTlight takes SCTransformed data, which is the processed scRNAseq data
+
+### load data
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/mob_raw_sparseMatrix.RData")
+# mob_se_raw
+
+# mob_se_wt_raw <- as.sparse(mob_se_raw[,wt_cells])
+# 18560 17709
+
+# mob_se_wt_raw_obj <- CreateSeuratObject(counts = mob_se_wt_raw, project = "mob scRNAseq raw")
+# An object of class Seurat 
+# 18560 features across 17709 samples within 1 assay 
+# Active assay: RNA (18560 features, 0 variable features)
+
+# for comparison:
+# mob_se_wt_obj
+# An object of class Seurat 
+# 18560 features across 17709 samples within 1 assay 
+# Active assay: RNA (18560 features, 0 variable features)
+
+```
+
+```{r}
+
+mobWtCellClusters <- meta.data.wt$ClusterName
+names(mobWtCellClusters) <- meta.data.wt$X
+
+mobWtCellProxyBetaRaw <- model.matrix(~ 0 + as.factor(mobWtCellClusters))
+
+rownames(mobWtCellProxyBetaRaw) <- names(mobWtCellClusters)
+
+# fix names
+colnames(mobWtCellProxyBetaRaw) <- unlist(lapply(colnames(mobWtCellProxyBetaRaw), function(x) {
+  unlist(strsplit(x, ")"))[2]
+}))
+
+mobWtCellProxyBetaRaw <- t(as.matrix(mob_se_wt_raw) %*% mobWtCellProxyBetaRaw)
+
+mobWtCellProxyBetaRaw <- mobWtCellProxyBetaRaw/rowSums(mobWtCellProxyBetaRaw)
+
+dim(mobWtCellProxyBetaRaw)
+
+```
+
+```{r}
+
+plot(mobWtCellProxyBetaRaw, mobWtCellProxyBeta)
+
+```
+
+
 # =========================
 
 # Figure 1
@@ -2701,6 +2819,10 @@ predict_theta <- breg_theta[,shared_cts]
 print(dim(predict_theta))
 print(dim(truth_theta))
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # for each spot, compute the RMSE wrt predicting proportions of the 9 cell types
 SL_bregmaFN7FullSeur8cts_spotsRMSE <- unlist(lapply(seq(dim(truth_theta)[1]), function(i){
   actual <- as.vector(truth_theta[i,])
@@ -2712,6 +2834,9 @@ length(SL_bregmaFN7FullSeur8cts_spotsRMSE)
 head(SL_bregmaFN7FullSeur8cts_spotsRMSE)
 
 ```
+
+Unit of RMSE same as the dependent variable. SO it is same as proportion/sd
+So a "good range" also depends on what you are looking at. A RMSE of 1000 may be good or bad depending on the units...
 
 Each cell type separately for each deconvolved bregma
 
@@ -2728,9 +2853,21 @@ predict_theta <- breg_theta[,shared_cts]
 print(dim(predict_theta))
 print(dim(truth_theta))
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # return matrix where each column is the rmse for predicting a ct across the spots
 SL_bregmaFN7FullSeur8cts_ctRMSE <- do.call(cbind, lapply(colnames(truth_theta), function(ct){
   mltools::rmse(preds = predict_theta[,ct], actuals = truth_theta[,ct])
+  
+  # in order to compare cts to cts, normalize the rmse
+  # because the scale of the values affects the rmse
+  # bigger values return larger rmse than smaller values
+  # this is why the rare neuronal cts also return lower
+  # rmse that looking that the higher proportion cts across spots
+  # nrmse_func(obs = truth_theta[,ct], pred = predict_theta[,ct], type = "mean")
+  
 }))
 colnames(SL_bregmaFN7FullSeur8cts_ctRMSE) <- colnames(truth_theta)
 SL_bregmaFN7FullSeur8cts_ctRMSE
@@ -2806,6 +2943,10 @@ predict_theta <- breg_theta[,shared_cts]
 print(dim(predict_theta))
 print(dim(truth_theta))
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # for each spot, compute the RMSE wrt predicting proportions of the 9 cell types
 SL_bregmaFN7FullSeur75neurocts_spotsRMSE <- unlist(lapply(seq(dim(truth_theta)[1]), function(i){
   actual <- as.vector(truth_theta[i,])
@@ -2835,6 +2976,10 @@ predict_theta <- breg_theta[,shared_cts]
 print(dim(predict_theta))
 print(dim(truth_theta))
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # return matrix where each column is the rmse for predicting a ct across the spots
 SL_bregmaFN7FullSeur75neurocts_ctRMSE <- do.call(cbind, lapply(colnames(truth_theta), function(ct){
   mltools::rmse(preds = predict_theta[,ct], actuals = truth_theta[,ct])
@@ -2856,7 +3001,7 @@ p <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/R
 
 ref <- bregmaFN7FullSeur
 
-meta_ref <- ref@meta.data[,c("Major_class", "nFeature_RNA")]
+meta_ref <- ref@meta.data[,c("Major_class", "nCount_RNA")]
 meta_ref$barcode <- rownames(meta_ref)
 colnames(meta_ref) <- c("cluster", "nUMI", "barcode")
 meta_ref <- meta_ref[,c("barcode", "cluster", "nUMI")]
@@ -2963,6 +3108,10 @@ print(dim(truth_theta))
 # make sure the rows are the same, too
 truth_theta <- truth_theta[rownames(predict_theta),]
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # for each spot, compute the RMSE wrt predicting proportions of the 9 cell types
 RCTD_bregmaFN7FullSeur8cts_spotsRMSE <- unlist(lapply(seq(dim(predict_theta)[1]), function(i){
   actual <- as.vector(truth_theta[i,])
@@ -2999,6 +3148,10 @@ print(dim(truth_theta))
 # make sure the rows are the same, too
 truth_theta <- truth_theta[rownames(predict_theta),]
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # return matrix where each column is the rmse fpr predicting a ct across the spots
 RCTD_bregmaFN7FullSeur8cts_ctRMSE <- do.call(cbind, lapply(colnames(breg_theta), function(ct){
   mltools::rmse(preds = predict_theta[,ct], actuals = truth_theta[,ct])
@@ -3024,7 +3177,7 @@ p <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/R
 
 ref <- bregmaFN7FullSeur
 
-meta_ref <- ref@meta.data[,c("All_classes", "nFeature_RNA")]
+meta_ref <- ref@meta.data[,c("All_classes", "nCount_RNA")]
 meta_ref$barcode <- rownames(meta_ref)
 colnames(meta_ref) <- c("cluster", "nUMI", "barcode")
 meta_ref <- meta_ref[,c("barcode", "cluster", "nUMI")]
@@ -3108,6 +3261,10 @@ print(dim(truth_theta))
 # make sure the rows are the same, too
 truth_theta <- truth_theta[rownames(predict_theta),]
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # for each spot, compute the RMSE wrt predicting proportions of the 9 cell types
 RCTD_bregmaFN7FullSeur75neurocts_spotsRMSE <- unlist(lapply(seq(dim(predict_theta)[1]), function(i){
   actual <- as.vector(truth_theta[i,])
@@ -3144,6 +3301,10 @@ print(dim(truth_theta))
 # make sure the rows are the same, too
 truth_theta <- truth_theta[rownames(predict_theta),]
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # return matrix where each column is the rmse fpr predicting a ct across the spots
 RCTD_bregmaFN7FullSeur75neurocts_ctRMSE <- do.call(cbind, lapply(colnames(breg_theta), function(ct){
   mltools::rmse(preds = predict_theta[,ct], actuals = truth_theta[,ct])
@@ -3179,6 +3340,10 @@ predict_theta <- breg_theta[,theta_pairs$rowix]
 # the `pairs$rowix` are the new paired indices of the columns in the corrMtx. Here, the cols are the cell types
 truth_theta <- breg_gt_theta[,theta_pairs$colsix]
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # for each spot, compute the RMSE wrt predicting proportions of the 9 cell types
 LDA_bregmaFN7FullSeur8cts_spotsRMSE <- unlist(lapply(seq(dim(truth_theta)[1]), function(i){
   actual <- as.vector(truth_theta[i,])
@@ -3205,6 +3370,10 @@ theta_pairs <- lsatPairs(getCorrMtx(m1 = breg_gt_theta,
 # for a given bregma, pair up predicted topics with cell types present
 predict_theta <- breg_theta[,theta_pairs$colsix]
 truth_theta <- breg_gt_theta[,theta_pairs$rowix]
+
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
 
 # return matrix where each column is the rmse for predicting each ct across spots
 LDA_bregmaFN7FullSeur8cts_ctRMSE <- do.call(cbind, lapply(seq(theta_pairs$rowix), function(ct){
@@ -3235,6 +3404,10 @@ predict_theta <- breg_theta[,theta_pairs$rowix]
 # the `pairs$rowix` are the new paired indices of the columns in the corrMtx. Here, the cols are the cell types
 truth_theta <- breg_gt_theta[,theta_pairs$colsix]
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # for each spot, compute the RMSE wrt predicting proportions of the 9 cell types
 LDA_bregmaFN7FullSeur75neurocts_spotsRMSE <- unlist(lapply(seq(dim(truth_theta)[1]), function(i){
   actual <- as.vector(truth_theta[i,])
@@ -3245,6 +3418,72 @@ length(LDA_bregmaFN7FullSeur75neurocts_spotsRMSE)
 head(LDA_bregmaFN7FullSeur75neurocts_spotsRMSE)
 
 ```
+
+### ------------------
+### ** scale dependence **
+
+WARNING: RMSE depends on the actual values
+
+the rmse scales with the values themselves...
+
+so maybe for comparing each spot with all cts, this is ok because each value in the vector for a spot is wrt a different cell type and its like taking the "average". Although I feel that certain cts would then be weigthing the overall RMSE differently. Like the cts at higher abundances would contribute more to the RMSE. And relative larger deviations for the low abundance cts would actually have less of an effect on the overall RMSE.
+
+When comparing a RMSE across all spots for a given CT, you can compare each method this way wrt a singe ct. But you can't compare ct to ct for each method. THis is why low abundance cts are lower RMSEs.
+
+Should find a way to normalize all the actual and predicted proportions across cell types.
+
+```{r}
+
+
+# scale-dependent:
+x_scale <- truth_theta
+y_scale <- predict_theta
+x <- x_scale[,"Ependymal"]
+y <- y_scale[,23]
+mltools::rmse(preds = y, actuals = x)
+
+x_scale <- 2*truth_theta
+y_scale <- 2*predict_theta
+x <- x_scale[,"Ependymal"]
+y <- y_scale[,23]
+mltools::rmse(preds = y, actuals = x)
+
+x_scale <- 0.5*truth_theta
+y_scale <- 0.5*predict_theta
+x <- x_scale[,"Ependymal"]
+y <- y_scale[,23]
+mltools::rmse(preds = y, actuals = x)
+
+# try seeing if scaling prevents this (here, just dividing by sd)
+x_scale <- truth_theta
+y_scale <- predict_theta
+x_scale <- scale(x_scale, center = FALSE, scale = apply(x_scale, 2, sd, na.rm = TRUE))
+y_scale <- scale(y_scale, center = FALSE, scale = apply(y_scale, 2, sd, na.rm = TRUE))
+x <- x_scale[,"Ependymal"]
+y <- y_scale[,23]
+mltools::rmse(preds = y, actuals = x)
+
+x_scale <- 2*truth_theta
+y_scale <- 2*predict_theta
+x_scale <- scale(x_scale, center = FALSE, scale = apply(x_scale, 2, sd, na.rm = TRUE))
+y_scale <- scale(y_scale, center = FALSE, scale = apply(y_scale, 2, sd, na.rm = TRUE))
+x <- x_scale[,"Ependymal"]
+y <- y_scale[,23]
+mltools::rmse(preds = y, actuals = x)
+
+x_scale <- 0.5*truth_theta
+y_scale <- 0.5*predict_theta
+x_scale <- scale(x_scale, center = FALSE, scale = apply(x_scale, 2, sd, na.rm = TRUE))
+y_scale <- scale(y_scale, center = FALSE, scale = apply(y_scale, 2, sd, na.rm = TRUE))
+x <- x_scale[,"Ependymal"]
+y <- y_scale[,23]
+mltools::rmse(preds = y, actuals = x)
+
+
+```
+
+### ------------------
+
 
 Each cell type separately for each deconvolved bregma
 
@@ -3261,6 +3500,10 @@ theta_pairs <- lsatPairs(getCorrMtx(m1 = breg_gt_theta,
 # for a given bregma, pair up predicted topics with cell types present
 predict_theta <- breg_theta[,theta_pairs$colsix]
 truth_theta <- breg_gt_theta[,theta_pairs$rowix]
+
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
 
 # return matrix where each column is the rmse for predicting each ct across spots
 LDA_bregmaFN7FullSeur75neurocts_ctRMSE <- do.call(cbind, lapply(seq(theta_pairs$rowix), function(ct){
@@ -3287,8 +3530,8 @@ ggplot(data = reshape2::melt(rmse_FN7_allCts_8cts),
        aes(x = variable, y = value, fill = variable)) +
   geom_boxplot(outlier.shape=NA) +
   geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
-  stat_compare_means(comparisons = my_comparisons, method = "wilcox.test", 
-                     label.y = c(0.50, 0.535, 0.582)) +
+  # stat_compare_means(comparisons = my_comparisons, method = "wilcox.test", 
+  #                    label.y = c(0.50, 0.535, 0.582)) +
   labs(title = "MERFISH 8 major cell type predictions across FN7 spots",
        x = "Method", y = "RMSE") +
   # theme(
@@ -3506,8 +3749,8 @@ ggplot(data = reshape2::melt(rmse_FN7_allCts_75neurocts),
        aes(x = variable, y = value, fill = variable)) +
   geom_boxplot(outlier.shape=NA) +
   geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
-  stat_compare_means(comparisons = my_comparisons, method = "wilcox.test", 
-                     label.y = c(0.2, 0.22, 0.24)) +
+  # stat_compare_means(comparisons = my_comparisons, method = "wilcox.test", 
+  #                    label.y = c(0.2, 0.22, 0.24)) +
   labs(title = "MERFISH 75 neuro cell type predictions across FN7 spots",
        x = "Method", y = "RMSE") +
   # theme(
@@ -3723,7 +3966,7 @@ thetaCorMtx <- getCorrMtx(m1 = FN7_K8$theta,
                            m2 = as.matrix(simFN7$gtSpotTopics),
                            type = "t")
 
-pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
 gplots::heatmap.2(x = thetaCorMtx,
                   density.info = "none",
                   trace = "none",
@@ -3737,9 +3980,9 @@ gplots::heatmap.2(x = thetaCorMtx,
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
-pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
 # pair up best matching cell class to a predicted topic
 pairs <- lsatPairs(thetaCorMtx)
 gplots::heatmap.2(x = thetaCorMtx[pairs$rowix, pairs$colsix],
@@ -3757,7 +4000,7 @@ gplots::heatmap.2(x = thetaCorMtx[pairs$rowix, pairs$colsix],
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
 # correlations along diagonal (after assigning best matches)
 lda_k8_thetaCor_paired_gt_cors <- diag(thetaCorMtx[pairs$rowix, pairs$colsix])
@@ -3779,7 +4022,7 @@ thetaCorMtx <- getCorrMtx(m1 = m1,
                            m2 = as.matrix(simFN7$gtSpotTopics),
                            type = "t")
 
-pdf(file = paste0(fig_path, "Fig1_B-4_FN7_SL_k8_mjrcts_thetaCor.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_SL_k8_mjrcts_thetaCor.pdf"))
 gplots::heatmap.2(x = thetaCorMtx,
                   density.info = "none",
                   trace = "none",
@@ -3793,9 +4036,9 @@ gplots::heatmap.2(x = thetaCorMtx,
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
-pdf(file = paste0(fig_path, "Fig1_B-4_FN7_SL_k8_mjrcts_thetaCor_pairs.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_SL_k8_mjrcts_thetaCor_pairs.pdf"))
 # pair up best matching cell class to a predicted topic
 pairs <- lsatPairs(thetaCorMtx)
 gplots::heatmap.2(x = thetaCorMtx[pairs$rowix, pairs$colsix],
@@ -3813,7 +4056,7 @@ gplots::heatmap.2(x = thetaCorMtx[pairs$rowix, pairs$colsix],
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
 # correlations along diagonal (after assigning best matches)
 sl_k8_thetaCor_paired_gt_cors <- diag(thetaCorMtx[pairs$rowix, pairs$colsix])
@@ -3837,7 +4080,7 @@ thetaCorMtx <- getCorrMtx(m1 = m1,
                            m2 = m2,
                            type = "t")
 
-pdf(file = paste0(fig_path, "Fig1_B-4_FN7_RCTD_k8_mjrcts_thetaCor.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_RCTD_k8_mjrcts_thetaCor.pdf"))
 gplots::heatmap.2(x = thetaCorMtx,
                   density.info = "none",
                   trace = "none",
@@ -3851,9 +4094,9 @@ gplots::heatmap.2(x = thetaCorMtx,
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
-pdf(file = paste0(fig_path, "Fig1_B-4_FN7_RCTD_k8_mjrcts_thetaCor_pairs.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_RCTD_k8_mjrcts_thetaCor_pairs.pdf"))
 # pair up best matching cell class to a predicted topic
 pairs <- lsatPairs(thetaCorMtx)
 gplots::heatmap.2(x = thetaCorMtx[pairs$rowix, pairs$colsix],
@@ -3871,7 +4114,7 @@ gplots::heatmap.2(x = thetaCorMtx[pairs$rowix, pairs$colsix],
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
 # correlations along diagonal (after assigning best matches)
 rctd_k8_thetaCor_paired_gt_cors <- diag(thetaCorMtx[pairs$rowix, pairs$colsix])
@@ -3892,7 +4135,7 @@ betaCorMtx <- getCorrMtx(m1 = FN7_K8$beta,
                          m2 = as.matrix(simFN7$gtCtGenes), # gt made from cells in bregma
                          type = "b")
 
-pdf(file = paste0(fig_path, "Fig1_B-5_FN7_k8_mjrcts_betaCor.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-5_FN7_k8_mjrcts_betaCor.pdf"))
 gplots::heatmap.2(x = betaCorMtx,
                   density.info = "none",
                   trace = "none",
@@ -3906,9 +4149,9 @@ gplots::heatmap.2(x = betaCorMtx,
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
-pdf(file = paste0(fig_path, "Fig1_B-5_FN7_k8_mjrcts_betaCor_pairs.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-5_FN7_k8_mjrcts_betaCor_pairs.pdf"))
 # pair up best matching cell class to a predicted topic
 pairs <- lsatPairs(betaCorMtx)
 gplots::heatmap.2(x = betaCorMtx[pairs$rowix, pairs$colsix],
@@ -3926,7 +4169,7 @@ gplots::heatmap.2(x = betaCorMtx[pairs$rowix, pairs$colsix],
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
 # correlations along diagonal (after assigning best matches)
 lda_k8_betaCor_paired_gt_cors <- diag(betaCorMtx[pairs$rowix, pairs$colsix])
@@ -3953,7 +4196,7 @@ betaCorMtx <- getCorrMtx(m1 = SL_bregmaFN7FullSeur8cts_predict$betaCt,
                          m2 = as.matrix(simFN7$gtCtGenes), # gt made from cells in bregma
                          type = "b")
 
-pdf(file = paste0(fig_path, "Fig1_B-5_FN7_SL_k8_mjrcts_betaCor.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-5_FN7_SL_k8_mjrcts_betaCor.pdf"))
 gplots::heatmap.2(x = betaCorMtx,
                   density.info = "none",
                   trace = "none",
@@ -3967,9 +4210,9 @@ gplots::heatmap.2(x = betaCorMtx,
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
-pdf(file = paste0(fig_path, "Fig1_B-5_FN7_SL_k8_mjrcts_betaCor_pairs.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-5_FN7_SL_k8_mjrcts_betaCor_pairs.pdf"))
 # pair up best matching cell class to a predicted topic
 pairs <- lsatPairs(betaCorMtx)
 gplots::heatmap.2(x = betaCorMtx[pairs$rowix, pairs$colsix],
@@ -3987,7 +4230,7 @@ gplots::heatmap.2(x = betaCorMtx[pairs$rowix, pairs$colsix],
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
 # correlations along diagonal (after assigning best matches)
 sl_k8_betaCor_paired_gt_cors <- diag(betaCorMtx[pairs$rowix, pairs$colsix])
@@ -4012,7 +4255,7 @@ thetaCorMtx <- getCorrMtx(m1 = FN7_K75$theta,
                            m2 = as.matrix(simFN7_neuro$gtSpotTopics),
                            type = "t")
 
-pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k75_neuro_thetaCor.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k75_neuro_thetaCor.pdf"))
 gplots::heatmap.2(x = thetaCorMtx,
                   density.info = "none",
                   trace = "none",
@@ -4026,9 +4269,9 @@ gplots::heatmap.2(x = thetaCorMtx,
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
-pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k75_neuro_thetaCor_pairs.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k75_neuro_thetaCor_pairs.pdf"))
 # pair up best matching cell class to a predicted topic
 pairs <- lsatPairs(thetaCorMtx)
 gplots::heatmap.2(x = thetaCorMtx[pairs$rowix, pairs$colsix],
@@ -4046,7 +4289,7 @@ gplots::heatmap.2(x = thetaCorMtx[pairs$rowix, pairs$colsix],
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
 # correlations along diagonal (after assigning best matches)
 lda_k75_thetaCor_paired_gt_cors <- diag(thetaCorMtx[pairs$rowix, pairs$colsix])
@@ -4068,7 +4311,7 @@ thetaCorMtx <- getCorrMtx(m1 = m1,
                            m2 = as.matrix(simFN7_neuro$gtSpotTopics),
                            type = "t")
 
-pdf(file = paste0(fig_path, "Fig1_B-4_FN7_SL_k75_neuro_thetaCor.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_SL_k75_neuro_thetaCor.pdf"))
 gplots::heatmap.2(x = thetaCorMtx,
                   density.info = "none",
                   trace = "none",
@@ -4082,9 +4325,9 @@ gplots::heatmap.2(x = thetaCorMtx,
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
-pdf(file = paste0(fig_path, "Fig1_B-4_FN7_SL_k75_neuro_thetaCor_pairs.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_SL_k75_neuro_thetaCor_pairs.pdf"))
 # pair up best matching cell class to a predicted topic
 pairs <- lsatPairs(thetaCorMtx)
 gplots::heatmap.2(x = thetaCorMtx[pairs$rowix, pairs$colsix],
@@ -4102,7 +4345,7 @@ gplots::heatmap.2(x = thetaCorMtx[pairs$rowix, pairs$colsix],
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
 # correlations along diagonal (after assigning best matches)
 sl_k75_thetaCor_paired_gt_cors <- diag(thetaCorMtx[pairs$rowix, pairs$colsix])
@@ -4126,7 +4369,7 @@ thetaCorMtx <- getCorrMtx(m1 = m1,
                            m2 = m2,
                            type = "t")
 
-pdf(file = paste0(fig_path, "Fig1_B-4_FN7_RCTD_k75_mjrcts_thetaCor.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_RCTD_k75_mjrcts_thetaCor.pdf"))
 gplots::heatmap.2(x = thetaCorMtx,
                   density.info = "none",
                   trace = "none",
@@ -4140,9 +4383,9 @@ gplots::heatmap.2(x = thetaCorMtx,
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
-pdf(file = paste0(fig_path, "Fig1_B-4_FN7_RCTD_k75_mjrcts_thetaCor_pairs.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_RCTD_k75_mjrcts_thetaCor_pairs.pdf"))
 # pair up best matching cell class to a predicted topic
 pairs <- lsatPairs(thetaCorMtx)
 gplots::heatmap.2(x = thetaCorMtx[pairs$rowix, pairs$colsix],
@@ -4160,7 +4403,7 @@ gplots::heatmap.2(x = thetaCorMtx[pairs$rowix, pairs$colsix],
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
 # correlations along diagonal (after assigning best matches)
 rctd_k75_thetaCor_paired_gt_cors <- diag(thetaCorMtx[pairs$rowix, pairs$colsix])
@@ -4181,7 +4424,7 @@ betaCorMtx <- getCorrMtx(m1 = FN7_K75$beta,
                          m2 = as.matrix(simFN7_neuro$gtCtGenes), # gt made from cells in bregma
                          type = "b")
 
-pdf(file = paste0(fig_path, "Fig1_B-5_FN7_k75_mjrcts_betaCor.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-5_FN7_k75_mjrcts_betaCor.pdf"))
 gplots::heatmap.2(x = betaCorMtx,
                   density.info = "none",
                   trace = "none",
@@ -4195,9 +4438,9 @@ gplots::heatmap.2(x = betaCorMtx,
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
-pdf(file = paste0(fig_path, "Fig1_B-5_FN7_k75_mjrcts_betaCor_pairs.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-5_FN7_k75_mjrcts_betaCor_pairs.pdf"))
 # pair up best matching cell class to a predicted topic
 pairs <- lsatPairs(betaCorMtx)
 gplots::heatmap.2(x = betaCorMtx[pairs$rowix, pairs$colsix],
@@ -4215,7 +4458,7 @@ gplots::heatmap.2(x = betaCorMtx[pairs$rowix, pairs$colsix],
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
 # correlations along diagonal (after assigning best matches)
 lda_k75_betaCor_paired_gt_cors <- diag(betaCorMtx[pairs$rowix, pairs$colsix])
@@ -4242,7 +4485,7 @@ betaCorMtx <- getCorrMtx(m1 = SL_bregmaFN7FullSeur75neurocts_predict$betaCt,
                          m2 = as.matrix(simFN7_neuro$gtCtGenes), # gt made from cells in bregma
                          type = "b")
 
-pdf(file = paste0(fig_path, "Fig1_B-5_FN7_SL_k75_mjrcts_betaCor.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-5_FN7_SL_k75_mjrcts_betaCor.pdf"))
 gplots::heatmap.2(x = betaCorMtx,
                   density.info = "none",
                   trace = "none",
@@ -4256,9 +4499,9 @@ gplots::heatmap.2(x = betaCorMtx,
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
-pdf(file = paste0(fig_path, "Fig1_B-5_FN7_SL_k75_mjrcts_betaCor_pairs.pdf"))
+# pdf(file = paste0(fig_path, "Fig1_B-5_FN7_SL_k75_mjrcts_betaCor_pairs.pdf"))
 # pair up best matching cell class to a predicted topic
 pairs <- lsatPairs(betaCorMtx)
 gplots::heatmap.2(x = betaCorMtx[pairs$rowix, pairs$colsix],
@@ -4276,7 +4519,7 @@ gplots::heatmap.2(x = betaCorMtx[pairs$rowix, pairs$colsix],
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
 # correlations along diagonal (after assigning best matches)
 sl_k75_betaCor_paired_gt_cors <- diag(betaCorMtx[pairs$rowix, pairs$colsix])
@@ -4383,6 +4626,10 @@ predict_theta <- breg_theta[,shared_cts]
 print(dim(predict_theta))
 print(dim(truth_theta))
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # for each spot, compute the RMSE wrt predicting proportions of the 9 cell types
 SL_noNeuro_spotsRMSE <- unlist(lapply(seq(dim(truth_theta)[1]), function(i){
   actual <- as.vector(truth_theta[i,])
@@ -4417,6 +4664,10 @@ truth_theta <- truth_theta/rowSums(truth_theta)
 # filtering. So their values after normalizing are NAs. replace with 0's
 truth_theta[is.na(truth_theta)] <- 0
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # for each spot, compute the RMSE wrt predicting proportions of the 9 cell types
 SL_noNeuro_spotsRMSE_adj <- unlist(lapply(seq(dim(truth_theta)[1]), function(i){
   actual <- as.vector(truth_theta[i,])
@@ -4443,6 +4694,10 @@ predict_theta <- breg_theta[,shared_cts]
 
 print(dim(predict_theta))
 print(dim(truth_theta))
+
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
 
 # return matrix where each column is the rmse for predicting a ct across the spots
 SL_noNeuro_ctRMSE <- do.call(cbind, lapply(colnames(truth_theta), function(ct){
@@ -4472,6 +4727,10 @@ truth_theta <- truth_theta/rowSums(truth_theta)
 # note that some spots that had only neuronal cts beforehand had all 0's after
 # filtering. So their values after normalizing are NAs. replace with 0's
 truth_theta[is.na(truth_theta)] <- 0
+
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
 
 # return matrix where each column is the rmse for predicting a ct across the spots
 SL_noNeuro_ctRMSE_adj <- do.call(cbind, lapply(colnames(truth_theta), function(ct){
@@ -4576,6 +4835,10 @@ print(dim(truth_theta))
 # make sure the rows are the same, too
 truth_theta <- truth_theta[rownames(predict_theta),]
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # for each spot, compute the RMSE wrt predicting proportions of the 9 cell types
 RCTD_noNeuro_spotsRMSE <- unlist(lapply(seq(dim(predict_theta)[1]), function(i){
   actual <- as.vector(truth_theta[i,])
@@ -4618,6 +4881,10 @@ truth_theta <- truth_theta/rowSums(truth_theta)
 # filtering. So their values after normalizing are NAs. replace with 0's
 truth_theta[is.na(truth_theta)] <- 0
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # for each spot, compute the RMSE wrt predicting proportions of the 9 cell types
 RCTD_noNeuro_spotsRMSE_adj <- unlist(lapply(seq(dim(predict_theta)[1]), function(i){
   actual <- as.vector(truth_theta[i,])
@@ -4653,6 +4920,10 @@ print(dim(truth_theta))
 # make sure the rows are the same, too
 truth_theta <- truth_theta[rownames(predict_theta),]
 
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
+
 # return matrix where each column is the rmse fpr predicting a ct across the spots
 RCTD_noNeuro_ctRMSE <- do.call(cbind, lapply(colnames(breg_theta), function(ct){
   mltools::rmse(preds = predict_theta[,ct], actuals = truth_theta[,ct])
@@ -4685,6 +4956,10 @@ truth_theta <- truth_theta/rowSums(truth_theta)
 # note that some spots that had only neuronal cts beforehand had all 0's after
 # filtering. So their values after normalizing are NAs. replace with 0's
 truth_theta[is.na(truth_theta)] <- 0
+
+# scale the ct columns by dividing each by sd
+truth_theta <- scale(truth_theta, center = FALSE, scale = apply(truth_theta, 2, sd, na.rm = TRUE))
+predict_theta <- scale(predict_theta, center = FALSE, scale = apply(predict_theta, 2, sd, na.rm = TRUE))
 
 # return matrix where each column is the rmse fpr predicting a ct across the spots
 RCTD_noNeuro_ctRMSE_adj <- do.call(cbind, lapply(colnames(breg_theta), function(ct){
@@ -7815,7 +8090,7 @@ print(length(wt_cells))
 
 mob_se_wt <- mob_se[,wt_cells]
 
-meta.data.wt = mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]
+meta.data.wt <-  mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]
 
 
 mob_se_wt_obj <- CreateSeuratObject(counts = mob_se_wt, project = "mob_wt",
@@ -7933,22 +8208,43 @@ vizTopicClusters(theta = m,
 
 ## reference
 
+RCTD takes untransformed raw counts
+
+
 ```{r}
 
 mob_se_wt_obj
+# mob_se_wt_raw_obj_nOEC
 
 # a lot of metadata info not being added...? try doing manually:
 # mob_se_wt[["ClusterName"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$ClusterName
 # mob_se_wt[["percent.mito"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$percent.mito
-mob_se_wt_obj[["nUMI"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$nUMI
+mob_se_wt_raw_obj[["nUMI"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$nUMI
+mob_se_wt_raw_obj[["ClusterName"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$ClusterName
 
 ```
+
+cluster markers using the raw counts
+
+```{r}
+
+Seurat::Idents(object = mob_se_wt_raw_obj) <- mob_se_wt_raw_obj@meta.data$ClusterName
+
+cluster_markers_mob_se_wt_raw <- Seurat::FindAllMarkers(object = mob_se_wt_raw_obj,
+                                              assay = "RNA",
+                                              slot = "data",
+                                              verbose = TRUE,
+                                              only.pos = TRUE)
+
+```
+
+
 
 ```{r}
 
 p <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/RCTD/mob_ref/"
 
-ref <- mob_se_wt_obj
+ref <- mob_se_wt_raw_obj
 
 meta_ref <- ref@meta.data[,c("ClusterName", "nUMI")]
 meta_ref$barcode <- rownames(meta_ref)
@@ -8809,10 +9105,72 @@ vizTopicClusters(theta = m,
 
 ## RCTD
 
+## reference
+
+RCTD takes untransformed raw counts
+
 ```{r}
 
-refdir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mob_RCTD_noOEC_ref/"
+cts <- unique(mob_se_wt_raw_obj@meta.data$ClusterName)
+cts <- cts[which(!cts %in% c("OEC1", "OEC2", "OEC3", "OEC4", "OEC5"))]
+
+mob_se_wt_raw_obj_nOEC <- subset(mob_se_wt_raw_obj, subset = (ClusterName %in% cts))
+
+```
+
+```{r}
+
+# mob_se_wt_obj
+mob_se_wt_raw_obj_nOEC
+
+# a lot of metadata info not being added...? try doing manually:
+# mob_se_wt[["ClusterName"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$ClusterName
+# mob_se_wt[["percent.mito"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$percent.mito
+# mob_se_wt_raw_obj[["nUMI"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$nUMI
+# mob_se_wt_raw_obj[["ClusterName"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$ClusterName
+
+```
+
+```{r}
+
+p <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/RCTD/mob_noOEC_ref/"
+
+ref <- mob_se_wt_raw_obj_nOEC
+
+meta_ref <- ref@meta.data[,c("ClusterName", "nUMI")]
+meta_ref$barcode <- rownames(meta_ref)
+colnames(meta_ref) <- c("cluster", "nUMI", "barcode")
+meta_ref <- meta_ref[,c("barcode", "cluster", "nUMI")]
+write.csv(x=meta_ref, row.names = FALSE, file=paste0(p, "meta_data.csv"))
+
+
+x <- as.data.frame(as.matrix(ref@assays$RNA@counts))
+cols <- colnames(x)
+x$Row.names <- rownames(x)
+x <- x[,c("Row.names", cols)]
+write.table(x=x, sep = ",",
+            col.names = colnames(x),
+            row.names = FALSE,
+            file=paste0(p, "dge.csv"))
+
+# write.table(x=ref@assays$RNA@counts,
+#             sep = ",",
+#             col.names = colnames(ref@assays$RNA@counts),
+#             file=paste0(p, "dge.csv"))
+
+write.csv(x = data.frame(Cluster = unique(ref@meta.data$ClusterName),
+                         Name = unique(ref@meta.data$ClusterName)),
+          row.names = FALSE,
+          file = paste0(p, "cell_type_dict.csv"))
+
+```
+
+```{r}
+
+refdir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/RCTD/mob_noOEC_ref/"
 mob_scRNAseq_noOEC_RCTD_reference <- dgeToSeurat(refdir)
+
+dim(mob_scRNAseq_noOEC_RCTD_reference@assays$RNA@counts)
 
 ```
 
@@ -9201,8 +9559,8 @@ then also the original scRNAseq clusters
 
 ```{r, fig.height=8, fig.width=8}
 
-betaCorMtx <- getCorrMtx(m1 = mobWtCellProxyBeta[,colnames(sl_countsClean$betaCt)],
-                         m2 = mobWtCellProxyBeta[,colnames(sl_countsClean$betaCt)],
+betaCorMtx <- getCorrMtx(m1 = mobWtCellProxyBetaRaw[,colnames(sl_countsClean$betaCt)],
+                         m2 = mobWtCellProxyBetaRaw[,colnames(sl_countsClean$betaCt)],
                          type = "b")
 
 # pdf(file = paste0(fig_path, "Fig1_B-5_FN7_k8_mjrcts_betaCor.pdf"))
@@ -9261,7 +9619,7 @@ If I correlate the W and the "proxyBeta":
 ```{r, fig.height=8, fig.width=8}
 
 betaCorMtx <- getCorrMtx(m1 = sl_countsClean$betaCt,
-                         m2 = mobWtCellProxyBeta[,colnames(sl_countsClean$betaCt)],
+                         m2 = mobWtCellProxyBetaRaw[,colnames(sl_countsClean$betaCt)],
                          type = "b")
 
 # pdf(file = paste0(fig_path, "Fig1_B-5_FN7_k8_mjrcts_betaCor.pdf"))
@@ -9441,7 +9799,7 @@ gplots::heatmap.2(x = thetaCorMtx[pairs$rowix, pairs$colsix],
                   ylab = "Cell layer",
                   key.title = NA,
                   cexRow = 1,
-                  cexCol = 0.9,
+                  cexCol = 1,
                   # lhei = c(1,3),
                   margins = c(6,11))
 # dev.off()
@@ -9551,6 +9909,30 @@ ggplot(data = reshape2::melt(rctd_theta_olfNerve_merged), aes(x = ref, y = value
 N10 very much granule cell layer, but highly variable wrt predicted proportions across spots.
 
 # 2. gexp cluster markers
+
+
+Get genes with significant differential genes determined used the raw scRNAseq counts, too.
+See if similar to the processed
+
+```{r}
+
+N2_seurat_genes <- cluster_markers_mob_se_wt_raw[which(cluster_markers_mob_se_wt_raw$cluster == "N2"),]
+N2_seurat_genes
+
+```
+
+```{r}
+
+# order by p-val
+N2_seurat_genes[order(N2_seurat_genes$p_val_adj, decreasing = FALSE),]
+
+# order by avg_log2FC (fold change in group compared to all other groups)
+N2_seurat_genes[order(N2_seurat_genes$avg_log2FC, decreasing = TRUE),]
+
+# get top 5 based on fold change (also significant)
+top5_n2 <- N2_seurat_genes[order(N2_seurat_genes$avg_log2FC, decreasing = TRUE),]$gene[1:5]
+
+```
 
 N2
 
@@ -9732,7 +10114,7 @@ cortex_sc <- Seurat::SCTransform(cortex_sc, verbose = FALSE)
 
 ```{r}
 
-Seurat::Idents(object = cortex_sc) <- cortex_sc@meta.data$subclass
+Seurat::Idents(object = cortex_sc) <- cortex_sc_sct@meta.data$subclass
 cortex_cluster_markers <- Seurat::FindAllMarkers(object = cortex_sc, 
                                               assay = "SCT",
                                               slot = "data",
@@ -9768,6 +10150,46 @@ cortexProxyBeta <- cortexProxyBeta/rowSums(cortexProxyBeta)
 dim(cortexProxyBeta)
 
 ```
+
+With raw counts:
+
+```{r}
+
+# cortex_sc@assays$RNA@counts 
+
+# clusters
+cortexClusters <- cortex_sc@meta.data$subclass
+names(cortexClusters) <- rownames(cortex_sc@meta.data)
+
+cortexProxyBetaRaw <- model.matrix(~ 0 + as.factor(cortexClusters))
+
+rownames(cortexProxyBetaRaw) <- names(cortexClusters)
+
+# fix names
+colnames(cortexProxyBetaRaw) <- unlist(lapply(colnames(cortexProxyBetaRaw), function(x) {
+  unlist(strsplit(x, ")"))[2]
+}))
+
+cortexProxyBetaRaw <- t(as.matrix(cortex_sc@assays$RNA@counts) %*% cortexProxyBetaRaw)
+
+# filter out genes to make same as cortexProxyBeta
+cortexProxyBetaRaw <- cortexProxyBetaRaw[,colnames(cortexProxyBeta)]
+
+cortexProxyBetaRaw <- cortexProxyBetaRaw/rowSums(cortexProxyBetaRaw)
+
+dim(cortexProxyBetaRaw)
+
+```
+
+note that additional filtering and transformations also when performing SCTransform
+
+```{r}
+
+plot(cortexProxyBetaRaw, cortexProxyBeta)
+
+```
+
+
 
 ```{r}
 
@@ -9883,26 +10305,45 @@ vizTopicClusters(theta = m,
 
 ### reference
 
-```{r}
-
-# cortex_sc[["ClusterName"]] <- cortex_sc@meta.data$subclass
-# cortex_sc[["nUMI"]] <- cortex_sc@meta.data$nFeature_RNA
-
-```
+need to start from raw count data
 
 ```{r}
 
-# write.csv(x=cortex_sc@meta.data[,c("ClusterName", "nUMI")], file="meta_data.csv")
-# write.csv(x=cortex_sc@assays$RNA@counts, file="dge.csv")
-# 
-# write.csv(x = data.frame(Cluster = unique(cortex_sc@meta.data$ClusterName),
-#             Name = unique(cortex_sc@meta.data$ClusterName)), file = "cell_type_dict.csv")
+p <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/RCTD/cortex_ref/"
+
+ref <- cortex_sc
+
+meta_ref <- ref@meta.data[,c("subclass", "nCount_RNA")] # nUMI = nCount_RNA
+meta_ref$barcode <- rownames(meta_ref)
+colnames(meta_ref) <- c("cluster", "nUMI", "barcode")
+meta_ref <- meta_ref[,c("barcode", "cluster", "nUMI")]
+write.csv(x=meta_ref, row.names = FALSE, file=paste0(p, "meta_data.csv"))
+
+
+x <- as.data.frame(as.matrix(ref@assays$RNA@counts)) # make sure set to raw counts
+cols <- colnames(x)
+x$Row.names <- rownames(x)
+x <- x[,c("Row.names", cols)]
+write.table(x=x, sep = ",",
+            col.names = colnames(x),
+            row.names = FALSE,
+            file=paste0(p, "dge.csv"))
+
+# write.table(x=ref@assays$RNA@counts,
+#             sep = ",",
+#             col.names = colnames(ref@assays$RNA@counts),
+#             file=paste0(p, "dge.csv"))
+
+write.csv(x = data.frame(Cluster = unique(ref@meta.data$subclass),
+                         Name = unique(ref@meta.data$subclass)),
+          row.names = FALSE,
+          file = paste0(p, "cell_type_dict.csv"))
 
 ```
 
 ``` {r}
 
-refdir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/cortex_RCTD_ref/"
+refdir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/RCTD/cortex_ref/"
 cortex_scRNAseq_RCTD_reference <- dgeToSeurat(refdir)
 
 ```
@@ -10119,8 +10560,8 @@ seurat markers for mob versus those for cortex
 ```{r, fig.height=8, fig.width=8}
 
 # in terms of cluster genes for the mob and cortex cts
-betaCorMtx <- getCorrMtx(m1 = cortexProxyBeta[,colnames(sl_countsClean_cortexRef$betaCt)],
-                         m2 = mobWtCellProxyBeta[,colnames(sl_countsClean$betaCt)],
+betaCorMtx <- getCorrMtx(m1 = cortexProxyBetaRaw[,colnames(sl_countsClean_cortexRef$betaCt)],
+                         m2 = mobWtCellProxyBetaRaw[,colnames(sl_countsClean$betaCt)],
                          type = "b")
 
 # pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
@@ -10243,7 +10684,7 @@ I suspect some correspondence between VLMC and the topics that are assigned to t
 
 ```{r, fig.height=8, fig.width=8}
 
-betaCorMtx <- getCorrMtx(m1 = cortexProxyBeta[,colnames(sl_countsClean_cortexRef$betaCt)],
+betaCorMtx <- getCorrMtx(m1 = cortexProxyBetaRaw[,colnames(sl_countsClean_cortexRef$betaCt)],
                            m2 = mob_k38$beta,
                            type = "b")
 
@@ -10298,7 +10739,7 @@ with the mobscRNAseq
 
 ```{r, fig.height=8, fig.width=8}
 
-betaCorMtx <- getCorrMtx(m1 = mobWtCellProxyBeta,
+betaCorMtx <- getCorrMtx(m1 = mobWtCellProxyBetaRaw,
                            m2 = mob_k38$beta,
                            type = "b")
 
@@ -10361,8 +10802,8 @@ Actually Mes1/2 is only slightly similar transcriptionally to the OECs...
 # reduce set of genes to test correlation to the cluster ones
 
 
-betaCorMtx <- getCorrMtx(m1 = mobWtCellProxyBeta[,colnames(sl_countsClean$betaCt)],
-                           m2 = mobWtCellProxyBeta[,colnames(sl_countsClean$betaCt)],
+betaCorMtx <- getCorrMtx(m1 = mobWtCellProxyBetaRaw[,colnames(sl_countsClean$betaCt)],
+                           m2 = mobWtCellProxyBetaRaw[,colnames(sl_countsClean$betaCt)],
                            type = "b")
 
 # pdf(file = paste0(fig_path, "Fig1_B-5_FN7_k8_mjrcts_betaCor.pdf"))
@@ -10417,8 +10858,8 @@ heatmap(betaCorMtx)
 # reduce set of genes to test correlation to the cluster ones
 
 
-betaCorMtx <- getCorrMtx(m1 = cortexProxyBeta[,colnames(sl_countsClean_cortexRef$betaCt)],
-                           m2 = cortexProxyBeta[,colnames(sl_countsClean_cortexRef$betaCt)],
+betaCorMtx <- getCorrMtx(m1 = cortexProxyBetaRaw[,colnames(sl_countsClean_cortexRef$betaCt)],
+                           m2 = cortexProxyBetaRaw[,colnames(sl_countsClean_cortexRef$betaCt)],
                            type = "b")
 
 # pdf(file = paste0(fig_path, "Fig1_B-5_FN7_k8_mjrcts_betaCor.pdf"))
@@ -11625,11 +12066,248 @@ sapply(gs, function(g) {
 })
 
 
+# Co-localization of topics
+
+```{r}
+
+head(bcl_k12$theta)
+rowSums(bcl_k12$theta)
+
+pcor <- do.call(rbind, lapply(1:12, function(i) {
+  p1 <- bcl_k12$theta[,i]
+  unlist(lapply(1:12, function(j) {
+    p2 <- bcl_k12$theta[,j]
+    cor(p1, p2)
+  }))
+}))
+diag(pcor) <- NA
+range(pcor)
+heatmap(pcor, col=correlation_palette)
+which(pcor == max(pcor), arr.ind=TRUE)
+
+tcor <- do.call(rbind, lapply(1:12, function(i) {
+  p1 <- bcl_k12$beta[i,]
+  unlist(lapply(1:12, function(j) {
+    p2 <- bcl_k12$beta[j,]
+    cor(p1, p2)
+  }))
+}))
+diag(tcor) <- NA
+range(tcor)
+heatmap(tcor, col=correlation_palette, scale='none')
+which(tcor == max(tcor), arr.ind=TRUE)
+
+foo <- pcor - tcor
+range(foo)
+diag(foo) <- NA
+heatmap(foo, col=correlation_palette, scale='none')
+which(foo == max(foo, na.rm=TRUE), arr.ind=TRUE)
+
+```
+
+
+```{r, fig.height=8, fig.width=8}
+
+thetaCorMtx <- getCorrMtx(m1 = bcl_k12$theta,
+                           m2 = bcl_k12$theta,
+                           type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = thetaCorMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "Major cell class",
+                  ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 0.8,
+                  cexCol = 0.8,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(thetaCorMtx)
+gplots::heatmap.2(x = thetaCorMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "Major cell class",
+                  ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 0.8,
+                  cexCol = 0.8,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+# correlations along diagonal (after assigning best matches)
+paired_cors <- diag(thetaCorMtx[pairs$rowix, pairs$colsix])
+
+hist(paired_cors, breaks = 10)
+mean(paired_cors)
+sd(paired_cors)
+
+```
+
+```{r, fig.height=8, fig.width=8}
+
+betaCorMtx <- getCorrMtx(m1 = bcl_k12$beta,
+                           m2 = bcl_k12$beta,
+                           type = "b")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = betaCorMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "Major cell class",
+                  ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 0.8,
+                  cexCol = 0.8,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(betaCorMtx)
+gplots::heatmap.2(x = betaCorMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "Major cell class",
+                  ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 0.8,
+                  cexCol = 0.8,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+# correlations along diagonal (after assigning best matches)
+paired_cors <- diag(betaCorMtx[pairs$rowix, pairs$colsix])
+
+hist(paired_cors, breaks = 10)
+mean(paired_cors)
+sd(paired_cors)
+
+```
+
+what's interesting is topics 11 and 1 are in the same topic cluster, but are in different parts of the tissue. So similar gexp but different theta. Could these be same cells (but different states).
+
+Also what are some transcriptionally different topics? But similar theta?
+
+6 and 3 with 1 and 11? 
+3 and 1 specifically?
+
 # =========================
 
 # Addt'l
 
 # -------
+
+objects to save
+
+```{r}
+
+# for assessing beta values
+save(mob_se_wt,
+     mob_se_wt_obj,
+     mob_se_wt_raw,
+     mob_se_wt_raw_obj_sct,
+     cluster_markers_mob_se_wt,
+     cluster_markers_mob_se_wt_raw,
+     mobWtCellProxyBeta,
+     mobWtCellProxyBetaRaw,
+     mob_k15,
+     sl_countsClean,
+     sl_ctTheta,
+     W_countsClean,
+     file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mob_data_to_assess_beta.RData")
+
+```
+
+```{r}
+
+# all of the trained models for mob:
+
+save(mob_k15,
+     mob_k38,
+     mobCorpus,
+     mobProxyTheta,
+     countsClean,
+     nmf_mod_mob_wt_countsClean_ls,
+     sl_countsClean,
+     RCTD_mob_results_norm,
+     nmf_mod_mob_wt_countsClean_noOECs_ls,
+     sl_countsClean_noOEC,
+     RCTD_mob_noOEC_results_norm,
+     sl_cortexRef_countsClean_ls,
+     sl_countsClean_cortexRef,
+     RCTD_cortexRef_results_norm,
+     file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mob_fitted_models.RData")
+
+```
+
+```{r}
+
+# all of the trained models for merfish:
+save(bregmaCellsGexpFN7, # gene counts
+      bregmaCellsGexpFN7_filt, # gene counts cells in patches
+      gtCtGenesFN7,
+      gtCtNeuronalGenesFN7,
+      FN7,
+      FN7_neuro,
+      bregmaFN7FullSeur, # seurat object using just cells in patches
+      bregmaFN7FullSeur_noNeuro,
+      simBregmasFN7,
+      simBregmasFN7_neuro,
+      simFN7,
+      simFN7_neuro,
+      FN7_K8,
+      FN7_K75,
+      bregmaFN7FullSeur_markers8cts,
+      bregmaFN7FullSeur_markers75neurocts,
+      bregmaFN7FullSeur_noNeuro_markers,
+      SL_bregmaFN7FullSeur8cts_fit,
+      SL_bregmaFN7FullSeur75neurocts_fit,
+      RCTD_FN7_results_norm,
+      RCTD_FN7_neuro_results_norm,
+      SL_bregmaFN7FullSeur_noNeuro_fit,
+      RCTD_FN7_noNeuro_results_norm,
+      file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/merfish_fitted_models.RData")
+
+
+```
+
+```{r}
+
+# all of the trained models for BCL:
+
+save(bcl_countsClean,
+      bcl_CPM,
+      bclCorpus,
+      bcl_k12,
+     file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/bcl_fitted_models.RData")
+
+
+```
+
 
 # explore beta vs gene counts
 
@@ -11642,17 +12320,17 @@ Ex: If 2 cell types express gene A at 10 and 20, is the beta probability going t
 ```{r}
 
 m1 <- mob_k15$beta
-m2 <- as.matrix(mobWtCellProxyBeta)
+m2 <- as.matrix(mobWtCellProxyBetaRaw)
 
 betaCor <- getCorrMtx(m1 = m1,
                       m2 = m2, # gt proxy beta
                       type = "b")
 
 
-keep_genes <- intersect(colnames(m1), colnames(m2))
+mobk15_mobProxyBeta_sharedGenes <- intersect(colnames(m1), colnames(m2))
 
-m1_filt <- m1[,keep_genes]
-m2_filt <- m2[,keep_genes]
+m1_filt <- m1[,mobk15_mobProxyBeta_sharedGenes]
+m2_filt <- m2[,mobk15_mobProxyBeta_sharedGenes]
 
 pairs <- lsatPairs(betaCor)
 gplots::heatmap.2(x = betaCor[pairs$rowix, pairs$colsix],
@@ -11682,13 +12360,13 @@ sd(diag_cors)
 ```{r}
 
 # Mes1 and topic 4 correlate strongly (0.827). What about the genes?
-plot(log(m2_filt["Mes1",]), log(m1_filt[4,]))
+plot(m2_filt["N1",], m1_filt[5,])
 
 # N4 and topic 3 correlate weakly (0.37). What about the genes?
-plot(m2_filt["N4",], m1_filt[3,])
+plot(m2_filt["N7",], m1_filt[2,])
 
 # OEC5 and topic 14 in correlate moderately (0.65). What about the genes?
-plot(m2_filt["OEC5",], m1_filt[14,])
+plot(m2_filt["Mono",], m1_filt[15,])
 
 ```
 
@@ -11702,12 +12380,12 @@ So should really try this using the "W" matrix from spotlight which is trained u
 
 ```{r}
 
-difExpAll <- MERINGUE::getDifferentialGenes(cd = mob_se_wt, cols = mobWtCellClusters)
+difExpAll <- MERINGUE::getDifferentialGenes(cd = mob_se_wt_raw, cols = mobWtCellClusters)
 
 # also try with just the genes in the LDA corpus
 # this actually ends up being very similar in terms of the p.adj, Z, M, fe values
 # assigned even with a limited set of genes to begin with. Just stick to all genes above
-difExp_limitedGenes <- MERINGUE::getDifferentialGenes(cd = mob_se_wt[keep_genes,], cols = mobWtCellClusters)
+# difExp_limitedGenes <- MERINGUE::getDifferentialGenes(cd = mob_se_wt[mobk15_mobProxyBeta_sharedGenes,], cols = mobWtCellClusters)
 
 ```
 
@@ -11731,18 +12409,248 @@ difExp_limitedGenes_sig <- lapply(difExp_limitedGenes, function(x) {
 
 ```{r}
 
-# difExpAll$Mes1[names(m2_filt["Mes1",]),]$fe
+m1_filt[4,order(m1_filt[4,], decreasing = TRUE)]
 
-# Mes1 and topic 4 correlate strongly (0.827). What about the genes?
-plot(difExpAll$Mes1[names(m2_filt["Mes1",]),]$Z, m1_filt[4,])
+m1_filt[14,order(m1_filt[14,], decreasing = TRUE)]
 
-# N4 and topic 3 correlate weakly (0.37). What about the genes?
-plot(difExpAll$N4[names(m2_filt["N4",]),]$Z, m1_filt[3,])
-
-# OEC5 and topic 14 in correlate moderately (0.65). What about the genes?
-plot(difExpAll$OEC5[names(m2_filt["OEC5",]),]$Z, m1_filt[14,])
+m1_filt[11,order(m1_filt[11,], decreasing = TRUE)]
 
 ```
+
+
+```{r}
+
+
+ggplot(data = reshape2::melt(m1_filt)) +
+  geom_boxplot(aes(x = as.character(Var1), y = value)) +
+  geom_point(data = reshape2::melt(m1_filt)[which(reshape2::melt(m1_filt)[,"Var2"] == "Ptgds"),], 
+             aes(x = as.character(Var1), y = value, color = "Ptgds")) +
+  geom_point(data = reshape2::melt(m1_filt)[which(reshape2::melt(m1_filt)[,"Var2"] == "Apod"),], 
+             aes(x = as.character(Var1), y = value, color = "Apod")) +
+  geom_point(data = reshape2::melt(m1_filt)[which(reshape2::melt(m1_filt)[,"Var2"] == "Fabp7"),], 
+             aes(x = as.character(Var1), y = value, color = "Fabp7")) +
+  geom_point(data = reshape2::melt(m1_filt)[which(reshape2::melt(m1_filt)[,"Var2"] == "Kctd12"),], 
+             aes(x = as.character(Var1), y = value, color = "Kctd12")) +
+  geom_point(data = reshape2::melt(m1_filt)[which(reshape2::melt(m1_filt)[,"Var2"] == "Atp1b1"),], 
+             aes(x = as.character(Var1), y = value, color = "Atp1b1")) +
+  geom_point(data = reshape2::melt(m1_filt)[which(reshape2::melt(m1_filt)[,"Var2"] == "Nrgn"),], 
+             aes(x = as.character(Var1), y = value, color = "Nrgn")) +
+  labs(
+       x = "Topic", y = "gene beta value")
+
+# ggplot(data = reshape2::melt(m1_filt)) +
+#   geom_boxplot(aes(x = as.character(Var1), y = value)) +
+#   geom_point(data = reshape2::melt(m1_filt)[which(reshape2::melt(m1_filt)[,"Var2"] == "Ptgds"),], 
+#              aes(x = as.character(Var1), y = value, color = "red"))
+
+```
+
+```{r}
+
+PDF <- approxfun(density(m1_filt[3,]), rule=2)
+plot(PDF)
+points(m1_filt[3,"Nrgn"], PDF(m1_filt[3,"Nrgn"]))
+p <- integrate(PDF, lower=m1_filt[3,"Nrgn"], upper=1)
+p
+
+```
+
+```{r}
+
+topicGenePvals <- do.call(rbind, lapply(rownames(m1_filt), function(t){
+  pvals <- unlist(lapply(mobk15_mobProxyBeta_sharedGenes, function(g){
+    PDF <- approxfun(density(m1_filt[t,]), rule=2)
+    p <- integrate(PDF, lower=m1_filt[t,g], upper=1, stop.on.error = FALSE)
+    p$value
+  }))
+  names(pvals) <- mobk15_mobProxyBeta_sharedGenes
+  pvals
+}))
+rownames(topicGenePvals) <- rownames(m1_filt)
+
+
+```
+
+```{r}
+
+l <- lapply(1:15, function(t){
+  plot(-log10(topicGenePvals[t,]), m1_filt[t,])
+  plot(rank(topicGenePvals[t,]), rank(m1_filt[t,]))
+  
+  -log10(topicGenePvals[t,order(-log10(topicGenePvals[t,]), decreasing = TRUE)])
+  m1_filt[t,order(m1_filt[t,], decreasing = TRUE)]
+  
+  # print(-log10(topicGenePvals[t, which(-log10(topicGenePvals[t,]) > -log10(0.05))]))
+  print(m1_filt[t, which(-log10(topicGenePvals[t,]) > -log10(0.05))])
+  
+})
+
+
+```
+
+```{r}
+
+plot(-log10(topicGenePvals), m1_filt)
+abline(v = -log10(0.05), col='red')
+
+```
+
+
+```{r}
+
+mat <- rbind(m1_filt, m1_filt, m1_filt)
+
+tps <- rownames(mat)
+names(tps) <- rownames(mat)
+tps <- as.factor(tps)
+
+sigDiffTopicGenes <- MERINGUE::getDifferentialGenes(cd = t(mat), cols = tps)
+
+## average gene expression for each group
+# mat.group <- do.call(cbind, lapply(levels(tps), function(g) {
+#   rowMeans(t(m1_filt)[,group==g])
+# }))
+# colnames(mat.group) <- levels(group)
+# ## construct tree related groups
+
+# d_ <- as.dist(1-cor(t(m1_filt)))
+# hc_ <- stats::hclust(d_, method = "ward.D")
+# plot(hc_)
+# 
+# dend <- as.dendrogram(hc_)
+# group <- tps
+# M <- mobk15_mobProxyBeta_sharedGenes
+# mat <- t(m1_filt)
+# G <- length(levels(mob_k15$clusters))
+# 
+# pv <- sapply(M, function(i) {
+#   mydataframe <- data.frame(y=mat[i,], ig=group)
+#   print(mydataframe)
+#   fit <- aov(y ~ ig, data=mydataframe)
+#   summary(fit)[[1]][["Pr(>F)"]][1]
+# })
+
+
+
+
+# pv.sig.all <- c()
+# pv.recur <- function(dend) {
+#   g1 <- labels(dend[[1]])
+#   g2 <- labels(dend[[2]])
+#   #print(g1)
+#   #print(g2)
+#   ingroup <- names(group)[group %in% g1]
+#   outgroup <- names(group)[group %in% g2]
+#   print(ingroup)
+#   print(outgroup)
+#   pv <- sapply(M, function(i) {
+#     t.test(mat[i,ingroup], mat[i,outgroup])$p.value
+#   })
+#   names(pv) <- rownames(mat)
+#   pv.sig <- names(pv)[pv < 0.05/length(M)/length(hc_$height)] ## bonferonni
+#   print(pv.sig)
+#   pv.sig.all <<- c(pv.sig.all, pv.sig) ## save
+#   
+#   ## recursion to go down tree if not leaf
+#   print(dend)
+#   print(dend[[1]])
+#   print(dend[[2]])
+#   if(!is.leaf(dend[[1]])) {
+#     pv.recur(dend[[1]])
+#   }
+#   if(!is.leaf(dend[[2]])) {
+#     pv.recur(dend[[2]])
+#   }
+# }
+# pv.recur(dend)
+# 
+# heatmap(mat[unique(unlist(pv.sig.all)),], Rowv=NA, Colv=NA, col=colorRampPalette(c('blue', 'white', 'red'))(100), scale="none", ColSideColors=rainbow(G)[group], labCol=FALSE, labRow=FALSE)
+
+```
+
+
+For each cluster and topic combo, compute correlation (pearson or spearman) wrt beta and a component of gene expression (p-val of significant diff exp, z-score, or expression in cluster.
+
+Does expression of a gene across clusters correlated with its beta across topics?
+
+
+```{r}
+
+# Note:
+# difExp_limitedGenes and difExpAll nearly the same. So doesn't matter which gene set is used.
+# Makes sense because genes are not being compared to other genes
+# Each gene is compared across clusters independent of the other genes
+
+
+
+
+ct <- "MyOligo"
+tp <- 4
+
+# difExpGenesDF <- difExpAll[[ct]][names(m2_filt[ct,]),]
+# difExpGenesDF$beta <- m1_filt[tp,]
+# difExpGenesDF$betaZ <- scale(m1_filt[tp,])
+
+# ggplot(data = difExpGenesDF) +
+#   geom_point(aes(x = -log10(p.adj), y = beta))
+# 
+# ggplot(data = difExpGenesDF) +
+#   geom_point(aes(x = -log10(p.adj), y = beta))
+
+# Mes1 and topic 4 correlate strongly (0.827). What about the genes?
+plot(-log10(difExpAll[[ct]][names(m2_filt[ct,]),]$p.adj), m1_filt[tp,])
+cor(-log10(difExpAll[[ct]][names(m2_filt[ct,]),]$p.adj), m1_filt[tp,], method = c("pearson"))
+cor(-log10(difExpAll[[ct]][names(m2_filt[ct,]),]$p.adj), m1_filt[tp,], method = c("spearman"))
+
+plot(difExpAll[[ct]][names(m2_filt[ct,]),]$M, m1_filt[tp,])
+cor(difExpAll[[ct]][names(m2_filt[ct,]),]$M, m1_filt[tp,], method = c("pearson"))
+cor(difExpAll[[ct]][names(m2_filt[ct,]),]$M, m1_filt[tp,], method = c("spearman"))
+
+plot(difExpAll[[ct]][names(m2_filt[ct,]),]$Z, m1_filt[tp,])
+cor(difExpAll[[ct]][names(m2_filt[ct,]),]$Z, m1_filt[tp,], method = c("pearson"))
+cor(difExpAll[[ct]][names(m2_filt[ct,]),]$Z, m1_filt[tp,], method = c("spearman"))
+
+plot(as.matrix(mobWtCellProxyBeta)[ct, names(m2_filt[ct,])], m1_filt[tp,])
+cor(-log10(as.matrix(mobWtCellProxyBeta)[ct, names(m2_filt[ct,])]), m1_filt[tp,], method = c("pearson"))
+cor(-log10(as.matrix(mobWtCellProxyBeta)[ct, names(m2_filt[ct,])]), m1_filt[tp,], method = c("spearman"))
+
+
+ct <- "OEC5"
+tp <- 14
+
+plot(-log10(difExpAll[[ct]][names(m2_filt[ct,]),]$p.adj), m1_filt[tp,])
+cor(-log10(difExpAll[[ct]][names(m2_filt[ct,]),]$p.adj), m1_filt[tp,], method = c("pearson"))
+cor(-log10(difExpAll[[ct]][names(m2_filt[ct,]),]$p.adj), m1_filt[tp,], method = c("spearman"))
+
+plot(difExpAll[[ct]][names(m2_filt[ct,]),]$M, m1_filt[tp,])
+cor(difExpAll[[ct]][names(m2_filt[ct,]),]$M, m1_filt[tp,], method = c("pearson"))
+cor(difExpAll[[ct]][names(m2_filt[ct,]),]$M, m1_filt[tp,], method = c("spearman"))
+
+plot(difExpAll[[ct]][names(m2_filt[ct,]),]$Z, m1_filt[tp,])
+cor(difExpAll[[ct]][names(m2_filt[ct,]),]$Z, m1_filt[tp,], method = c("pearson"))
+cor(difExpAll[[ct]][names(m2_filt[ct,]),]$Z, m1_filt[tp,], method = c("spearman"))
+
+plot(-log10(as.matrix(mobWtCellProxyBeta)[ct, names(m2_filt[ct,])]), m1_filt[tp,])
+cor(-log10(as.matrix(mobWtCellProxyBeta)[ct, names(m2_filt[ct,])]), m1_filt[tp,], method = c("pearson"))
+cor(-log10(as.matrix(mobWtCellProxyBeta)[ct, names(m2_filt[ct,])]), m1_filt[tp,], method = c("spearman"))
+
+```
+
+```{r}
+
+# Mes1 and topic 4 correlate strongly (0.827). What about the genes?
+plot(difExpAll$Mes1[names(m2_filt["Mes1",]),]$p.adj, m1_filt[4,])
+
+# significant cluster genes determined by seurat that are in the corpus
+mobWtdifGenesSeurat_inCorpus <- cluster_markers_mob_se_wt[which(cluster_markers_mob_se_wt$cluster == "Mes1" & cluster_markers_mob_se_wt$gene %in% names(m2_filt["Mes1",])),]
+dim(mobWtdifGenesSeurat_inCorpus)
+
+# compare to beta from LDA model
+plot(difExpAll$Mes1[names(m2_filt["Mes1",]),]$p.adj, m1_filt[4,])
+
+```
+
+
 
 In cases where the beta correlates well with the ct expression, there are a few top genes that are highly expressed in the cell type that the beta picks up on. But the weights are not direct correspondences with the gene expressions.
 
@@ -11766,7 +12674,7 @@ Make a proxy beta using the 38 cell type clusters of the mob scRNAseq reference
 
 ```{r}
 
-dim(mobWtCellProxyBeta)
+dim(mobWtCellProxyBetaRaw)
 
 ```
 
@@ -11776,14 +12684,14 @@ This one was fit using `mob_counts`, so the seurat cluster genes were additional
 
 ```{r}
 
-load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/spotlight_nmf_train_mob_wt_countsClean_ls.RData")
+# load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/spotlight_nmf_train_mob_wt_countsClean_ls.RData")
 # nmf_mod_mob_wt_countsClean_ls
 
 W_countsClean <- nmf_mod_mob_wt_countsClean_ls[[1]]@fit@W
 
 dim(W_countsClean)
 
-keep_genes <- colnames(mobWtCellProxyBeta)[colnames(mobWtCellProxyBeta) %in% rownames(W_countsClean)]
+keep_genes <- colnames(mobWtCellProxyBetaRaw)[colnames(mobWtCellProxyBetaRaw) %in% rownames(W_countsClean)]
 length(keep_genes)
 
 ```
@@ -11792,7 +12700,7 @@ correlate each, then plot gene expression vs betas for a variety of different to
 
 ```{r}
 
-w_vs_mobScRNA_beta <- getCorrMtx(m1 = mobWtCellProxyBeta[,keep_genes],
+w_vs_mobScRNA_beta <- getCorrMtx(m1 = mobWtCellProxyBetaRaw[,keep_genes],
                                        m2 = t(W_countsClean),
                                        type = "b")
 
@@ -11844,6 +12752,19 @@ sd(cors)
 ```{r}
 
 # astro 3 and 3 corr = 0.86
+plot(x = mobWtCellProxyBetaRaw["Astro3",keep_genes], y = t(W_countsClean)[3,keep_genes])
+
+# corr = 0.915
+plot(x = mobWtCellProxyBetaRaw["N3",keep_genes], y = t(W_countsClean)[25,keep_genes])
+
+# corr = 0.37
+plot(x = mobWtCellProxyBetaRaw["Mural1",keep_genes], y = t(W_countsClean)[12,keep_genes])
+
+```
+
+```{r}
+
+# astro 3 and 3 corr = 0.86
 plot(x = mobWtCellProxyBeta["Astro3",keep_genes], y = t(W_countsClean)[3,keep_genes])
 
 # corr = 0.915
@@ -11871,13 +12792,31 @@ t(W_countsClean)[25,keep_genes][order(t(W_countsClean)[25,keep_genes], decreasin
 ```{r}
 
 # input df for `vizGeneCounts`
-df <- t(mob_cpm)[,c("Rps29", "Mt3", "Cst3", "Rpl41", "Tmsb10")]
+df <- t(mob_cpm)[,c("Rps29", "Mt3", "Cst3", "Rpl41", "Tmsb10", "Ptgds", "Atp1b1")]
 df <- merge(mobCorpus$mob$pos, as.data.frame(df), by=0)
 rownames(df) <- df$Row.names
 
 ```
 
 ```{r}
+
+vizGeneCounts(df = df,
+              gene = "Atp1b1",
+              # groups = as.character(mobProxyTheta$`Granule Cell Layer`),
+              # group_cols = c("0" = "white", "1" = "white"),
+              # size = (mobProxyTheta$`Granule Cell Layer` + 0.5) * 5,
+              # stroke = 0, # maybe consider just the size? group of interest is large spots, the rest are small?
+              plotTitle = "Atp1b1",
+              showLegend = TRUE)
+
+vizGeneCounts(df = df,
+              gene = "Ptgds",
+              # groups = as.character(mobProxyTheta$`Granule Cell Layer`),
+              # group_cols = c("0" = "white", "1" = "white"),
+              # size = (mobProxyTheta$`Granule Cell Layer` + 0.5) * 5,
+              # stroke = 0, # maybe consider just the size? group of interest is large spots, the rest are small?
+              plotTitle = "Ptgds",
+              showLegend = TRUE)
 
 vizGeneCounts(df = df,
               gene = "Rps29",
@@ -11941,6 +12880,24 @@ vizGeneCounts(df = df,
               showLegend = TRUE)
 
 ```
+
+# p-val vs beta
+
+## mob_k15
+
+
+```{r}
+
+x1 <- seq(from = 10, to = 100, by = 10)
+x2 <- seq(from = 50, to = 100, by = 5)
+x3 <- seq(from = 20, to = 100, by = 20)
+
+
+
+```
+
+
+
 
 
 # -------

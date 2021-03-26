@@ -5,6 +5,7 @@ library(ggplot2)
 library(scatterpie)
 library(viridis) # for "scale_fill_viridis in `vizGeneCounts`
 library(dynamicTreeCut)
+library(slam)
 
 
 # for figures but not for actual package

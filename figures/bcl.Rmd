@@ -1,0 +1,882 @@
+---
+title: "Untitled"
+author: "Brendan F. Miller"
+date: "3/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+save(bcl_countsClean,
+      bcl_CPM,
+      bclCorpus,
+      bcl_k12,
+     file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/bcl_fitted_models.RData")
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/bcl_fitted_models.RData")
+
+```
+
+```{r}
+
+data(BCL)
+# 4 layers, 1031 total spots.
+
+bcl_pos <- BCL$pos[,1:2]
+bcl_slice <- BCL$pos[,3]
+names(bcl_slice) <- rownames(bcl_pos)
+length(bcl_slice)
+
+# filter spots in bcl_slice based on those kept in the corpus
+bcl_slice_filt <- bcl_slice[names(bcl_slice) %in% rownames(bclCorpus$pos)]
+length(bcl_slice_filt)
+
+bclCorpus$slice <- bcl_slice_filt
+
+# clean
+# bcl_countsClean <- MERINGUE::cleanCounts(counts = BCL$counts, # genes x spots mtx
+#                                         min.reads = 10,
+#                                         min.lib.size = 10,
+#                                         verbose=TRUE)
+# 
+# bcl_CPM <- MERINGUE::normalizeCounts(counts = bcl_countsClean,
+#                                           verbose=TRUE, log=FALSE)
+
+```
+
+Consider all 4 slices as part of same corpus
+
+But first, for genes, consider those that are overdispersed in all slices separately
+
+```{r}
+
+# list of either the mob data sets or paths to the data for inputs into `preprocess`
+
+bcl_paths <- list()
+bcl_paths[[1]] <- as.matrix(t(BCL$counts[,names(bcl_slice[bcl_slice == 1])]))
+bcl_paths[[2]] <- as.matrix(t(BCL$counts[,names(bcl_slice[bcl_slice == 2])]))
+bcl_paths[[3]] <- as.matrix(t(BCL$counts[,names(bcl_slice[bcl_slice == 3])]))
+bcl_paths[[4]] <- as.matrix(t(BCL$counts[,names(bcl_slice[bcl_slice == 4])]))
+
+```
+
+```{r}
+
+bclRepGenes <- lapply(bcl_paths, function(p) {
+  dat <- preprocess(p,
+                   alignFile = NA,
+                   extractPos = FALSE,
+                   selected.genes = NA,
+                   nTopGenes = NA,
+                   genes.to.remove = NA,
+                   perc.spots = NA,
+                   min.reads = 10,
+                   min.lib.size = 10,
+                   ODgenes = TRUE, # select the overdispersed genes
+                   od.genes.alpha = 0.2,
+                   gam.k = 5)
+  colnames(dat$corpus)
+})
+
+commonBCLGenes <- Reduce(intersect, bclRepGenes)
+length(commonBCLGenes)
+
+```
+
+152 genes overdispersed across the 4 sections
+
+# Txn clustering
+
+In the original paper, 3 clusters ID:
+- ductal carcinoma in situ
+- invasive ductal carcinoma
+- non-malignant
+
+```{r}
+
+# use the CPM adjusted counts and the common OD genes used in corpus for MOB
+
+pcs.info <- prcomp(t(log10(as.matrix(bcl_CPM[commonBCLGenes,])+1)), center=TRUE)
+plot(pcs.info$sdev[1:30])
+nPcs <- 5
+pcs <- pcs.info$x[,1:nPcs]
+# 2D embedding by tSNE
+emb <- Rtsne::Rtsne(pcs,
+                    is_distance=FALSE,
+                    perplexity=30,
+                    num_threads=1,
+                    verbose=FALSE)$Y
+rownames(emb) <- rownames(pcs)
+# Graph-based cluster detection
+k <- 300
+bcl_com <- MERINGUE::getClusters(pcs, k, method=igraph::cluster_louvain)
+
+par(mfrow=c(2,2), mar=rep(1,4))
+
+# top row
+# left: all slice spots tSNE embedding and labeled by cluster assignment
+MUDAN::plotEmbedding(emb, groups=bcl_com,
+                     show.legend=TRUE, xlab=NA, ylab=NA,
+                     verbose=FALSE)
+# right: all slice spots tSNE embedding and labeled by tissuse slice assignment
+MUDAN::plotEmbedding(emb, groups=bcl_slice,
+                     show.legend=TRUE, xlab=NA, ylab=NA,
+                     verbose=FALSE)
+
+# bottom row
+# left: spots labeld by cluster assignment and overlayed on each slice.
+# Same clusters seem to be at similar spot locations on slices. Nice to see
+MUDAN::plotEmbedding(bclCorpus$pos, groups=bcl_com,
+                     cex=1, xlab=NA, ylab=NA,
+                     verbose=FALSE)
+# right: spots colored by slice and slices overlayed
+MUDAN::plotEmbedding(bclCorpus$pos, groups=bcl_slice,
+                     cex=1, xlab=NA, ylab=NA,
+                     verbose=FALSE)
+
+
+```
+
+# Overlay spots 
+
+overlay the txn cluster labeled spots on top of the H&E images
+
+```{r}
+
+# 12 custom colors that look decent on top of the purple H&E
+topic_colors <- c("red", "yellow", "green", "magenta", "black", "cyan", "tan2", "orange", "blue", "sienna", "seagreen", "turquoise1")
+
+```
+
+
+## BCL1
+
+```{r, fig.width=10, fig.height=11}
+
+he <- readJPEG('/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/HE_BrightfieldImages/HE_layer1_BC.jpg')
+
+# alignment matrices came with these images
+he_align <- matrix(unlist(read.table("/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/Alignments/Layer1_BC_transformation.txt")), nrow = 3, ncol = 3)
+
+posScale <- bclCorpus$pos[bclCorpus$slice==1,]
+sliceTxnClusters <- bcl_com[bclCorpus$slice==1]
+
+# use the alignment file to adjust
+posScale[,"x"] <- posScale[,"x"] * he_align[1,1]
+posScale[,"y"] <- posScale[,"y"] * he_align[2,2]
+
+# bring coordinates to positive values. set the x and y to start  at 0
+posScale[,"x"] <- posScale[,"x"] - min(posScale[,"x"])
+posScale[,"y"] <- posScale[,"y"] - min(posScale[,"y"])
+
+# Flip the spots horizontally
+posScale[,"y"] <- posScale[,"y"] + 2*((dim(he)[1]/2) - posScale[,"y"])
+# posScale[,"x"] <- posScale[,"x"]
+
+# set the x and y to start at 0 again, after flipping
+posScale[,"x"] <- posScale[,"x"] - min(posScale[,"x"])
+posScale[,"y"] <- posScale[,"y"] - min(posScale[,"y"])
+
+
+# final adjustment
+# based on the Stahl et al spot coordinates (from Layer1_BC_count_matrix-1.tsv)
+# that were adjusted with the alignment matrix, get the minimum x and y coords of these spots
+# also double checked that the range of both sets of spot coordinates
+# matched these, which they do. So just a matter of shifting spots in x and y direction
+# equal to where the positions of the spots are in the stahl data
+posScale[,"x"] <- posScale[,"x"] + 1380
+posScale[,"y"] <- posScale[,"y"] + 2669
+
+
+# plotting:
+# ==============================================
+
+# par(mfrow=c(1,1), mar=rep(5,4))
+plot.new()
+plot(c(0,dim(he)[2]), c(0,dim(he)[1])) 
+
+# the point coords correspond to the mirror of the jpeg when plotted
+# first dim is the y, which we reverse to match spot
+# he[dim(he)[1]:1, , ]
+# but if the y is not reveresed, then the spots need to be rotated along the horizontal
+# to do this, find midpoint on the y-axis, and use this to rotate the y-coords of the spots
+# posScale[,"y"] + 2*((dim(he)[1]/2) - posScale[,"y"])
+# take distance of spots from the center horizontal of the image, multiply by 2 then add
+rasterImage(he[, , ],
+            0, 0,
+            dim(he)[2], dim(he)[1])
+# points(posScale[,"x"], posScale[,"y"], col='red', pch="+")
+# points(posScale[,"x"], posScale[,"y"], col=MERINGUE:::fac2col(bcl_com), pch=16)
+points(posScale[,"x"], posScale[,"y"], col=MERINGUE:::fac2col(sliceTxnClusters), pch=16)
+
+
+m <- bcl_k12$theta[names(sliceTxnClusters),]
+p <- posScale # bclCorpus$pos[names(sliceTxnClusters),]
+
+# vizAllTopics(theta = m,
+#              pos = p,
+#              topicOrder=seq(ncol(m)),
+#              topicCols=topo.colors(ncol(m)),
+#              groups = NA,
+#              group_cols = NA,
+#              r = 100,
+#              lwd = 0.01,
+#              showLegend = TRUE,
+#              plotTitle = NA,
+#              overlay = he)
+
+# clustCols <- RColorBrewer::brewer.pal(12, name = "Set1")
+# clustCols <- topo.colors(5)
+clustCols <- topic_colors
+names(clustCols) <- colnames(bcl_k12$theta)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = as.factor(clustCols),
+                 sharedCol = TRUE,
+                 groups = NA,
+                 group_cols = NA,
+                 r = 100,
+                 lwd = 0.01,
+                 showLegend = TRUE,
+                 plotTitle = paste("Slice", as.character(1)),
+                 overlay = he)
+
+```
+
+## BCL2 
+
+```{r, fig.width=10, fig.height=11}
+
+he <- readJPEG('/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/HE_BrightfieldImages/HE_layer2_BC.jpg')
+
+# alignment matrices came with these images
+he_align <- matrix(unlist(read.table("/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/Alignments/Layer2_BC_transformation.txt")), nrow = 3, ncol = 3)
+
+posScale <- bclCorpus$pos[bclCorpus$slice==2,]
+sliceTxnClusters <- bcl_com[bclCorpus$slice==2]
+
+# use the alignment file to adjust
+posScale[,"x"] <- posScale[,"x"] * he_align[1,1]
+posScale[,"y"] <- posScale[,"y"] * he_align[2,2]
+
+# bring coordinates to positive values
+posScale[,"x"] <- posScale[,"x"] - min(posScale[,"x"])
+posScale[,"y"] <- posScale[,"y"] - min(posScale[,"y"])
+
+# final adjustments
+
+# for image 2, the spots actually need to be rotated slightly to align properly with the tissue image
+# based on the Stahl data spot coordinates, plot the base image and the spots rotated along the horizontal
+# axis (similar strategy done above for he1). This is the alignment we want.
+# Then, can take the range of the x and y coordinates for the Stahl plots.
+# The difference between the min and max are how we can check that the rotation
+# done below for this plot has the spots placed in the correct orientation (make sure the x and y range difs here match)
+# it turns out that a rotation of 12 degrees looks pretty good
+
+# so, first flip the spots horizontally
+posScale[,"y"] <- posScale[,"y"] + 2*((dim(he)[1]/2) - posScale[,"y"])
+posScale[,"x"] <- posScale[,"x"] # + 2*((dim(he)[2]/2) - posScale[,"x"])
+
+# then rotate the spots by 12 degrees in radians
+posScale <- MERINGUE::rotatePos(posScale, theta = -pi/(180/12))
+
+# now reset the x and y to start at 0
+posScale[,"x"] <- posScale[,"x"] - min(posScale[,"x"])
+posScale[,"y"] <- posScale[,"y"] - min(posScale[,"y"])
+
+# and finally shift by the start of the x and y coordinates for the stahl points (flipped across horizontal)
+posScale[,"x"] <- posScale[,"x"] + 2010
+posScale[,"y"] <- posScale[,"y"] + 2641
+
+
+# plotting:
+# ==============================================
+
+# par(mfrow=c(1,1), mar=rep(5,4))
+plot.new()
+plot(c(0,dim(he)[2]), c(0,dim(he)[1])) 
+
+# the point coords correspond to the mirror of the jpeg when plotted
+# first dim is the y, which we reverse to match spot
+# he[dim(he)[1]:1, , ]
+# but if the y is not reveresed, then the spots need to be rotated along the horizontal
+# to do this, find midpoint on the y-axis, and use this to rotate the y-coords of the spots
+# posScale[,"y"] + 2*((dim(he)[1]/2) - posScale[,"y"])
+# take distance of spots from the center horizontal of the image, multiply by 2 then add
+rasterImage(he[, , ],
+            0, 0,
+            dim(he)[2], dim(he)[1])
+# points(posScale[,"x"], posScale[,"y"], col='red', pch="+")
+# points(posScale[,"x"], posScale[,"y"], col=MERINGUE:::fac2col(bcl_com), pch=16)
+points(posScale[,"x"], posScale[,"y"], col=MERINGUE:::fac2col(sliceTxnClusters), pch=16)
+
+
+m <- bcl_k12$theta[names(sliceTxnClusters),]
+p <- posScale # bclCorpus$pos[names(sliceTxnClusters),]
+
+# vizAllTopics(theta = m,
+#              pos = p,
+#              topicOrder=seq(ncol(m)),
+#              topicCols=topo.colors(ncol(m)),
+#              groups = NA,
+#              group_cols = NA,
+#              r = 100,
+#              lwd = 0.01,
+#              showLegend = TRUE,
+#              plotTitle = NA,
+#              overlay = he)
+
+# clustCols <- RColorBrewer::brewer.pal(12, name = "Set1")
+# clustCols <- topo.colors(5)
+clustCols <- topic_colors
+names(clustCols) <- colnames(bcl_k12$theta)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = as.factor(clustCols),
+                 sharedCol = TRUE,
+                 groups = NA,
+                 group_cols = NA,
+                 r = 100,
+                 lwd = 0.01,
+                 showLegend = TRUE,
+                 plotTitle = paste("Slice", as.character(2)),
+                 overlay = he)
+
+```
+
+## BCL 3
+
+```{r, fig.width=10, fig.height=11}
+
+he <- readJPEG('/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/HE_BrightfieldImages/HE_layer3_BC.jpg')
+
+# alignment matrices came with these images
+he_align <- matrix(unlist(read.table("/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/Alignments/Layer3_BC_transformation.txt")), nrow = 3, ncol = 3)
+
+posScale <- bclCorpus$pos[bclCorpus$slice==3,]
+sliceTxnClusters <- bcl_com[bclCorpus$slice==3]
+
+# use the alignment file to adjust
+posScale[,"x"] <- posScale[,"x"] * he_align[1,1]
+posScale[,"y"] <- posScale[,"y"] * he_align[2,2]
+
+# bring coordinates to positive values
+posScale[,"x"] <- posScale[,"x"] - min(posScale[,"x"])
+posScale[,"y"] <- posScale[,"y"] - min(posScale[,"y"])
+
+
+# final adjustments
+
+# for image 3, need to flip the spots across a vertical axis
+
+# flip spots
+posScale[,"y"] <- posScale[,"y"] #+ 2*((dim(he)[1]/2) - posScale[,"y"])
+posScale[,"x"] <- posScale[,"x"] + 2*((dim(he)[2]/2) - posScale[,"x"])
+
+# then rotate the spots in radians
+posScale <- MERINGUE::rotatePos(posScale, theta = pi/(180/32))
+
+# now reset the x and y to start at 0
+posScale[,"x"] <- posScale[,"x"] - min(posScale[,"x"])
+posScale[,"y"] <- posScale[,"y"] - min(posScale[,"y"])
+
+# and finally shift by the start of the x and y coordinates for the stahl points (flipped across horizontal)
+posScale[,"x"] <- posScale[,"x"] + 1425
+posScale[,"y"] <- posScale[,"y"] + 2902
+
+
+
+# plotting:
+# ==============================================
+
+# par(mfrow=c(1,1), mar=rep(5,4))
+plot.new()
+plot(c(0,dim(he)[2]), c(0,dim(he)[1])) 
+
+# the point coords correspond to the mirror of the jpeg when plotted
+# first dim is the y, which we reverse to match spot
+# he[dim(he)[1]:1, , ]
+# but if the y is not reveresed, then the spots need to be rotated along the horizontal
+# to do this, find midpoint on the y-axis, and use this to rotate the y-coords of the spots
+# posScale[,"y"] + 2*((dim(he)[1]/2) - posScale[,"y"])
+# take distance of spots from the center horizontal of the image, multiply by 2 then add
+rasterImage(he[, , ],
+            0, 0,
+            dim(he)[2], dim(he)[1])
+# points(posScale[,"x"], posScale[,"y"], col='red', pch="+")
+# points(posScale[,"x"], posScale[,"y"], col=MERINGUE:::fac2col(bcl_com), pch=16)
+points(posScale[,"x"], posScale[,"y"], col=MERINGUE:::fac2col(sliceTxnClusters), pch=16)
+
+
+m <- bcl_k12$theta[names(sliceTxnClusters),]
+p <- posScale # bclCorpus$pos[names(sliceTxnClusters),]
+
+# vizAllTopics(theta = m,
+#              pos = p,
+#              topicOrder=seq(ncol(m)),
+#              topicCols=topo.colors(ncol(m)),
+#              groups = NA,
+#              group_cols = NA,
+#              r = 100,
+#              lwd = 0.01,
+#              showLegend = TRUE,
+#              plotTitle = NA,
+#              overlay = he)
+
+# clustCols <- RColorBrewer::brewer.pal(12, name = "Set1")
+# clustCols <- topo.colors(5)
+clustCols <- topic_colors
+names(clustCols) <- colnames(bcl_k12$theta)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = as.factor(clustCols),
+                 sharedCol = TRUE,
+                 groups = NA,
+                 group_cols = NA,
+                 r = 100,
+                 lwd = 0.01,
+                 showLegend = TRUE,
+                 plotTitle = paste("Slice", as.character(3)),
+                 overlay = he)
+
+```
+
+## BCL 4
+
+```{r, fig.width=10, fig.height=11}
+
+he <- readJPEG('/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/HE_BrightfieldImages/HE_layer4_BC.jpg')
+
+# alignment matrices came with these images
+he_align <- matrix(unlist(read.table("/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/Alignments/Layer4_BC_transformation.txt")), nrow = 3, ncol = 3)
+
+posScale <- bclCorpus$pos[bclCorpus$slice==4,]
+sliceTxnClusters <- bcl_com[bclCorpus$slice==4]
+
+# use the alignment file to adjust
+posScale[,"x"] <- posScale[,"x"] * he_align[1,1]
+posScale[,"y"] <- posScale[,"y"] * he_align[2,2]
+
+# bring coordinates to positive values
+posScale[,"x"] <- posScale[,"x"] - min(posScale[,"x"])
+posScale[,"y"] <- posScale[,"y"] - min(posScale[,"y"])
+
+
+# final adjustments
+
+# for image 4, flip x-coords across vertical axis
+
+# flip spots
+# posScale[,"y"] <- posScale[,"y"] + 2*((dim(he)[1]/2) - posScale[,"y"])
+posScale[,"x"] <- posScale[,"x"] + 2*((dim(he)[2]/2) - posScale[,"x"])
+
+# then rotate the spots in radians
+posScale <- MERINGUE::rotatePos(posScale, theta = pi/(180/5))
+
+# now reset the x and y to start at 0
+posScale[,"x"] <- posScale[,"x"] - min(posScale[,"x"])
+posScale[,"y"] <- posScale[,"y"] - min(posScale[,"y"])
+
+# and finally shift by the start of the x and y coordinates for the stahl points (flipped across horizontal)
+posScale[,"x"] <- posScale[,"x"] + 2824
+posScale[,"y"] <- posScale[,"y"] + 2033
+
+
+
+# plotting:
+# ==============================================
+
+# par(mfrow=c(1,1), mar=rep(5,4))
+plot.new()
+plot(c(0,dim(he)[2]), c(0,dim(he)[1])) 
+
+# the point coords correspond to the mirror of the jpeg when plotted
+# first dim is the y, which we reverse to match spot
+# he[dim(he)[1]:1, , ]
+# but if the y is not reveresed, then the spots need to be rotated along the horizontal
+# to do this, find midpoint on the y-axis, and use this to rotate the y-coords of the spots
+# posScale[,"y"] + 2*((dim(he)[1]/2) - posScale[,"y"])
+# take distance of spots from the center horizontal of the image, multiply by 2 then add
+rasterImage(he[, , ],
+            0, 0,
+            dim(he)[2], dim(he)[1])
+# points(posScale[,"x"], posScale[,"y"], col='red', pch="+")
+# points(posScale[,"x"], posScale[,"y"], col=MERINGUE:::fac2col(bcl_com), pch=16)
+points(posScale[,"x"], posScale[,"y"], col=MERINGUE:::fac2col(sliceTxnClusters), pch=16)
+
+
+m <- bcl_k12$theta[names(sliceTxnClusters),]
+p <- posScale # bclCorpus$pos[names(sliceTxnClusters),]
+
+# vizAllTopics(theta = m,
+#              pos = p,
+#              topicOrder=seq(ncol(m)),
+#              topicCols=topo.colors(ncol(m)),
+#              groups = NA,
+#              group_cols = NA,
+#              r = 100,
+#              lwd = 0.01,
+#              showLegend = TRUE,
+#              plotTitle = NA,
+#              overlay = he)
+
+# clustCols <- RColorBrewer::brewer.pal(12, name = "Set1")
+# clustCols <- topo.colors(5)
+clustCols <- topic_colors
+names(clustCols) <- colnames(bcl_k12$theta)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = as.factor(clustCols),
+                 sharedCol = TRUE,
+                 groups = NA,
+                 group_cols = NA,
+                 r = 100,
+                 lwd = 0.01,
+                 showLegend = TRUE,
+                 plotTitle = paste("Slice", as.character(3)),
+                 overlay = he)
+
+```
+
+# Co-localization
+
+```{r}
+
+set.seed(888) # for randomColorR
+
+# consistent colors between plots for topics
+colspace <- randomcoloR::distinctColorPalette(12)
+
+```
+
+```{r}
+
+m <- bcl_k12$theta[bclCorpus$slice == 1,]
+p <- bclCorpus$pos[bclCorpus$slice == 1,]
+sliceTxnClusters <- bcl_com[bclCorpus$slice==1]
+txnCols <- unique(MERINGUE:::fac2col(sliceTxnClusters))
+
+# cc <- as.factor(rainbow(ncol(m)))
+# cc <- as.factor(rep("black", 12))
+# names(cc) <- colnames(m)
+
+for (i in colnames(m)){
+  cc <- as.factor(rep("black", 1))
+  names(cc) <- i
+  vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc,
+                 sharedCol = TRUE,
+                 groups = sliceTxnClusters,
+                 group_cols = txnCols,
+                 r = 0.4,
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = paste("Slice", as.character(1)))
+}
+
+# vizTopicClusters(theta = m,
+#                  pos = p,
+#                  clusters = cc,
+#                  sharedCol = TRUE,
+#                  groups = sliceTxnClusters,
+#                  group_cols = txnCols,
+#                  r = 0.4,
+#                  lwd = 0.3,
+#                  showLegend = TRUE,
+#                  plotTitle = paste("Slice", as.character(1)))
+
+```
+
+```{r}
+
+
+# correlation wrt theta positional proportions
+pcor <- do.call(rbind, lapply(1:12, function(i) {
+  p1 <- bcl_k12$theta[,i]
+  unlist(lapply(1:12, function(j) {
+    p2 <- bcl_k12$theta[,j]
+    cor(p1, p2)
+  }))
+}))
+diag(pcor) <- NA
+heatmap(pcor, col=correlation_palette)
+which(pcor == max(pcor, na.rm=TRUE), arr.ind=TRUE)
+
+
+# correlation wrt beta values
+tcor <- do.call(rbind, lapply(1:12, function(i) {
+  p1 <- bcl_k12$beta[i,]
+  unlist(lapply(1:12, function(j) {
+    p2 <- bcl_k12$beta[j,]
+    cor(p1, p2)
+  }))
+}))
+diag(tcor) <- NA
+heatmap(tcor, col=correlation_palette, scale='none')
+which(tcor == max(tcor, na.rm=TRUE), arr.ind=TRUE)
+
+
+# difference between topic theta and beta correlations.
+# More positive = co-localized but transcriptionally different
+# More negative = transcriptionally similar but different spatial locations
+
+# note: the two different correlations are in different scales, so normalize the scales
+range(pcor, na.rm = TRUE)
+max(range(pcor, na.rm = TRUE)) - min(range(pcor, na.rm = TRUE))
+
+range(tcor, na.rm = TRUE)
+max(range(tcor, na.rm = TRUE)) - min(range(tcor, na.rm = TRUE))
+
+foo <- scale0_1(pcor) - scale0_1(tcor)
+diag(foo) <- NA
+heatmap(foo, col=correlation_palette, scale='none', )
+which(foo == max(foo, na.rm=TRUE), arr.ind=TRUE)
+
+```
+
+```{r}
+
+# top pcors:
+sort(pcor, decreasing = TRUE)[1:10]
+# the pairs:
+which(pcor >= sort(pcor, decreasing = TRUE)[8], arr.ind = T)
+# top pair:
+which(pcor == max(pcor, na.rm=TRUE), arr.ind=TRUE)
+
+```
+
+Topics 7 and 11 spatially co-localized. 3 and 1 runner up.
+
+```{r}
+
+# top tcor:
+sort(tcor, decreasing = TRUE)[1:10]
+# the pairs:
+which(tcor >= sort(tcor, decreasing = TRUE)[8], arr.ind = T)
+# top pair:
+which(tcor == max(tcor, na.rm=TRUE), arr.ind=TRUE)
+
+```
+
+Topics 11 and 1 most positively correlated transcriptionally, but 5 and 11 a very close second; same with 7 and 1.
+5 and 7 a close runner up, too.
+
+So 7, 11, 1, and 5 txn similar.
+
+7 and 11 also spatially similar,
+
+**But 3 and spatially similar (to 1) but txn different from 1,11,7,5: interacting cell types?**
+
+Spatially and txn 7 and 11 similar
+
+```{r}
+
+# note that foo was difference between 0-1 scaled pcor and tcor
+
+# top foo:
+sort(foo, decreasing = TRUE)[1:10]
+# the pairs:
+which(foo >= sort(foo, decreasing = TRUE)[8], arr.ind = T)
+# top pair:
+which(foo == max(foo, na.rm=TRUE), arr.ind=TRUE)
+
+```
+
+In terms of the most positive difference
+(More positive = co-localized but transcriptionally different)
+foo = scale0_1(pcor) - scale0_1(tcor)
+
+
+we have 9 and 6, perhaps another set of txn different but spatially close cell types?
+
+
+```{r}
+
+# min foo:
+sort(foo, decreasing = FALSE)[1:10]
+# the pairs:
+which(foo <= sort(foo, decreasing = FALSE)[8], arr.ind = T)
+# top pair:
+which(foo == min(foo, na.rm=TRUE), arr.ind=TRUE)
+
+```
+
+In terms of the most negative difference
+(More negative = transcriptionally similar but different spatial locations)
+foo = scale0_1(pcor) - scale0_1(tcor)
+
+we have 7, 1, 11 popping up again.
+
+Recall that 7 and 11 were spatially and txn similar.
+7 and 1 were txn similar, but did not correlate strongly wrt to space.
+
+So same cell type in different locations?
+
+
+# Viz hits
+
+for each topic combo check out for all slices
+
+and then the genes from the betas
+
+
+3 and 1 spatially similar but txn different
+
+```{r}
+
+m <- bcl_k12$theta[,c("1","3")]
+p <- bclCorpus$pos[,]
+sliceTxnClusters <- bcl_com[]
+
+other <- 1 - rowSums(m)
+m <- cbind(m, other)
+
+cc <- c(
+  transparentCol("red", percent = 50),
+  transparentCol("blue", percent = 50),
+  transparentCol("white", percent = 100))
+
+vizAllTopics(theta = m,
+               pos = p,
+               topicOrder=seq(ncol(m)),
+               topicCols=cc,
+               groups = sliceTxnClusters,
+               group_cols = c("white", "white", "white"),
+               r = 0.4,
+               lwd = 0.01,
+               showLegend = TRUE,
+               plotTitle = NA)
+
+```
+
+```{r}
+
+sort(bcl_k12$beta[1,], decreasing = TRUE)[1:5]
+sort(bcl_k12$beta[3,], decreasing = TRUE)[1:5]
+
+```
+
+
+7 and 1 txn similar but spatially different
+
+```{r}
+
+m <- bcl_k12$theta[,c("1","7")]
+p <- bclCorpus$pos[,]
+sliceTxnClusters <- bcl_com[]
+
+other <- 1 - rowSums(m)
+m <- cbind(m, other)
+
+cc <- c(
+  transparentCol("red", percent = 50),
+  transparentCol("blue", percent = 50),
+  transparentCol("white", percent = 100))
+
+vizAllTopics(theta = m,
+               pos = p,
+               topicOrder=seq(ncol(m)),
+               topicCols=cc,
+               groups = sliceTxnClusters,
+               group_cols = c("white", "white", "white"),
+               r = 0.4,
+               lwd = 0.01,
+               showLegend = TRUE,
+               plotTitle = NA)
+
+```
+
+```{r}
+
+sort(bcl_k12$beta[1,], decreasing = TRUE)[1:5]
+sort(bcl_k12$beta[7,], decreasing = TRUE)[1:5]
+
+```
+
+Spatially and txn 7 and 11 similar
+
+```{r}
+
+m <- bcl_k12$theta[,c("7","11")]
+p <- bclCorpus$pos[,]
+sliceTxnClusters <- bcl_com[]
+
+other <- 1 - rowSums(m)
+m <- cbind(m, other)
+
+cc <- c(
+  transparentCol("red", percent = 50),
+  transparentCol("blue", percent = 50),
+  transparentCol("white", percent = 100))
+
+vizAllTopics(theta = m,
+               pos = p,
+               topicOrder=seq(ncol(m)),
+               topicCols=cc,
+               groups = sliceTxnClusters,
+               group_cols = c("white", "white", "white"),
+               r = 0.4,
+               lwd = 0.01,
+               showLegend = TRUE,
+               plotTitle = NA)
+
+```
+
+```{r}
+
+sort(bcl_k12$beta[7,], decreasing = TRUE)[1:5]
+sort(bcl_k12$beta[11,], decreasing = TRUE)[1:5]
+
+```
+
+9 and 6, perhaps another set of txn different but spatially close cell types?
+
+```{r}
+
+m <- bcl_k12$theta[,c("6","9")]
+p <- bclCorpus$pos[,]
+sliceTxnClusters <- bcl_com[]
+
+other <- 1 - rowSums(m)
+m <- cbind(m, other)
+
+cc <- c(
+  transparentCol("red", percent = 50),
+  transparentCol("blue", percent = 50),
+  transparentCol("white", percent = 100))
+
+vizAllTopics(theta = m,
+               pos = p,
+               topicOrder=seq(ncol(m)),
+               topicCols=cc,
+               groups = sliceTxnClusters,
+               group_cols = c("white", "white", "white"),
+               r = 0.4,
+               lwd = 0.01,
+               showLegend = TRUE,
+               plotTitle = NA)
+
+```
+
+```{r}
+
+sort(bcl_k12$beta[6,], decreasing = TRUE)[1:5]
+sort(bcl_k12$beta[9,], decreasing = TRUE)[1:5]
+
+```
+
+GSEA may help
+
+and other BCL datasets. Clearer pathology perhaps
+
+
+
