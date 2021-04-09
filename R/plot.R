@@ -155,7 +155,9 @@ vizTopicClusters <- function(theta, pos, clusters,
                              lwd = 0.5,
                              showLegend = TRUE,
                              plotTitle = NA,
-                             overlay = NA) {
+                             overlay = NA,
+                             fig_path = "./",
+                             fig_prefix = NA) {
 
   print("Topic cluster members:")
   # produce a plot for each topic cluster:
@@ -282,8 +284,22 @@ vizTopicClusters <- function(theta, pos, clusters,
     if (is.na(plotTitle) == FALSE) {
       p <- p + ggtitle(plotTitle)
     }
+    
+    if (is.na(fig_prefix) == FALSE) {
+      fig_name <- paste0(fig_prefix, "_", topics, ".pdf")
+    } else {
+      fig_name <- paste0(topics, ".pdf")
+    }
 
     print(p)
+    # ggsave(filename = fig_name,
+    #        device = "pdf",
+    #        path = fig_path,
+    #        scale = 1.5,
+    #        width = 5,
+    #        height = 4,
+    #        units = c("in"),
+    #        dpi = 600)
   }
 }
 

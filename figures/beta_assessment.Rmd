@@ -331,6 +331,7 @@ ggplot(data = reshape2::melt(mob_k15$beta)) +
 When reviewing a box plot, an outlier is defined as a data point that is located outside the whiskers of the box plot.
 For example, outside 1.5 times the interquartile range above the upper quartile and below the lower quartile (Q1 - 1.5 * IQR or Q3 + 1.5 * IQR).
 
+
 This is the distribution of beta values of the corpus genes for each topic. 
 Idea is to select genes that are significantly higher than the distribution of beta values for a topic.
 
@@ -883,9 +884,6 @@ for (topic in seq(length(topGenes))){
 }
 
 ```
-
-# GSEA for betas:
-
 
 
 

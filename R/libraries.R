@@ -4,9 +4,8 @@ library(MUDAN) # some MERINGUE functions actually from MUDAN (?) cleanCounts, ge
 library(ggplot2)
 library(scatterpie)
 library(viridis) # for "scale_fill_viridis in `vizGeneCounts`
-library(dynamicTreeCut)
-library(slam)
-
+library(dynamicTreeCut) # for clustering topics
+library(slam) # for formatting matrix for input into LDA 
 
 # for figures but not for actual package
 library(Seurat) # for building scRNAseq references
@@ -18,3 +17,11 @@ library(mltools) # for rmse
 library(randomcoloR) # for distinct color palettes
 library(ggpubr) # for stats on ggplots
 library(jpeg) # for viz of BCL H&E stain jpegs
+library(venn) # for venn diagram
+library(UpSetR) # for UpSetR topic spot intersection viz
+
+# for GSEA
+library(liger)
+library(GO.db)
+library(AnnotationDbi)
+library(msigdbr)

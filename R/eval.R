@@ -124,11 +124,14 @@ scale0_1 <- function(x) {
 #' @param perc.spots non-negative numeric <=1 to use as a percentage.
 #'    Removes genes present in this fraction of spots (default: NA)
 #' @param min.reads MERINGUE::cleanCounts param; minimum number of reads to keep
-#'     a gene (defualt: 100)
+#'     a gene (default: 100)
 #' @param min.lib.size MERINGUE::cleanCounts param; minimum number of counts a
 #'     spot needs to keep (default: 100)
+#' @param min.detected MERIGNUE::cleanCounts param; minimum number of spots a gene
+#'     needs to have been detected in to keep (default: 1)
 #' @param ODgenes Boolean to use MERINGUE::getOverdispersedGenes for the corpus
 #'    genes (default: TRUE)
+#' @param nTopOD number of top OD genes to use. int (default: NA)
 #' @param od.genes.alpha alpha parameter for MERINGUE::getOverdispersedGenes.
 #'     Higher = less stringent and more OD genes returned (default: 0.05)
 #' @param gam.k gam.k parameter for MERINGUE::getOverdispersedGenes. Dimension
@@ -152,7 +155,9 @@ preprocess <- function(dat,
                        perc.spots = NA,
                        min.reads = 100,
                        min.lib.size = 100,
+                       min.detected = 1,
                        ODgenes = TRUE,
+                       nTopOD = NA,
                        od.genes.alpha = 0.05,
                        gam.k = 5) {
   
@@ -168,65 +173,58 @@ preprocess <- function(dat,
     stop("`dat` is not a viable path or matrix")
   }
   
+  cat("Initial genes:", dim(t(counts))[1], "Initial spots:", dim(t(counts))[2], "\n")
+  
+  # use specific genes in the corpus
+  if (is.na(selected.genes[1]) == FALSE) {
+    cat("- Using genes in `selected.genes` for corpus.", "\n")
+    counts <- counts[,selected.genes]
+    cat(" ", dim(counts)[2], "genes are present in dataset.", "\n")
+  }
+  
   # remove poor spots and genes
-  cat("Removing poor spots with <", min.lib.size, "reads and genes with <", min.reads, "reads.", "\n")
+  cat("- Removing poor spots with <=", min.lib.size, "reads", "\n")
+  cat("- Removing genes with <=", min.reads, "reads across spots and detected in <=", min.detected, "spots.", "\n")
   countsClean <- MERINGUE::cleanCounts(counts = t(counts), 
                                        min.reads = min.reads, 
                                        min.lib.size = min.lib.size, 
+                                       min.detected = min.detected,
                                        plot=TRUE,
-                                       verbose=TRUE)
+                                       verbose=FALSE)
   
-  # get spot positions if spot colnames contain the positions
-  # this is the case for some ST datasets like Stahl 2016 sets
-  # ex: "20x30" -> 20 x, 30 y positions
-  if (extractPos) {
-    cat("Extracting positions from spot names.", "\n")
-    positions <- do.call(rbind, lapply(colnames(countsClean), function(spotID) {
-      coords <- as.numeric(strsplit(spotID, "x")[[1]])
-      coords
-    }))
-    colnames(positions) <- c("x", "y")
-    rownames(positions) <- colnames(countsClean)
-  } else {
-    positions <- NULL
-  }
+  cat("  Remaining genes:", dim(countsClean)[1], "and remaining spots:", dim(countsClean)[2], "\n")
   
   # adjust spot coordinates, optional.
   # based on Stahl 2016 ST data with alignment matrices
   if (is.na(alignFile) == FALSE) {
     if (file.exists(alignFile) == TRUE){
-      cat("Adjusting spot positions based on alignment file.")
+      cat("- Adjusting spot positions based on alignment file.")
       align <- matrix(unlist(read.table(alignFile)), nrow = 3, ncol = 3)
       (positions[,"x"] * align[1,1]) - 290 # note that I found they were off by one spot distance in pixels
       (positions[,"y"] * align[2,2]) - 290
     } else {
-      cat("alignFile path does not exists. Skipping position adjustments.", "\n")
+      cat("Warning: `alignFile` path does not exists. Skipping position adjustments.", "\n")
     }
-  }
-  
-  # use specific genes in the corpus
-  if (is.na(selected.genes[1]) == FALSE) {
-    cat("using genes in `selected.genes` for corpus.", "\n")
-    countsClean <- countsClean[selected.genes,]
   }
   
   # remove top expressed genes (nTopGenes needs to be integer or NA)
   if (is.na(nTopGenes) == FALSE & is.numeric(nTopGenes) == TRUE) {
     nTopGenes <- round(nTopGenes)
-    cat("Removing the top", nTopGenes, "expressed genes.", "\n")
+    cat("- Removing the top", nTopGenes, "expressed genes.", "\n")
     top_expressed <- names(rowSums(countsClean)[order(rowSums(countsClean),
                                                       decreasing = TRUE)][1:nTopGenes])
     countsClean <- countsClean[rownames(countsClean) %in% top_expressed == FALSE,]
     
-    print(paste("after removing top ",
-                as.character(nTopGenes),
-                " genes:", dim(countsClean)[1], dim(countsClean)[2]))
+    # print(paste("after removing top ",
+    #             as.character(nTopGenes),
+    #             " genes:", dim(countsClean)[1], "genes remain."))
   }
   
   # remove specific genes (if there are any). Use grepl to search for gene name pattern matches
   if (is.na(genes.to.remove) == FALSE) {
     countsClean <- countsClean[!grepl(paste(genes.to.remove, collapse="|"), rownames(countsClean)),]
-    print(paste("after removing selected genes:", dim(countsClean)[1], dim(countsClean)[2]))
+    cat("- After filtering for `genes.to.remove`:", "\n",
+        " Remaining genes:", dim(countsClean)[1], "\n")
   }
   
   # remove genes that appear in certain percentage of the spots
@@ -240,16 +238,17 @@ preprocess <- function(dat,
       # rowSums of countsClean_ equate to number of spots where each gene is expressed
       # remove genes expressed in "numberSpots" or more spots
       countsClean <- countsClean[which(rowSums(countsClean_) < numberSpots),]
-      print(paste("after removing genes present in more than ", 
-                  as.character(perc.spots*100), "% of spots: ",
-                  dim(countsClean)[1], dim(countsClean)[2]))
+      cat("- Removed genes present in", 
+                  as.character(perc.spots*100), "% or more of spots", "\n",
+                  " Remaining genes:", dim(countsClean)[1], "\n")
     } else {
-      cat("`perc.spots` must be a numeric from 0 to 1. Skipping perc.spots gene filter.", "\n")
+      cat("Warning: `perc.spots` must be a numeric from 0 to 1. Skipping perc.spots gene filter.", "\n")
     }
   }
   
   # use overdispersed variable genes for corpus
   if (ODgenes == TRUE) {
+    cat("- Capturing only the overdispersed genes...", "\n")
     par(mfrow=c(4,2), mar=c(1,1,1,1))
     OD <- MERINGUE::getOverdispersedGenes(countsClean,
                                 alpha = od.genes.alpha,
@@ -257,12 +256,51 @@ preprocess <- function(dat,
                                 plot = TRUE,
                                 details = TRUE)
     
-    countsClean <- countsClean[OD$ods,]
+    # option to select just the top n OD genes based on
+    # log p-val adjusted
+    if (is.na(nTopOD) == FALSE){
+      cat("- Using top", nTopOD, "overdispersed genes.", "\n")
+      OD_filt <- OD$df[OD$ods,]
+      # check if actual number of OD genes less than `nTopOD`
+      if (dim(OD_filt)[1] < nTopOD){
+        cat(" number of top OD genes available:", dim(OD_filt)[1], "\n")
+        od_genes <- rownames(OD_filt)
+      } else {
+        od_genes <- rownames(OD_filt[order(OD_filt$lpa),][1:nTopOD,])
+      }
+    } else {
+      od_genes <- OD$ods
+    }
+    
+    countsClean <- countsClean[od_genes,]
   }
   
   corpus <- t(as.matrix(countsClean))
-  corpus_slm <- slam::as.simple_triplet_matrix(corpus)
   
+  # last filter: each row must have at least 1 non-zero entry
+  # to be compatible with `topicmodels`.
+  cat("- Check that each spot has at least 1 non-zero gene count entry..", "\n")
+  corpus <- corpus[which(!rowSums(corpus) == 0),]
+  corpus_slm <- slam::as.simple_triplet_matrix(corpus)
+  cat("Final corpus:", "\n")
+  print(corpus_slm)
+  
+  # get spot positions if spot colnames contain the positions
+  # this is the case for some ST datasets like Stahl 2016 sets
+  # ex: "20x30" -> 20 x, 30 y positions
+  if (extractPos) {
+    cat("Extracting positions from spot names.", "\n")
+    positions <- do.call(rbind, lapply(rownames(corpus), function(spotID) {
+      coords <- as.numeric(strsplit(spotID, "x")[[1]])
+      coords
+    }))
+    colnames(positions) <- c("x", "y")
+    rownames(positions) <- rownames(corpus)
+  } else {
+    positions <- NULL
+  }
+  
+  cat("Preprocess complete.", "\n")
   return(list(corpus = corpus,
               slm = corpus_slm,
               pos = positions))
