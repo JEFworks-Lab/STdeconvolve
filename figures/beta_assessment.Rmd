@@ -601,7 +601,7 @@ summary_df <- do.call(rbind, lapply(pairs$rowix, function(i){
                 geom_point(aes(x = gexp_rank, y = beta_rank)) +
                 labs(title = paste("Beta pairs: Topic", topic, "vs", ct, "; cor =", round(corMtx[topic, ct],2), "\n",
                                    "pearson =", round(prsn, 2), "spearman =", round(sprn, 2)))
-        print(p)
+        print(prsn)
         ct_df
 })) 
 
@@ -609,6 +609,8 @@ ggplot(data = summary_df) +
         geom_hex(aes(x = gexp_rank, y = beta_rank), bins=10) +
         scale_fill_gradient(low = "white", high = "red") +
         theme_classic()
+
+cor(summary_df$beta_rank, summary_df$gexp_rank, method = "spearman")
 
 ```
 
@@ -721,7 +723,7 @@ summary_df <- do.call(rbind, lapply(pairs$rowix, function(i){
                 geom_point(aes(x = gexp_rank, y = beta_rank)) +
                 labs(title = paste("Beta pairs: Topic", topic, "vs", ct, "; cor =", round(corMtx[ct,topic], 2), "\n",
                                    "pearson =", round(prsn, 2), "spearman =", round(sprn, 2)))
-        # print(p)
+        print(prsn)
         ct_df
 })) 
 
@@ -729,6 +731,8 @@ ggplot(data = summary_df) +
         geom_hex(aes(x = gexp_rank, y = beta_rank), bins=10) +
         scale_fill_gradient(low = "white", high = "red") +
         theme_classic()
+
+cor(summary_df$beta_rank, summary_df$gexp_rank, method = "spearman")
 
 ```
 

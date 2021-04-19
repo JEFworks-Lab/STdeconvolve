@@ -4,5 +4,5 @@
 *~
 .DS_Store
 *.Rproj
-data/
+saved_data/
 draft_figures/

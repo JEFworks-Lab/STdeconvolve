@@ -781,7 +781,7 @@ for (s in unique(corpus$slice)){
                lwd = 0.1,
                showLegend = TRUE,
                plotTitle = NA,
-               overlay = he)
+               overlay = NA)
   ggsave(filename = paste0("bcl_k10-layer-", s, "-all-topics.png"),
          device = "png",
          path = draft_fig_path,
@@ -2337,16 +2337,16 @@ So count a topic as being in a spot if it is > %. Then compute overlap of spots 
 
 ```{r}
 
-bcl_union_k5_02 <- do.call(cbind, lapply(seq(5), function(i){
-  bcl_union_k5$theta[,i] > 0.2
+bcl_k5_02 <- do.call(cbind, lapply(seq(5), function(i){
+  bcl_k5$theta[,i] > 0.2
 }))
-colnames(bcl_union_k5_02) <- paste(seq(5))
+colnames(bcl_k5_02) <- paste(seq(5))
 
 ```
 
 ```{r}
 
-m <- bcl_union_k5_02
+m <- bcl_k5_02
 
 # listInput <- list("3 and 4" = rownames(m[which(m[,"3"] & m[,"4"]),]),
 #                   "3" = rownames(m[which(m[,"3"]),]),
@@ -2361,20 +2361,157 @@ listInput <- list("1" = rownames(m[which(m[,"1"]),]),
                   "4" = rownames(m[which(m[,"4"]),]),
                   "5" = rownames(m[which(m[,"5"]),]))
 
-pdf(file = paste0(draft_fig_path, "Fig_3_bcl_union_k5-UpSetR-20perc.pdf"),
-    width = 5,
-    height = 3)
+# pdf(file = paste0(draft_fig_path, "Fig_3_bcl_union_k5-UpSetR-20perc.pdf"),
+#     width = 5,
+#     height = 3)
 upset(fromList(listInput), order.by = "freq")
-dev.off()
+# dev.off()
 
 # library(venn)
-pdf(file = paste0(draft_fig_path, "Fig_3_bcl_union_k5-venn-20perc.pdf"),
-    width = 4,
-    height = 4)
+# pdf(file = paste0(draft_fig_path, "Fig_3_bcl_union_k5-venn-20perc.pdf"),
+#     width = 4,
+#     height = 4)
 venn(
   listInput,
   ilabels = TRUE,zcolor = "style", size = 25, cexil = 1.2, cexsn = 1.5)
-dev.off()
+# dev.off()
+
+```
+
+# ---------------------------------
+
+# Viz Gexp
+
+```{r}
+
+# get he GO ID and index of a GO ID term of interest
+desc[grepl('regulation of leukocyte activation', desc$TERM),]
+
+```
+
+```{r}
+
+# use the index of the GO ID/term to pull out the genes and then plot the combined gene counts
+# for the given GO ID term ossociated genes
+i <- 935
+
+# get genes in gene count mat corresponding to the GO term
+mat <- bcl_countsClean[intersect(go.env[[i]], rownames(bcl_countsClean)),]
+
+# add up counts of all the associated genes for each spot. Scale values
+gexp <- scale(colSums(mat))[,1]
+
+# plotEmbedding(emb, col=gexp, main=names(go.env)[i])
+# plotEmbedding(bclCorpus$pos, col=gexp)
+
+corpus <- bclCorpus
+
+for (s in unique(corpus$slice)){
+  slice <- corpus$slice == s
+  if (s == 1){
+    he <- he1
+    p <- posScale1
+  }
+  if (s == 2){
+    he <- he2
+    p <- posScale2
+  }
+  if (s == 3){
+    he <- he3
+    p <- posScale3
+  }
+  if (s == 4){
+    he <- he4
+    p <- posScale4
+  }
+  
+  slice <- corpus$slice == s
+  df_ <- cbind(gexp[slice], p)
+  colnames(df_) <- c("gexp", "x", "y")
+  df_ <- as.data.frame(df_)
+  
+  plt <- vizGeneCounts(df_,
+              "gexp",
+              groups = NA,
+              group_cols = NA,
+              size = 3, stroke = 0.1, a = 0.7,
+              plotTitle = paste("slice", s, "leuk activ GO:0002694"),
+              showLegend = TRUE,
+              overlay = he)
+  ggsave(filename = paste0("bcl_k10-layer-", s, "-", "leuk-activ", ".png"),
+         device = "png",
+         path = draft_fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+  
+  print(plt)
+}
+
+```
+
+
+```{r}
+
+genes <- c("IGLL5", "PPP1R1B", "JCHAIN", "SPINT2", "LY6E")
+df <- t(bcl_CPM[genes,])
+
+corpus <- bclCorpus
+ldamodel <- bcl_k10
+
+for (s in unique(corpus$slice)){
+  slice <- corpus$slice == s
+  if (s == 1){
+    he <- he1
+    p <- posScale1
+  }
+  if (s == 2){
+    he <- he2
+    p <- posScale2
+  }
+  if (s == 3){
+    he <- he3
+    p <- posScale3
+  }
+  if (s == 4){
+    he <- he4
+    p <- posScale4
+  }
+  
+  # all topics
+  slice <- corpus$slice == s
+  # m <- ldamodel$theta[slice,]
+  # p <- corpus$pos[slice,]
+  sliceTxnClusters <- corpus$txn[slice]
+  # tcols <- gg_color_hue(ncol(m))
+  
+  df_ <- df[slice,]
+  df_ <- merge(as.data.frame(p), as.data.frame(df_), by=0)
+        rownames(df_) <- df_$Row.names
+  
+  for (gene in genes){
+    plt <- vizGeneCounts(df_,
+                gene,
+                groups = NA,
+                group_cols = NA,
+                size = 3, stroke = 0.1, a = 0.7,
+                plotTitle = paste("slice", s, gene),
+                showLegend = TRUE,
+                overlay = he)
+    ggsave(filename = paste0("bcl_k10-layer-", s, "-", gene, ".png"),
+           device = "png",
+           path = draft_fig_path,
+           scale = 1.5,
+           width = 5,
+           height = 4,
+           units = c("in"),
+           dpi = 300)
+    
+    print(plt)
+  }
+}
 
 ```
 
@@ -2464,6 +2601,46 @@ for (i in seq(10)){
   gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
   print(dim(gsea.sig))
   print(head(gsea.sig, n = 10))
+  
+  # visualize the top 5
+  # for (j in seq(5)){
+  #   pdf(file = paste0(gsea_bcl_draft_figs, "Fig_3_gsea-GO-bcl_k10-topic-", i, "-", rownames(gsea.sig)[j], ".pdf"),
+  #     width = 6, height = 5)
+  #   gsea(values=vals, geneset=gset[[rownames(gsea.sig)[j]]], plot=TRUE, rank=TRUE, main = paste("topic", i, rownames(gsea.sig)[j]))
+  #   dev.off()
+  # }
+}
+
+```
+
+### plot GSEA hits
+
+```{r}
+
+gset <- go.env
+for (i in c(6)){
+  
+  vals <- sort(bcl_k10$beta[i,], decreasing=TRUE)
+  print(head(vals))
+  gsea.results <- iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
+  # print(head(gsea.results[order(gsea.results$p.val),], n = 30))
+  
+  # filter for top hits
+  gsea.sig <- gsea.results[gsea.results$q.val < 0.1,]
+  gsea.sig <- gsea.sig[gsea.sig$sscore > 0,]
+  
+  gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
+  gsea.sig$GOID <- rownames(gsea.sig)
+  gsea.sig <- gsea.sig[!grepl("NA", gsea.sig$GOID),]
+  
+  # print(dim(gsea.sig))
+  print(gsea.sig)
+  
+  plt <- ggplot(data=gsea.sig, aes(x=reorder(GOID, -p.val), y=-log10(p.val))) +
+    geom_bar(stat="identity") +
+    coord_flip() +
+    theme_classic()
+  print(plt)
   
   # visualize the top 5
   # for (j in seq(5)){
@@ -2609,12 +2786,12 @@ for (i in seq(10)){
   print(head(gsea.sig, n = 10))
   
   # visualize the top 5
-  for (j in seq(5)){
-    pdf(file = paste0(gsea_bcl_draft_figs, "Fig_3_gsea-C8-bcl_k10-topic-", i, "-", rownames(gsea.sig)[j], ".pdf"),
-      width = 6, height = 5)
-    gsea(values=vals, geneset=gset[[rownames(gsea.sig)[j]]], plot=TRUE, rank=TRUE, main = paste("topic", i, rownames(gsea.sig)[j]))
-    dev.off()
-  }
+  # for (j in seq(5)){
+  #   pdf(file = paste0(gsea_bcl_draft_figs, "Fig_3_gsea-C8-bcl_k10-topic-", i, "-", rownames(gsea.sig)[j], ".pdf"),
+  #     width = 6, height = 5)
+  #   gsea(values=vals, geneset=gset[[rownames(gsea.sig)[j]]], plot=TRUE, rank=TRUE, main = paste("topic", i, rownames(gsea.sig)[j]))
+  #   dev.off()
+  # }
 }
 
 ```
@@ -2752,12 +2929,12 @@ for (i in seq(10)){
   print(head(gsea.sig, n = 10))
   
   # visualize the top 5
-  for (j in seq(5)){
-    pdf(file = paste0(gsea_bcl_draft_figs, "Fig_3_gsea-C7-bcl_k10-topic-", i, "-", rownames(gsea.sig)[j], ".pdf"),
-      width = 6, height = 5)
-    gsea(values=vals, geneset=gset[[rownames(gsea.sig)[j]]], plot=TRUE, rank=TRUE, main = paste("topic", i, rownames(gsea.sig)[j]))
-    dev.off()
-  }
+  # for (j in seq(5)){
+  #   pdf(file = paste0(gsea_bcl_draft_figs, "Fig_3_gsea-C7-bcl_k10-topic-", i, "-", rownames(gsea.sig)[j], ".pdf"),
+  #     width = 6, height = 5)
+  #   gsea(values=vals, geneset=gset[[rownames(gsea.sig)[j]]], plot=TRUE, rank=TRUE, main = paste("topic", i, rownames(gsea.sig)[j]))
+  #   dev.off()
+  # }
 }
 
 ```
@@ -2896,12 +3073,12 @@ for (i in seq(10)){
   print(head(gsea.sig, n = 10))
   
   # visualize the top 5
-  for (j in seq(5)){
-    pdf(file = paste0(gsea_bcl_draft_figs, "Fig_3_gsea-kegg-bcl_k10-topic-", i, "-", rownames(gsea.sig)[j], ".pdf"),
-      width = 6, height = 5)
-    gsea(values=vals, geneset=gset[[rownames(gsea.sig)[j]]], plot=TRUE, rank=TRUE, main = paste("topic", i, rownames(gsea.sig)[j]))
-    dev.off()
-  }
+  # for (j in seq(5)){
+  #   pdf(file = paste0(gsea_bcl_draft_figs, "Fig_3_gsea-kegg-bcl_k10-topic-", i, "-", rownames(gsea.sig)[j], ".pdf"),
+  #     width = 6, height = 5)
+  #   gsea(values=vals, geneset=gset[[rownames(gsea.sig)[j]]], plot=TRUE, rank=TRUE, main = paste("topic", i, rownames(gsea.sig)[j]))
+  #   dev.off()
+  # }
 }
 
 ```

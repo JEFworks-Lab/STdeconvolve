@@ -321,16 +321,22 @@ vizTopicClusters <- function(theta, pos, clusters,
 #' @param size size of the geom_points to plot (default: 7)
 #' @param stroke thickness of the geom_point lines to help in emphasizing groups
 #'     (default: 2)
+#' @param a alpha value for the viridis color fill scale (default = 0)
 #' @param plotTitle option to add a title to the plot
 #' @param showLegend Boolean to show the plot legend
+#' @param overlay plot the scatterpies on top of a raster image of the H&E tissue
+#'     (default: NA)
 #' 
 #' @export
 vizGeneCounts <- function(df, gene,
                           groups = NA,
                           group_cols = NA,
-                          size = 7, stroke = 0.5,
+                          size = 7,
+                          stroke = 0.5,
+                          a = 1,
                           plotTitle = NA,
-                          showLegend = TRUE) {
+                          showLegend = TRUE,
+                          overlay = NA) {
 
   counts <- df[,gene]
 
@@ -344,34 +350,57 @@ vizGeneCounts <- function(df, gene,
   if (is.na(group_cols[1]) == TRUE) {
     group_cols <- c(" " = "white")
   }
-
-  p <- ggplot() +
-    geom_point(data = df, aes(x=x, y=y, fill=counts, color = groups),
-               shape = 21,
-               stroke = stroke, size = size) +
-    scale_fill_viridis(option = "A", direction = -1) +
-    scale_color_manual(values = group_cols)
+  
+  if (is.na(overlay[1]) == FALSE){
+    p <- ggplot(mapping = aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
+      coord_equal(xlim = c(0,dim(overlay)[2]), ylim = c(0, dim(overlay)[1]), expand = FALSE) +
+      theme(
+        #panel.background = element_rect(fill = "white"),
+        panel.grid = element_blank(),
+        axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()) +
+      # geom_point(aes(x = c(0,dim(overlay)[2]), y = c(0, dim(overlay)[1]))) +
+      annotation_raster(overlay, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) +
+      # theme_classic() +
+      geom_point(data = df, aes(x=x, y=y, fill=counts, color = groups),
+                 shape = 21,
+                 stroke = stroke, size = size) +
+      scale_fill_viridis(option = "A", direction = -1, alpha = a) +
+      scale_color_manual(values = group_cols)
+  } else {
+    p <- ggplot() +
+      theme(
+        #panel.background = element_rect(fill = "white"),
+        panel.grid = element_blank(),
+        axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()) +
+      # theme_classic() +
+      geom_point(data = df, aes(x=x, y=y, fill=counts, color = groups),
+                 shape = 21,
+                 stroke = stroke, size = size) +
+      scale_fill_viridis(option = "A", direction = -1, alpha = a) +
+      scale_color_manual(values = group_cols)
+  }
   
   if (showLegend == FALSE) {
     p <- p + guides(fill=FALSE)
   }
+  
   if (is.na(plotTitle) == FALSE) {
     p <- p + ggtitle(plotTitle)
   }
   
-  p <- p +
-    theme(
-      #panel.background = element_rect(fill = "white"),
-      panel.grid = element_blank(),
-      axis.line=element_blank(),
-      axis.text.x=element_blank(),
-      axis.text.y=element_blank(),
-      axis.ticks=element_blank(),
-      axis.title.x=element_blank(),
-      axis.title.y=element_blank(),
-      panel.background=element_blank())
-    # theme_classic()
-  print(p)
+  return(p)
 }
 
 

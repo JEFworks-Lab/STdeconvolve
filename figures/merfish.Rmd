@@ -1045,6 +1045,8 @@ ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
        units = c("in"),
        dpi = 600)
 
+# colMeans(raw_8cts, na.rm = T)
+
 
 scaled_8cts <- data.frame("SPOTlight" = as.vector(scaled_RMSE_sl_8cts_spots),
                         "RCTD" = as.vector(scaled_RMSE_rctd_8cts_spots),
@@ -1776,7 +1778,7 @@ gplots::heatmap.2(x = corMtx,
                   margins = c(7,4))
 # dev.off()
 
-pdf(file = paste0(fig_path, "Fig_2_STdev-k8-theta-heatmap.pdf"))
+# pdf(file = paste0(fig_path, "Fig_2_STdev-k8-theta-heatmap.pdf"))
 # pair up best matching cell class to a predicted topic
 pairs <- lsatPairs(corMtx)
 gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
@@ -1794,7 +1796,7 @@ gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
 diag_cors <- diag(corMtx[pairs$rowix, pairs$colsix])
 
@@ -1829,45 +1831,45 @@ boxplot(diag_cors_lda_k8,
         xlab = "",
         ylab = "Correlation") # size of outliers
 stripchart(diag_cors_lda_k8, vertical = TRUE, 
-    method = "jitter", add = TRUE, pch = 20, col = 'black')
+    method = "jitter", add = TRUE, pch = 20, col = 'black', size = 15)
 dev.off()
 
 
-pos <- simBregmasFN7$`-0.04`$cellCounts[,c("x", "y")]
-m <- FN7_K8$theta[rownames(pos),]
-vizAllTopics(theta = m,
-             pos = pos,
-             topicOrder=seq(ncol(m)),
-             topicCols=as.vector(mjr_class_cols)[pairs$colsix],
-             groups = rep("0", dim(m)[1]),
-             group_cols = c("0" = "black"),
-             r = 40, # different size piecharts for mOB data sets
-             lwd = 0.4,
-             showLegend = TRUE,
-             plotTitle = NA)
-ggsave(filename = "Fig_2_merfish_04_predict_theta.pdf",
-       device = "pdf",
-       path = fig_path,
-       scale = 1.5,
-       width = 5,
-       height = 4,
-       units = c("in"),
-       dpi = 600)
-
-pos <- simBregmasFN7$`-0.04`$cellCounts[,c("x", "y")]
-m <- FN7_K8$theta[rownames(pos),]
-cc <- as.factor(as.vector(mjr_class_cols)[pairs$colsix])
-names(cc) <- colnames(m)
-vizTopicClusters(theta = m,
-                 pos = pos,
-                 clusters = cc,
-                 sharedCol = TRUE,
-                 groups = rep("0", dim(m)[1]),
-                 group_cols = c("0" = "black"),
-                 r = 40,
-                 lwd = 0.4,
-                 showLegend = TRUE,
-                 plotTitle = NA)
+# pos <- simBregmasFN7$`-0.04`$cellCounts[,c("x", "y")]
+# m <- FN7_K8$theta[rownames(pos),]
+# vizAllTopics(theta = m,
+#              pos = pos,
+#              topicOrder=seq(ncol(m)),
+#              topicCols=as.vector(mjr_class_cols)[pairs$colsix],
+#              groups = rep("0", dim(m)[1]),
+#              group_cols = c("0" = "black"),
+#              r = 40, # different size piecharts for mOB data sets
+#              lwd = 0.4,
+#              showLegend = TRUE,
+#              plotTitle = NA)
+# ggsave(filename = "Fig_2_merfish_04_predict_theta.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+# 
+# pos <- simBregmasFN7$`-0.04`$cellCounts[,c("x", "y")]
+# m <- FN7_K8$theta[rownames(pos),]
+# cc <- as.factor(as.vector(mjr_class_cols)[pairs$colsix])
+# names(cc) <- colnames(m)
+# vizTopicClusters(theta = m,
+#                  pos = pos,
+#                  clusters = cc,
+#                  sharedCol = TRUE,
+#                  groups = rep("0", dim(m)[1]),
+#                  group_cols = c("0" = "black"),
+#                  r = 40,
+#                  lwd = 0.4,
+#                  showLegend = TRUE,
+#                  plotTitle = NA)
 
 ```
 
@@ -1939,7 +1941,7 @@ gplots::heatmap.2(x = corMtx,
                   margins = c(7,4))
 # dev.off()
 
-pdf(file = paste0(fig_path, "Fig_2_STdev-k8-beta-heatmap.pdf"))
+# pdf(file = paste0(fig_path, "Fig_2_STdev-k8-beta-heatmap.pdf"))
 # pair up best matching cell class to a predicted topic
 pairs <- lsatPairs(corMtx)
 gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
@@ -1957,7 +1959,7 @@ gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,4))
-dev.off()
+# dev.off()
 
 diag_cors <- diag(corMtx[pairs$rowix, pairs$colsix])
 
@@ -1990,7 +1992,7 @@ boxplot(diag_cors,
         xlab = "",
         ylab = "Correlation") # size of outliers
 stripchart(diag_cors_lda_k8, vertical = TRUE, 
-    method = "jitter", add = TRUE, pch = 20, col = 'black')
+    method = "jitter", add = TRUE, pch = 20, col = 'black', size = 15)
 dev.off()
 
 ```
@@ -2019,7 +2021,7 @@ gplots::heatmap.2(x = corMtx,
                   margins = c(7,4))
 # dev.off()
 
-pdf(file = paste0(fig_path, "Fig_2_STdev-k75-theta-heatmap.pdf"))
+# pdf(file = paste0(fig_path, "Fig_2_STdev-k75-theta-heatmap.pdf"))
 # pair up best matching cell class to a predicted topic
 pairs <- lsatPairs(corMtx)
 gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
@@ -2037,7 +2039,7 @@ gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
                   cexCol = 0.3,
                   # lhei = c(1,3),
                   margins = c(4,4))
-dev.off()
+# dev.off()
 
 diag_cors <- diag(corMtx[pairs$rowix, pairs$colsix])
 
@@ -2072,7 +2074,7 @@ boxplot(diag_cors_lda_k75,
         xlab = "",
         ylab = "Correlation") # size of outliers
 stripchart(diag_cors_lda_k75, vertical = TRUE, 
-    method = "jitter", add = TRUE, pch = 20, col = 'black')
+    method = "jitter", add = TRUE, pch = 20, col = 'black', size = 15)
 dev.off()
 
 ```
@@ -2099,7 +2101,7 @@ gplots::heatmap.2(x = corMtx,
                   margins = c(7,4))
 # dev.off()
 
-pdf(file = paste0(fig_path, "Fig_2_STdev-k75-beta-heatmap.pdf"))
+# pdf(file = paste0(fig_path, "Fig_2_STdev-k75-beta-heatmap.pdf"))
 # pair up best matching cell class to a predicted topic
 pairs <- lsatPairs(corMtx)
 gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
@@ -2117,7 +2119,7 @@ gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
                   cexCol = 0.3,
                   # lhei = c(1,3),
                   margins = c(4,4))
-dev.off()
+# dev.off()
 
 diag_cors <- diag(corMtx[pairs$rowix, pairs$colsix])
 
@@ -2150,7 +2152,7 @@ boxplot(diag_cors,
         xlab = "",
         ylab = "Correlation") # size of outliers
 stripchart(diag_cors, vertical = TRUE, 
-    method = "jitter", add = TRUE, pch = 20, col = 'black')
+    method = "jitter", add = TRUE, pch = 20, col = 'black', size = 15)
 dev.off()
 
 ```
