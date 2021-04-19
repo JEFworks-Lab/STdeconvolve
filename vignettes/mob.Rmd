@@ -2214,7 +2214,7 @@ vizAllTopics(theta = m,
 # mob_pos <- mOB$pos[colnames(mob_counts),]
 
 # CPM normalize
-mob_cpm <- MERINGUE::normalizeCounts(counts = t(countsClean), 
+mob_cpm <- normalizeCounts(counts = t(countsClean), 
                        log=FALSE,
                        verbose=TRUE)
 
