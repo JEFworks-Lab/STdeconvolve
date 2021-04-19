@@ -2,16 +2,28 @@
 % Please edit documentation in R/functions.R
 \name{getBetaTheta}
 \alias{getBetaTheta}
-\title{Pull out topics and terms from fitted topic models from fitLDA
-Jean: Brendan, the use of theta and beta vs topics and terms
-across different functions is quite confusing
-Please update for consistency}
+\title{Pull out topic proportions across spots (theta) and
+topic gene probabilities (beta) matrices from fitted topic models from fitLDA}
 \usage{
 getBetaTheta(lda)
 }
+\arguments{
+\item{lda}{an LDA model from \code{topicmodels}. From list of models returned by
+fitLDA}
+}
+\value{
+A list that contains
+\itemize{
+\item beta: topic (rows) by gene (columns) distribution matrix.
+Each row is a probability distribution of a topic expressing each gene
+in the corpus
+\item theta: spot (rows) by topics (columns) distribution matrix. Each row
+is the topic composition for a given spot
+\item topicFreq: overall proportion of each topic in the entire corpus of
+spots
+}
+}
 \description{
-Pull out topics and terms from fitted topic models from fitLDA
-Jean: Brendan, the use of theta and beta vs topics and terms
-across different functions is quite confusing
-Please update for consistency
+Pull out topic proportions across spots (theta) and
+topic gene probabilities (beta) matrices from fitted topic models from fitLDA
 }
