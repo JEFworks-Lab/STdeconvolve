@@ -185,7 +185,7 @@ preprocess <- function(dat,
   # remove poor spots and genes
   cat("- Removing poor spots with <=", min.lib.size, "reads", "\n")
   cat("- Removing genes with <=", min.reads, "reads across spots and detected in <=", min.detected, "spots.", "\n")
-  countsClean <- MERINGUE::cleanCounts(counts = t(counts), 
+  countsClean <- cleanCounts(counts = t(counts), 
                                        min.reads = min.reads, 
                                        min.lib.size = min.lib.size, 
                                        min.detected = min.detected,
@@ -250,7 +250,7 @@ preprocess <- function(dat,
   if (ODgenes == TRUE) {
     cat("- Capturing only the overdispersed genes...", "\n")
     par(mfrow=c(4,2), mar=c(1,1,1,1))
-    OD <- MERINGUE::getOverdispersedGenes(countsClean,
+    OD <- getOverdispersedGenes(countsClean,
                                 alpha = od.genes.alpha,
                                 gam.k = gam.k,
                                 plot = TRUE,

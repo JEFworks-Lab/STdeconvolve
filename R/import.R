@@ -165,3 +165,36 @@ bh.adjust <- function(x, log = FALSE) {
   ox
 }
 
+
+normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseudo = 1, 
+                             log = TRUE, verbose = TRUE) {
+  if (!class(counts) %in% c("dgCMatrix", "dgTMatrix")) {
+    if (verbose) {
+      message("Converting to sparse matrix ...")
+    }
+    counts <- Matrix::Matrix(counts, sparse = TRUE)
+  }
+  if (verbose) {
+    message("Normalizing matrix with ", ncol(counts), " cells and ", 
+            nrow(counts), " genes.")
+  }
+  if (is.null(normFactor)) {
+    if (verbose) {
+      message("normFactor not provided. Normalizing by library size.")
+    }
+    normFactor <- Matrix::colSums(counts)
+  }
+  if (verbose) {
+    message(paste0("Using depthScale ", depthScale))
+  }
+  counts <- Matrix::t(Matrix::t(counts)/normFactor)
+  counts <- counts * depthScale
+  if (log) {
+    if (verbose) {
+      message("Log10 transforming with pseudocount ", 
+              pseudo, ".")
+    }
+    counts <- log10(counts + pseudo)
+  }
+  return(counts)
+}

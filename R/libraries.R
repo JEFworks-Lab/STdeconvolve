@@ -1,5 +1,6 @@
+library(topicmodels)
 library(Matrix)
-library(MERINGUE)
+# library(MERINGUE)
 library(MUDAN) # some MERINGUE functions actually from MUDAN (?) cleanCounts, getDifferentialGenes, normalizeCounts, plotEmbedding
 library(ggplot2)
 library(scatterpie)
