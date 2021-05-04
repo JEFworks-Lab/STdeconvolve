@@ -4,5 +4,4 @@
 *~
 .DS_Store
 *.Rproj
-draft_data/
-draft_figures/
+.RDataTmp
