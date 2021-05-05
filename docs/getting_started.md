@@ -1,29 +1,12 @@
----
-title: "Getting Started with STdeconvolve"
-author: "Jean Fan"
-date: "2/26/2021"
-output:   
-  md_document:
-    variant: markdown_github
-vignette: >
-  %\VignetteIndexEntry{Getting Started with STdeconvolve}
-  %\VignetteEncoding{UTF-8}
-  %\VignetteEngine{knitr::rmarkdown}
----
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
 Load package
 
-```{r, getting_started_package}
+``` r
 library(STdeconvolve)
 ```
 
 Load built in data
 
-```{r, data}
+``` r
 data(mOB)
 pos <- mOB$pos
 cd <- mOB$counts
@@ -32,35 +15,61 @@ annot <- mOB$annot
 
 Feature select
 
-```{r, getting_started_feature}
+``` r
 counts <- cleanCounts(cd, min.lib.size = 100, min.reads = 100)
+```
+
+![](getting_started_files/figure-markdown_github/getting_started_feature-1.png)
+
+``` r
 corpus <- restrictCorpus(counts, alpha = 0.05, t = 1)
 ```
 
+    ## [1] "Calculating variance fit ..."
+    ## [1] "Using gam with k=5..."
+    ## [1] "255 overdispersed genes ... "
+    ## [1] "Removing genes present in more than 100% of datasets..."
+    ## [1] "237 genes remaining..."
+
 Choose optimal number of cell-types
 
-```{r, getting_started_opt}
+``` r
 lda <- fitLDA(corpus, Ks = seq(2, 9, by = 1), plot=TRUE)
 ```
 
+    ## [1] "Time to train LDA models was 0.24mins"
+    ## [1] "Computing perplexity for each fitted model..."
+    ## final e step document 260
+    ## final e step document 260
+    ## final e step document 260
+    ## final e step document 260
+    ## final e step document 260
+    ## final e step document 260
+    ## final e step document 260
+    ## final e step document 260
+
+![](getting_started_files/figure-markdown_github/getting_started_opt-1.png)
+
 Get best model results
 
-```{r, getting_started_model}
+``` r
 results <- getBetaTheta(lda$models[["8"]])
 ```
 
 Visualize deconvolved cell-type proportions
 
-```{r, getting_started_proportions}
+``` r
 vizAllTopics(results$theta, pos, 
              groups = annot, 
              group_cols = rainbow(length(levels(annot))),
              r=0.4)
 ```
 
+![](getting_started_files/figure-markdown_github/getting_started_proportions-1.png)
+
 Visualize deconvolved cell-type gene expression
 
-```{r, eval=FALSE, getting_started_expression}
+``` r
 marker <- names(sort(results$beta[1, ], decreasing=TRUE))[1]
 
 mat <- normalizeCounts(counts)
@@ -78,6 +87,3 @@ vizGeneCounts(df = df,
               plotTitle = marker,
               showLegend = TRUE)
 ```
-
-
-

@@ -21,6 +21,8 @@ slam::simple_triplet_matrix where spots were rows and genes were columns}
 \item{seed}{Random seed}
 
 \item{ncores}{Number of cores for parallelization}
+
+\item{plot}{Boolean for plotting}
 }
 \value{
 A list that contains
