@@ -23,7 +23,7 @@ remotes::install_github('JEFworks/STdeconvolve')
 
 ## Example
 
-```{r}
+``` r
 library(STdeconvolve)
 ## load built in data
 data(mOB)
@@ -44,7 +44,7 @@ deconGexp <- results$beta*1000
 vizAllTopics(deconProp, pos, 
              groups = annot, 
              group_cols = rainbow(length(levels(annot))),
-             r=0.4)
+             r=0.4)	     
 ```
 
 <img src="https://github.com/JEFworks/STdeconvolve/blob/package/docs/getting_started_files/figure-markdown_github/getting_started_proportions-1.png?raw=true"/>
