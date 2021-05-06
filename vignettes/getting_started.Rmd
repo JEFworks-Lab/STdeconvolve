@@ -32,27 +32,31 @@ annot <- mOB$annot
 
 Feature select
 
-```{r, getting_started_feature}
-counts <- cleanCounts(cd, min.lib.size = 100, min.reads = 100)
-corpus <- restrictCorpus(counts, alpha = 0.05, t = 1)
+```{r, getting_started_feature, fig.width=6, fig.height=3}
+## remove pixels with too few genes
+counts <- cleanCounts(cd)
+## feature select for genes
+corpus <- restrictCorpus(counts, t1=0.05, t2 = 1)
 ```
 
 Choose optimal number of cell-types
 
-```{r, getting_started_opt}
-lda <- fitLDA(corpus, Ks = seq(2, 9, by = 1), plot=TRUE)
+```{r, getting_started_opt, fig.width=6, fig.height=4}
+lda <- fitLDA(corpus, Ks = seq(2, 9, by = 1), plot=TRUE, verbose=FALSE)
 ```
 
 Get best model results
 
 ```{r, getting_started_model}
-results <- getBetaTheta(lda$models[["8"]])
+results <- getBetaTheta(lda$models[[lda$kOpt2]])
+deconProp <- results$theta
+deconGexp <- results$beta*1000
 ```
 
 Visualize deconvolved cell-type proportions
 
-```{r, getting_started_proportions}
-vizAllTopics(results$theta, pos, 
+```{r, getting_started_proportions, fig.width=8, fig.height=4}
+vizAllTopics(deconProp, pos, 
              groups = annot, 
              group_cols = rainbow(length(levels(annot))),
              r=0.4)
@@ -60,23 +64,48 @@ vizAllTopics(results$theta, pos,
 
 Visualize deconvolved cell-type gene expression
 
-```{r, eval=FALSE, getting_started_expression}
-marker <- names(sort(results$beta[1, ], decreasing=TRUE))[1]
+```{r, getting_started_expression, fig.width=6, fig.height=4}
+celltype <- 7
+highgexp <- names(which(deconGexp[celltype,] > 5))
+log2fc <- sort(log2(deconGexp[celltype,highgexp]/colMeans(deconGexp[-celltype,highgexp])), decreasing=TRUE)
+markers <- names(log2fc)[1:4]
 
-mat <- normalizeCounts(counts)
-gexp <- MERINGUE:::winsorize(scale(mat[marker,])[,1])
-MERINGUE::plotEmbedding(pos[colnames(mat),], col=gexp, cex=3)
-
-## function needs to be simplified
-df <- merge(as.data.frame(pos), as.data.frame(gexp), by = 0)
-rownames(df) <- df$Row.names
-df <- df[,-1]
-colnames(df) <- c('x', 'y', marker)
-vizGeneCounts(df = df,
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  vizGeneCounts(df = df,
               gene = marker,
-              size = 5, stroke = 0.01,
+              size = 2, stroke = 0.1,
               plotTitle = marker,
-              showLegend = TRUE)
+              winsorize = 0.05)
+})
+gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+
+celltype <- 2
+highgexp <- names(which(deconGexp[celltype,] > 5))
+log2fc <- sort(log2(deconGexp[celltype,highgexp]/colMeans(deconGexp[-celltype,highgexp])), decreasing=TRUE)
+markers <- names(log2fc)[1:4]
+
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  vizGeneCounts(df = df,
+              gene = marker,
+              size = 2, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05)
+})
+gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
 ```
 
 

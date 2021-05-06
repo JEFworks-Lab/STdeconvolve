@@ -319,6 +319,7 @@ vizTopicClusters <- function(theta, pos, clusters,
 #'     they belong to. Needs to be a character vector in the order of the spot
 #'     rows in df. Ex: c("0", "1", "0", ...)
 #' @param group_cols color labels for the groups. Ex: c("0" = "gray", "1" = "red")
+#' @param winsorize Winsorization quantile
 #' @param size size of the geom_points to plot (default: 7)
 #' @param stroke thickness of the geom_point lines to help in emphasizing groups
 #'     (default: 2)
@@ -332,6 +333,7 @@ vizTopicClusters <- function(theta, pos, clusters,
 vizGeneCounts <- function(df, gene,
                           groups = NA,
                           group_cols = NA,
+                          winsorize = 0,
                           size = 7,
                           stroke = 0.5,
                           a = 1,
@@ -340,6 +342,9 @@ vizGeneCounts <- function(df, gene,
                           overlay = NA) {
 
   counts <- df[,gene]
+
+  ## winsorize
+  counts <- winsorize(counts, qt=winsorize)
 
   # color spots by group:
   if (is.na(groups[1]) == TRUE) {

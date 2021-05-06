@@ -9,7 +9,8 @@ fitLDA(
   Ks = seq(2, 10, by = 2),
   seed = 0,
   ncores = parallel::detectCores(logical = TRUE) - 1,
-  plot = TRUE
+  plot = TRUE,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -23,6 +24,8 @@ slam::simple_triplet_matrix where spots were rows and genes were columns}
 \item{ncores}{Number of cores for parallelization}
 
 \item{plot}{Boolean for plotting}
+
+\item{verbose}{Verbosity level}
 }
 \value{
 A list that contains

@@ -6,11 +6,11 @@
 \usage{
 cleanCounts(
   counts,
-  min.lib.size = 1,
+  min.lib.size = 100,
   max.lib.size = Inf,
   min.reads = 1,
   min.detected = 1,
-  verbose = FALSE,
+  verbose = TRUE,
   plot = TRUE
 )
 }

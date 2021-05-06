@@ -2,11 +2,15 @@
 #'
 #' @export
 restrictCorpus <- function(counts,
-                           t = 0.9,
+                           t1 = 0.05,
+                           t2 = 1,
                            alpha = 0.05,
                            plot = FALSE,
                            verbose = TRUE) {
   ## overdispersed genes only
+  if(verbose) {
+    print(paste0('Restricting to overdispersed genes with alpha=', alpha, '...'))
+  }
   odGenes <- getOverdispersedGenes(counts,
                                    alpha = alpha,
                                    plot = plot,
@@ -14,10 +18,16 @@ restrictCorpus <- function(counts,
                                    verbose = verbose)
   countsFilt <- counts[odGenes$ods,]
 
-  ## remove genes that are present in more than X% of spots
-  vi <- rowSums(countsFilt > 0) >= ncol(countsFilt)*t
+  ## remove genes that are present in less than X% of spots
+  vi <- rowSums(countsFilt > 0) <= ncol(countsFilt)*t1
   if(verbose) {
-    print(paste0('Removing genes present in more than ', t*100, '% of datasets...'))
+    print(paste0('Removing ', sum(vi), ' genes present in less than ', t1*100, '% of datasets...'))
+  }
+  countsFilt <- countsFilt[!vi,]
+  ## remove genes that are present in more than X% of spots
+  vi <- rowSums(countsFilt > 0) >= ncol(countsFilt)*t2
+  if(verbose) {
+    print(paste0('Removing ', sum(vi), ' genes present in more than ', t2*100, '% of datasets...'))
   }
   countsFiltnoUnifGenes <- countsFilt[!vi,]
 
@@ -48,6 +58,7 @@ restrictCorpus <- function(counts,
 #' @param seed Random seed
 #' @param ncores Number of cores for parallelization
 #' @param plot Boolean for plotting
+#' @param verbose Verbosity level
 #'
 #' @return A list that contains
 #' \itemize{
@@ -61,7 +72,7 @@ restrictCorpus <- function(counts,
 #' @export
 fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
                    ncores = parallel::detectCores(logical = TRUE) - 1,
-                   plot = TRUE) {
+                   plot = TRUE, verbose=TRUE) {
 
   if (slam::is.simple_triplet_matrix(counts) == TRUE){
     corpus <- counts
@@ -70,19 +81,24 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
   }
 
   controls <- list(seed = seed,
-                   verbose = 1, keep = 1, estimate.alpha = TRUE)
+                   verbose = verbose, keep = 1, estimate.alpha = TRUE)
 
-  start_time <- Sys.time()
+  #start_time <- Sys.time()
   fitted_models <- parallel::mclapply(Ks, function(k) {
     topicmodels::LDA(corpus, k=k, control = controls)
   },
   mc.cores = ncores
   )
   names(fitted_models) <- Ks
-  total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
-  print(sprintf("Time to train LDA models was %smins", total_t))
+  #total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+  #if(verbose) {
+  #  print(sprintf("Time to train LDA models was %smins", total_t))
+  #}
 
-  print("Computing perplexity for each fitted model...")
+  if(verbose) {
+    print("Computing perplexity for each fitted model...")
+  }
+
   pScores <- unlist(lapply(fitted_models, function(model){
     p <- topicmodels::perplexity(model, corpus)
     return(p)
@@ -102,8 +118,8 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
   }
 
   return(list(models = fitted_models,
-              kOpt1 = kOpt1,
-              kOpt2 = kOpt2,
+              kOpt1 = as.character(kOpt1),
+              kOpt2 = as.character(kOpt2),
               perplexities = pScores,
               fitCorpus = corpus))
 }

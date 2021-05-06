@@ -43,7 +43,7 @@ where.is.knee <- function(points = NULL) {
 #'
 #' @importFrom Matrix Matrix colSums rowSums
 #'
-cleanCounts <- function (counts, min.lib.size = 1, max.lib.size = Inf, min.reads = 1, min.detected = 1, verbose = FALSE, plot=TRUE) {
+cleanCounts <- function (counts, min.lib.size = 100, max.lib.size = Inf, min.reads = 1, min.detected = 1, verbose = TRUE, plot=TRUE) {
   if (!any(class(counts) %in% c("dgCMatrix", "dgTMatrix"))) {
     if (verbose) {
       message("Converting to sparse matrix ...")
@@ -265,4 +265,16 @@ fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=F,un
   } else {
     return(y);
   }
+}
+
+# winsorize
+winsorize <- function (x, qt=.05) {
+  if(length(qt) != 1 || qt < 0 ||
+     qt > 0.5) {
+    stop("bad value for quantile threashold")
+  }
+  lim <- quantile(x, probs=c(qt, 1-qt))
+  x[ x < lim[1] ] <- lim[1]
+  x[ x > lim[2] ] <- lim[2]
+  x
 }
