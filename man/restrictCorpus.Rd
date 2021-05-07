@@ -4,7 +4,14 @@
 \alias{restrictCorpus}
 \title{Restrict to informative words (genes) for topic modeling}
 \usage{
-restrictCorpus(counts, t = 0.9, alpha = 0.05, plot = FALSE, verbose = TRUE)
+restrictCorpus(
+  counts,
+  t1 = 0.05,
+  t2 = 1,
+  alpha = 0.05,
+  plot = FALSE,
+  verbose = TRUE
+)
 }
 \description{
 Restrict to informative words (genes) for topic modeling

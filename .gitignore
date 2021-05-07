@@ -4,5 +4,7 @@
 *~
 .DS_Store
 *.Rproj
-0draft_data/
+.RDataTmp
 0draft_figures/
+0draft_data/
+figures/merfish

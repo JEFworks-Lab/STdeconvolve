@@ -10,6 +10,7 @@ vizGeneCounts(
   gene,
   groups = NA,
   group_cols = NA,
+  winsorize = 0,
   size = 7,
   stroke = 0.5,
   a = 1,
@@ -30,6 +31,8 @@ they belong to. Needs to be a character vector in the order of the spot
 rows in df. Ex: c("0", "1", "0", ...)}
 
 \item{group_cols}{color labels for the groups. Ex: c("0" = "gray", "1" = "red")}
+
+\item{winsorize}{Winsorization quantile}
 
 \item{size}{size of the geom_points to plot (default: 7)}
 

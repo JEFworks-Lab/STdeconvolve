@@ -23,6 +23,7 @@
 #'     (default: NA)
 #'
 #' @export
+#'
 vizAllTopics <- function(theta, pos,
                          topicOrder=seq(ncol(theta)),
                          topicCols=rainbow(ncol(theta)),
@@ -61,58 +62,58 @@ vizAllTopics <- function(theta, pos,
   if (is.na(group_cols[1]) == TRUE) {
     group_cols <- c("0" = "gray")
   }
-  
+
   if (is.na(overlay[1]) == FALSE){
-    p <- ggplot(mapping = aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
+    p <- ggplot2::ggplot(mapping = ggplot2::aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
       coord_equal(xlim = c(0,dim(overlay)[2]), ylim = c(0, dim(overlay)[1]), expand = FALSE) +
-      theme(
+      ggplot2::theme(
         #panel.background = element_rect(fill = "white"),
-        panel.grid = element_blank(),
-        axis.line=element_blank(),
-        axis.text.x=element_blank(),
-        axis.text.y=element_blank(),
-        axis.ticks=element_blank(),
-        axis.title.x=element_blank(),
-        axis.title.y=element_blank(),
-        panel.background=element_blank()) +
-      # geom_point(aes(x = c(0,dim(overlay)[2]), y = c(0, dim(overlay)[1]))) +
-      annotation_raster(overlay, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) +
+        panel.grid = ggplot2::element_blank(),
+        axis.line=ggplot2::element_blank(),
+        axis.text.x=ggplot2::element_blank(),
+        axis.text.y=ggplot2::element_blank(),
+        axis.ticks=ggplot2::element_blank(),
+        axis.title.x=ggplot2::element_blank(),
+        axis.title.y=ggplot2::element_blank(),
+        panel.background=ggplot2::element_blank()) +
+      # geom_point(ggplot2::aes(x = c(0,dim(overlay)[2]), y = c(0, dim(overlay)[1]))) +
+      ggplot2::annotation_raster(overlay, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) +
       # theme_classic() +
-      scatterpie::geom_scatterpie(aes(x=x, y=y, group=Row.names, r=r, color = groups),
+      scatterpie::geom_scatterpie(ggplot2::aes(x=x, y=y, group=Row.names, r=r, color = groups),
                                   lwd = lwd,
                                   data = theta_ordered_pos,
                                   cols = topicColumns,
                                   legend_name = "Topics") +
-      scale_fill_manual(values = topicCols) +
-      scale_color_manual(values = group_cols)
+      ggplot2::scale_fill_manual(values = topicCols) +
+      ggplot2::scale_color_manual(values = group_cols)
   } else {
-  p <- ggplot() +
-    theme(
+  p <- ggplot2::ggplot() +
+    ggplot2::theme(
       #panel.background = element_rect(fill = "white"),
-      panel.grid = element_blank(),
-      axis.line=element_blank(),
-      axis.text.x=element_blank(),
-      axis.text.y=element_blank(),
-      axis.ticks=element_blank(),
-      axis.title.x=element_blank(),
-      axis.title.y=element_blank(),
-      panel.background=element_blank()) +
+      panel.grid =ggplot2::element_blank(),
+      axis.line=ggplot2::element_blank(),
+      axis.text.x=ggplot2::element_blank(),
+      axis.text.y=ggplot2::element_blank(),
+      axis.ticks=ggplot2::element_blank(),
+      axis.title.x=ggplot2::element_blank(),
+      axis.title.y=ggplot2::element_blank(),
+      panel.background=ggplot2::element_blank()) +
     # theme_classic() +
-    scatterpie::geom_scatterpie(aes(x=x, y=y, group=Row.names, r=r, color = groups),
+    scatterpie::geom_scatterpie(ggplot2::aes(x=x, y=y, group=Row.names, r=r, color = groups),
                     lwd = lwd,
                     data = theta_ordered_pos,
                     cols = topicColumns,
                     legend_name = "Topics") +
-    scale_fill_manual(values = topicCols) +
-    scale_color_manual(values = group_cols)
+    ggplot2::scale_fill_manual(values = topicCols) +
+    ggplot2::scale_color_manual(values = group_cols)
   }
 
   if (showLegend == FALSE) {
-    p <- p + guides(fill=FALSE)
+    p <- p +  ggplot2::guides(fill=FALSE)
   }
 
   if (is.na(plotTitle) == FALSE) {
-    p <- p + ggtitle(plotTitle)
+    p <- p +  ggplot2::ggtitle(plotTitle)
   }
 
   return(p)
@@ -120,7 +121,7 @@ vizAllTopics <- function(theta, pos,
 
 
 #' Visualize proportions of topic clusters individually
-#' 
+#'
 #' @description Similar to `vizAllTopics` but will generate a separate plot for
 #'     each topic or topic-cluster where the other topics or clusters will be
 #'     colored gray. In this way, the actual proportions of each topic in a spot
@@ -131,7 +132,7 @@ vizAllTopics <- function(theta, pos,
 #' @param clusters factor of the color (i.e., topic cluster) each cluster is
 #'     assigned to. In this case, the levels should be colors. In `vizAllTopics`,
 #'     clusters is "topicCols" and can just be a vector of colors.
-#' @sharedCol Boolean indicating if the topics in a cluster will be plotted with
+#' @param sharedCol Boolean indicating if the topics in a cluster will be plotted with
 #'     the same color or if each topic will be colored by its own shade to also
 #'     show how the topics in a cluster are distributed in space wrt each other.
 #' @param groups colors the spot piechart lines based on a group or cell layer
@@ -145,7 +146,7 @@ vizAllTopics <- function(theta, pos,
 #' @param plotTitle add title to the resulting plot (default: NA)
 #' @param overlay plot the scatterpies on top of a raster image of the H&E tissue
 #'     (default: NA)
-#'     
+#'
 #' @export
 vizTopicClusters <- function(theta, pos, clusters,
                              sharedCol = FALSE,
@@ -182,7 +183,7 @@ vizTopicClusters <- function(theta, pos, clusters,
     theta_ordered <- as.data.frame(theta_ordered)
     colnames(theta_ordered) <- paste0("Topic.", topics)
     theta_ordered$other <- other
-    
+
     # if any topics not represented at all, drop them
     # Apparently if a topic is 0 for all pie charts, it is not plotted
     # and doesn't appear in the legend and messes with the colors such that
@@ -197,7 +198,7 @@ vizTopicClusters <- function(theta, pos, clusters,
         next
       }
     }
-    
+
     # add columns with document positions
     rownames(theta_ordered) <- rownames(pos)
     theta_ordered_pos <- merge(data.frame(theta_ordered),
@@ -231,60 +232,60 @@ vizTopicClusters <- function(theta, pos, clusters,
     }
 
     if (is.na(overlay[1]) == FALSE){
-      p <- ggplot(mapping = aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
+      p <- ggplot2::ggplot(mapping = ggplot2::aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
         coord_equal(xlim = c(0,dim(overlay)[2]), ylim = c(0, dim(overlay)[1]), expand = FALSE) +
-        theme(
+        ggplot2::theme(
           #panel.background = element_rect(fill = "white"),
-          panel.grid = element_blank(),
-          axis.line=element_blank(),
-          axis.text.x=element_blank(),
-          axis.text.y=element_blank(),
-          axis.ticks=element_blank(),
-          axis.title.x=element_blank(),
-          axis.title.y=element_blank(),
-          panel.background=element_blank()) +
-        # geom_point(aes(x = c(0,dim(overlay)[2]), y = c(0, dim(overlay)[1]))) +
-        annotation_raster(overlay, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) +
+          panel.grid = ggplot2::element_blank(),
+          axis.line=ggplot2::element_blank(),
+          axis.text.x=ggplot2::element_blank(),
+          axis.text.y=ggplot2::element_blank(),
+          axis.ticks=ggplot2::element_blank(),
+          axis.title.x=ggplot2::element_blank(),
+          axis.title.y=ggplot2::element_blank(),
+          panel.background=ggplot2::element_blank()) +
+        # geom_point(ggplot2::aes(x = c(0,dim(overlay)[2]), y = c(0, dim(overlay)[1]))) +
+        ggplot2::annotation_raster(overlay, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) +
         # theme_classic() +
-        scatterpie::geom_scatterpie(aes(x=x, y=y, group=Row.names, r = r, color = groups),
+        scatterpie::geom_scatterpie(ggplot2::aes(x=x, y=y, group=Row.names, r = r, color = groups),
                                     lwd = lwd,
                                     data=theta_ordered_pos,
                                     cols = topicColumns,
                                     legend_name = "Topics") +
         # coord_equal() +
-        scale_fill_manual(values=topic_colors) +
-        scale_color_manual(values = group_cols)
+        ggplot2::scale_fill_manual(values=topic_colors) +
+        ggplot2::scale_color_manual(values = group_cols)
     } else {
-      p <- ggplot() +
-        theme(
+      p <- ggplot2::ggplot() +
+        ggplot2::theme(
           #panel.background = element_rect(fill = "white"),
-          panel.grid = element_blank(),
-          axis.line=element_blank(),
-          axis.text.x=element_blank(),
-          axis.text.y=element_blank(),
-          axis.ticks=element_blank(),
-          axis.title.x=element_blank(),
-          axis.title.y=element_blank(),
-          panel.background=element_blank()) +
+          panel.grid = ggplot2::element_blank(),
+          axis.line=ggplot2::element_blank(),
+          axis.text.x=ggplot2::element_blank(),
+          axis.text.y=ggplot2::element_blank(),
+          axis.ticks=ggplot2::element_blank(),
+          axis.title.x=ggplot2::element_blank(),
+          axis.title.y=ggplot2::element_blank(),
+          panel.background=ggplot2::element_blank()) +
         # theme_classic() +
-        scatterpie::geom_scatterpie(aes(x=x, y=y, group=Row.names, r = r, color = groups),
+        scatterpie::geom_scatterpie(ggplot2::aes(x=x, y=y, group=Row.names, r = r, color = groups),
                                     lwd = lwd,
                                     data=theta_ordered_pos,
                                     cols = topicColumns,
                                     legend_name = "Topics") +
         # coord_equal() +
-        scale_fill_manual(values=topic_colors) +
-        scale_color_manual(values = group_cols)
+        ggplot2::scale_fill_manual(values=topic_colors) +
+        ggplot2::scale_color_manual(values = group_cols)
     }
 
     if (showLegend == FALSE) {
       p <- p + guides(fill=FALSE)
     }
-    
+
     if (is.na(plotTitle) == FALSE) {
-      p <- p + ggtitle(plotTitle)
+      p <- p + ggplot2::ggtitle(plotTitle)
     }
-    
+
     if (is.na(fig_prefix) == FALSE) {
       fig_name <- paste0(fig_prefix, "_", topics, ".pdf")
     } else {
@@ -306,7 +307,7 @@ vizTopicClusters <- function(theta, pos, clusters,
 
 #' Visualize gene counts in spots in space. Can also see group assignment of
 #' spots.
-#' 
+#'
 #' @description Note: visualized one gene at a time. Can set up a loop to plot
 #'    a different gene column in df individually.
 #'
@@ -318,6 +319,7 @@ vizTopicClusters <- function(theta, pos, clusters,
 #'     they belong to. Needs to be a character vector in the order of the spot
 #'     rows in df. Ex: c("0", "1", "0", ...)
 #' @param group_cols color labels for the groups. Ex: c("0" = "gray", "1" = "red")
+#' @param winsorize Winsorization quantile
 #' @param size size of the geom_points to plot (default: 7)
 #' @param stroke thickness of the geom_point lines to help in emphasizing groups
 #'     (default: 2)
@@ -326,11 +328,12 @@ vizTopicClusters <- function(theta, pos, clusters,
 #' @param showLegend Boolean to show the plot legend
 #' @param overlay plot the scatterpies on top of a raster image of the H&E tissue
 #'     (default: NA)
-#' 
+#'
 #' @export
 vizGeneCounts <- function(df, gene,
                           groups = NA,
                           group_cols = NA,
+                          winsorize = 0,
                           size = 7,
                           stroke = 0.5,
                           a = 1,
@@ -339,6 +342,9 @@ vizGeneCounts <- function(df, gene,
                           overlay = NA) {
 
   counts <- df[,gene]
+
+  ## winsorize
+  counts <- winsorize(counts, qt=winsorize)
 
   # color spots by group:
   if (is.na(groups[1]) == TRUE) {
@@ -350,56 +356,56 @@ vizGeneCounts <- function(df, gene,
   if (is.na(group_cols[1]) == TRUE) {
     group_cols <- c(" " = "white")
   }
-  
+
   if (is.na(overlay[1]) == FALSE){
-    p <- ggplot(mapping = aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
+    p <- ggplot(mapping = ggplot2::aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
       coord_equal(xlim = c(0,dim(overlay)[2]), ylim = c(0, dim(overlay)[1]), expand = FALSE) +
-      theme(
+      ggplot2::theme(
         #panel.background = element_rect(fill = "white"),
-        panel.grid = element_blank(),
-        axis.line=element_blank(),
-        axis.text.x=element_blank(),
-        axis.text.y=element_blank(),
-        axis.ticks=element_blank(),
-        axis.title.x=element_blank(),
-        axis.title.y=element_blank(),
-        panel.background=element_blank()) +
-      # geom_point(aes(x = c(0,dim(overlay)[2]), y = c(0, dim(overlay)[1]))) +
-      annotation_raster(overlay, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) +
+        panel.grid = ggplot2::element_blank(),
+        axis.line=ggplot2::element_blank(),
+        axis.text.x=ggplot2::element_blank(),
+        axis.text.y=ggplot2::element_blank(),
+        axis.ticks=ggplot2::element_blank(),
+        axis.title.x=ggplot2::element_blank(),
+        axis.title.y=ggplot2::element_blank(),
+        panel.background=ggplot2::element_blank()) +
+      # geom_point(ggplot2::aes(x = c(0,dim(overlay)[2]), y = c(0, dim(overlay)[1]))) +
+      ggplot2::annotation_raster(overlay, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) +
       # theme_classic() +
-      geom_point(data = df, aes(x=x, y=y, fill=counts, color = groups),
+      ggplot2::geom_point(data = df, ggplot2::aes(x=x, y=y, fill=counts, color = groups),
                  shape = 21,
                  stroke = stroke, size = size) +
-      scale_fill_viridis(option = "A", direction = -1, alpha = a) +
-      scale_color_manual(values = group_cols)
+      viridis::scale_fill_viridis(option = "A", direction = -1, alpha = a) +
+      ggplot2::scale_color_manual(values = group_cols)
   } else {
-    p <- ggplot() +
-      theme(
+    p <- ggplot2::ggplot() +
+      ggplot2::theme(
         #panel.background = element_rect(fill = "white"),
-        panel.grid = element_blank(),
-        axis.line=element_blank(),
-        axis.text.x=element_blank(),
-        axis.text.y=element_blank(),
-        axis.ticks=element_blank(),
-        axis.title.x=element_blank(),
-        axis.title.y=element_blank(),
-        panel.background=element_blank()) +
+        panel.grid = ggplot2::element_blank(),
+        axis.line=ggplot2::element_blank(),
+        axis.text.x=ggplot2::element_blank(),
+        axis.text.y=ggplot2::element_blank(),
+        axis.ticks=ggplot2::element_blank(),
+        axis.title.x=ggplot2::element_blank(),
+        axis.title.y=ggplot2::element_blank(),
+        panel.background=ggplot2::element_blank()) +
       # theme_classic() +
-      geom_point(data = df, aes(x=x, y=y, fill=counts, color = groups),
+      ggplot2::geom_point(data = df, ggplot2::aes(x=x, y=y, fill=counts, color = groups),
                  shape = 21,
                  stroke = stroke, size = size) +
-      scale_fill_viridis(option = "A", direction = -1, alpha = a) +
-      scale_color_manual(values = group_cols)
+      viridis::scale_fill_viridis(option = "A", direction = -1, alpha = a) +
+      ggplot2::scale_color_manual(values = group_cols)
   }
-  
+
   if (showLegend == FALSE) {
     p <- p + guides(fill=FALSE)
   }
-  
+
   if (is.na(plotTitle) == FALSE) {
-    p <- p + ggtitle(plotTitle)
+    p <- p + ggplot2::ggtitle(plotTitle)
   }
-  
+
   return(p)
 }
 
@@ -439,16 +445,16 @@ transparentCol <- function(color, percent = 50, name = NULL) {
   #       color = color name
   #       percent = % transparency
   #       name = an optional name for the color
-  
+
   ## Get RGB values for named color
   rgb.val <- col2rgb(color)
-  
+
   ## Make new color using input color as base and alpha set by transparency
   t.col <- rgb(rgb.val[1], rgb.val[2], rgb.val[3],
                max = 255,
                alpha = (100 - percent) * 255 / 100,
                names = name)
-  
+
   ## Save the color
   invisible(t.col)
 }

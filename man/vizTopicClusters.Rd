@@ -29,6 +29,10 @@ vizTopicClusters(
 assigned to. In this case, the levels should be colors. In \code{vizAllTopics},
 clusters is "topicCols" and can just be a vector of colors.}
 
+\item{sharedCol}{Boolean indicating if the topics in a cluster will be plotted with
+the same color or if each topic will be colored by its own shade to also
+show how the topics in a cluster are distributed in space wrt each other.}
+
 \item{groups}{colors the spot piechart lines based on a group or cell layer
 they belong to. Needs to be a character vector in the order of the spot
 rows in theta. Ex: c("0", "1", "0", ...)}

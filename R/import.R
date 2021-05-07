@@ -19,7 +19,31 @@ where.is.knee <- function(points = NULL) {
 }
 
 
-cleanCounts <- function (counts, min.lib.size = 1, max.lib.size = Inf, min.reads = 1, min.detected = 1, verbose = FALSE, plot=TRUE) {
+#' Filter a counts matrix
+#'
+#' @description Filter a counts matrix based on gene (row) and cell (column)
+#'      requirements.
+#'
+#' @param counts A sparse read count matrix. The rows correspond to genes,
+#'      columns correspond to individual cells
+#' @param min.lib.size Minimum number of genes detected in a cell. Cells with
+#'      fewer genes will be removed (default: 1)
+#' @param max.lib.size Maximum number of genes detected in a cell. Cells with
+#'      more genes will be removed (default: Inf)
+#' @param min.reads Minimum number of reads per gene. Genes with fewer reads
+#'      will be removed (default: 1)
+#' @param min.detected Minimum number of cells a gene must be seen in. Genes
+#'      not seen in a sufficient number of cells will be removed (default: 1)
+#' @param verbose Verbosity (default: FALSE)
+#' @param plot Whether to plot (default: TRUE)
+#'
+#' @return a filtered read count matrix
+#'
+#' @export
+#'
+#' @importFrom Matrix Matrix colSums rowSums
+#'
+cleanCounts <- function (counts, min.lib.size = 100, max.lib.size = Inf, min.reads = 1, min.detected = 1, verbose = TRUE, plot=TRUE) {
   if (!any(class(counts) %in% c("dgCMatrix", "dgTMatrix"))) {
     if (verbose) {
       message("Converting to sparse matrix ...")
@@ -46,6 +70,29 @@ cleanCounts <- function (counts, min.lib.size = 1, max.lib.size = Inf, min.reads
   return(counts)
 }
 
+#' Normalize gene expression variance relative to transcriptome-wide expectations
+#' (Modified from SCDE/PAGODA2 code)
+#'
+#' Normalizes gene expression magnitudes to with respect to its ratio to the
+#' transcriptome-wide expectation as determined by local regression on expression magnitude
+#'
+#' @param counts Read count matrix. The rows correspond to genes, columns correspond to individual cells
+#' @param gam.k Generalized additive model parameter; the dimension of the basis used to represent the smooth term (default: 5)
+#' @param alpha Significance threshold (default: 0.05)
+#' @param plot Whether to plot the results (default: FALSE)
+#' @param use.unadjusted.pvals If true, will apply BH correction (default: FALSE)
+#' @param do.par Whether to adjust par for plotting if plotting (default: TRUE)
+#' @param max.adjusted.variance Ceiling on maximum variance after normalization to prevent infinites (default: 1e3)
+#' @param min.adjusted.variance Floor on minimum variance after normalization (default: 1e-3)
+#' @param verbose Verbosity (default: TRUE)
+#' @param details If true, will return data frame of normalization parameters. Else will return list of overdispersed genes. (default: FALSE)
+#'
+#' @return If details is true, will return data frame of normalization parameters. Else will return list of overdispersed genes.
+#'
+#' @importFrom mgcv s
+#'
+#' @export
+#'
 getOverdispersedGenes <- function(counts, gam.k=5, alpha=0.05, plot=FALSE, use.unadjusted.pvals=FALSE, do.par=TRUE, max.adjusted.variance=1e3, min.adjusted.variance=1e-3, verbose=TRUE, details=FALSE) {
 
   if (!any(class(counts) %in% c("dgCMatrix", "dgTMatrix"))) {
@@ -126,6 +173,76 @@ getOverdispersedGenes <- function(counts, gam.k=5, alpha=0.05, plot=FALSE, use.u
   }
 }
 
+# Multiple testing correction
+bh.adjust <- function(x, log = FALSE) {
+  nai <- which(!is.na(x))
+  ox <- x
+  x <- x[nai]
+  id <- order(x, decreasing = FALSE)
+  if(log) {
+    q <- x[id] + log(length(x)/seq_along(x))
+  } else {
+    q <- x[id]*length(x)/seq_along(x)
+  }
+  a <- rev(cummin(rev(q)))[order(id)]
+  ox[nai] <- a
+  ox
+}
+
+
+#' Normalizes counts to CPM
+#'
+#' @description Normalizes raw counts to log10 counts per million with pseudocount
+#'
+#' @param counts Read count matrix. The rows correspond to genes, columns
+#'      correspond to individual cells
+#' @param normFactor Normalization factor such as cell size. If not provided
+#'      column sum as proxy for library size will be used
+#' @param depthScale Depth scaling. Using a million for CPM (default: 1e6)
+#' @param pseudo Pseudocount for log transform (default: 1)
+#' @param log Whether to apply log transform
+#' @param verbose Verbosity (default: TRUE)
+#'
+#' @return a normalized matrix
+#'
+#' @export
+#'
+#' @importFrom Matrix Matrix colSums t
+#'
+normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseudo = 1,
+                             log = TRUE, verbose = TRUE) {
+  if (!class(counts) %in% c("dgCMatrix", "dgTMatrix")) {
+    if (verbose) {
+      message("Converting to sparse matrix ...")
+    }
+    counts <- Matrix::Matrix(counts, sparse = TRUE)
+  }
+  if (verbose) {
+    message("Normalizing matrix with ", ncol(counts), " cells and ",
+            nrow(counts), " genes.")
+  }
+  if (is.null(normFactor)) {
+    if (verbose) {
+      message("normFactor not provided. Normalizing by library size.")
+    }
+    normFactor <- Matrix::colSums(counts)
+  }
+  if (verbose) {
+    message(paste0("Using depthScale ", depthScale))
+  }
+  counts <- Matrix::t(Matrix::t(counts)/normFactor)
+  counts <- counts * depthScale
+  if (log) {
+    if (verbose) {
+      message("Log10 transforming with pseudocount ",
+              pseudo, ".")
+    }
+    counts <- log10(counts + pseudo)
+  }
+  return(counts)
+}
+
+# from factors to colors
 fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=F,unclassified.cell.color='lightgrey',level.colors=NULL) {
   x <- as.factor(x);
   if(min.group.size>1) {
@@ -150,50 +267,14 @@ fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=F,un
   }
 }
 
-bh.adjust <- function(x, log = FALSE) {
-  nai <- which(!is.na(x))
-  ox <- x
-  x <- x[nai]
-  id <- order(x, decreasing = FALSE)
-  if(log) {
-    q <- x[id] + log(length(x)/seq_along(x))
-  } else {
-    q <- x[id]*length(x)/seq_along(x)
+# winsorize
+winsorize <- function (x, qt=.05) {
+  if(length(qt) != 1 || qt < 0 ||
+     qt > 0.5) {
+    stop("bad value for quantile threashold")
   }
-  a <- rev(cummin(rev(q)))[order(id)]
-  ox[nai] <- a
-  ox
-}
-
-normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseudo = 1, 
-                             log = TRUE, verbose = TRUE) {
-  if (!class(counts) %in% c("dgCMatrix", "dgTMatrix")) {
-    if (verbose) {
-      message("Converting to sparse matrix ...")
-    }
-    counts <- Matrix::Matrix(counts, sparse = TRUE)
-  }
-  if (verbose) {
-    message("Normalizing matrix with ", ncol(counts), " cells and ", 
-            nrow(counts), " genes.")
-  }
-  if (is.null(normFactor)) {
-    if (verbose) {
-      message("normFactor not provided. Normalizing by library size.")
-    }
-    normFactor <- Matrix::colSums(counts)
-  }
-  if (verbose) {
-    message(paste0("Using depthScale ", depthScale))
-  }
-  counts <- Matrix::t(Matrix::t(counts)/normFactor)
-  counts <- counts * depthScale
-  if (log) {
-    if (verbose) {
-      message("Log10 transforming with pseudocount ", 
-              pseudo, ".")
-    }
-    counts <- log10(counts + pseudo)
-  }
-  return(counts)
+  lim <- quantile(x, probs=c(qt, 1-qt))
+  x[ x < lim[1] ] <- lim[1]
+  x[ x > lim[2] ] <- lim[2]
+  x
 }

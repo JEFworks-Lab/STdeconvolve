@@ -2,11 +2,15 @@
 #'
 #' @export
 restrictCorpus <- function(counts,
-                           t = 0.9,
+                           t1 = 0.05,
+                           t2 = 1,
                            alpha = 0.05,
                            plot = FALSE,
                            verbose = TRUE) {
   ## overdispersed genes only
+  if(verbose) {
+    print(paste0('Restricting to overdispersed genes with alpha=', alpha, '...'))
+  }
   odGenes <- getOverdispersedGenes(counts,
                                    alpha = alpha,
                                    plot = plot,
@@ -14,10 +18,16 @@ restrictCorpus <- function(counts,
                                    verbose = verbose)
   countsFilt <- counts[odGenes$ods,]
 
-  ## remove genes that are present in more than X% of spots
-  vi <- rowSums(countsFilt > 0) >= ncol(countsFilt)*t
+  ## remove genes that are present in less than X% of spots
+  vi <- rowSums(countsFilt > 0) <= ncol(countsFilt)*t1
   if(verbose) {
-    print(paste0('Removing genes present in more than ', t*100, '% of datasets...'))
+    print(paste0('Removing ', sum(vi), ' genes present in less than ', t1*100, '% of datasets...'))
+  }
+  countsFilt <- countsFilt[!vi,]
+  ## remove genes that are present in more than X% of spots
+  vi <- rowSums(countsFilt > 0) >= ncol(countsFilt)*t2
+  if(verbose) {
+    print(paste0('Removing ', sum(vi), ' genes present in more than ', t2*100, '% of datasets...'))
   }
   countsFiltnoUnifGenes <- countsFilt[!vi,]
 
@@ -35,7 +45,7 @@ restrictCorpus <- function(counts,
 
 
 #' Find the optimal number of topics K for topic modeling
-#' 
+#'
 #' @description The input for topicmodels::LDA needs to be a
 #'     slam::as.simple_triplet_matrix (docs x words). Access a given model in
 #'     the returned list via: lda$models[[k]][1]. The models are objects from
@@ -47,7 +57,8 @@ restrictCorpus <- function(counts,
 #' @param Ks vector of K parameters to search
 #' @param seed Random seed
 #' @param ncores Number of cores for parallelization
-#' @plot Boolean for plotting
+#' @param plot Boolean for plotting
+#' @param verbose Verbosity level
 #'
 #' @return A list that contains
 #' \itemize{
@@ -61,28 +72,33 @@ restrictCorpus <- function(counts,
 #' @export
 fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
                    ncores = parallel::detectCores(logical = TRUE) - 1,
-                   plot = TRUE) {
+                   plot = TRUE, verbose=TRUE) {
 
   if (slam::is.simple_triplet_matrix(counts) == TRUE){
     corpus <- counts
   } else {
     corpus <- slam::as.simple_triplet_matrix(t(as.matrix(counts)))
   }
-  
+
   controls <- list(seed = seed,
-                   verbose = 1, keep = 1, estimate.alpha = TRUE)
-  
-  start_time <- Sys.time()
+                   verbose = verbose, keep = 1, estimate.alpha = TRUE)
+
+  #start_time <- Sys.time()
   fitted_models <- parallel::mclapply(Ks, function(k) {
     topicmodels::LDA(corpus, k=k, control = controls)
   },
   mc.cores = ncores
   )
   names(fitted_models) <- Ks
-  total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
-  print(sprintf("Time to train LDA models was %smins", total_t))
-  
-  print("Computing perplexity for each fitted model...")
+  #total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+  #if(verbose) {
+  #  print(sprintf("Time to train LDA models was %smins", total_t))
+  #}
+
+  if(verbose) {
+    print("Computing perplexity for each fitted model...")
+  }
+
   pScores <- unlist(lapply(fitted_models, function(model){
     p <- topicmodels::perplexity(model, corpus)
     return(p)
@@ -102,8 +118,8 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
   }
 
   return(list(models = fitted_models,
-              kOpt1 = kOpt1,
-              kOpt2 = kOpt2,
+              kOpt1 = as.character(kOpt1),
+              kOpt2 = as.character(kOpt2),
               perplexities = pScores,
               fitCorpus = corpus))
 }
@@ -111,7 +127,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
 
 #' Pull out topic proportions across spots (theta) and
 #' topic gene probabilities (beta) matrices from fitted topic models from fitLDA
-#' 
+#'
 #' @param lda an LDA model from `topicmodels`. From list of models returned by
 #'     fitLDA
 #'
@@ -221,7 +237,7 @@ clusterTopics <- function(beta,
 
 
 #' Collapse topics in the same cluster into a single topic
-#' 
+#'
 #' @description Note: for the beta matrix, each row is a topic, each column
 #'     is a gene. The topic row is a distribution of terms that sums to 1. So
 #'     combining topic row vectors, these should be adjusted such that the
@@ -231,29 +247,29 @@ clusterTopics <- function(beta,
 #'     each doc and these will not necessarily add to 1, should not take average.
 #'     Just sum topic row vectors together. This way, each document column still
 #'     adds to 1 when considering the proportion of each topic-cluster in the document.
-#' 
+#'
 #' @param mtx either a beta (topic-gene distribution matrix) or a
 #'     theta (spot-topic distribution matrix)
 #' @param clusters factor of the topics (names) and their assigned cluster (levels)
 #' @param type either "t" or "b". Affects the adjustment to the combined
 #'     topic vectors. "b" divides summed topic vectors by number of combined topics.
-#' 
+#'
 #' @return matrix where topics are now topic-clusters
-#' 
+#'
 #' @export
 combineTopics <- function(mtx, clusters, type) {
-  
+
   if (!type %in% c("t", "b")){
     stop("`type` must be either 't' or 'b'")
   }
-  
+
   # if mtx is theta, transpose so topics are rows
   if (type == "t") {
     mtx <- t(mtx)
   }
 
   combinedTopics <- do.call(rbind, lapply(levels(clusters), function(cluster) {
-    
+
     # get topics in a given cluster
     topics <- labels(clusters[which(clusters == cluster)])
 
@@ -279,7 +295,7 @@ combineTopics <- function(mtx, clusters, type) {
   rownames(combinedTopics) <- levels(clusters)
   colnames(combinedTopics) <- colnames(mtx)
   print("topics combined.")
-  
+
   # if theta, make topics the columns again
   if (type == "t") {
     combinedTopics <- t(combinedTopics)
@@ -289,15 +305,15 @@ combineTopics <- function(mtx, clusters, type) {
 
 
 #' Get the optimal LDA model
-#' 
+#'
 #' @param models list returned from fitLDA
 #' @param opt either "kneed" (kOpt1) or "min" (kOpt2), or designate a specific K
-#' 
+#'
 #' @return optimal LDA model fitted to the K based on `opt`
-#' 
+#'
 #' @export
 optimalModel <- function(models, opt) {
-  
+
   if (opt == "kneed"){
     m <- models$models[[which(sapply(models$models, slot, "k") == models$kOpt1)]]
   } else if (opt == "min"){
@@ -314,18 +330,18 @@ optimalModel <- function(models, opt) {
 #' Wrapper to extract beta (topic-gene distribution matrix),
 #' theta (spot-topic distribution) for individual topic and combined topic-clusters
 #' for an LDA model in `fitLDA` output list.
-#' 
+#'
 #' @description Wrapper that combines the functions `getBetaTheta`, `clusterTopics`,
 #'     `combineTopics` and slots of the topicmodels::LDA object to return a list
 #'     that contains the most relevant components of a given LDA model for ease
 #'     of analysis and visualization.
-#' 
+#'
 #' @param LDAmodel LDA model from fitLDA
 #' @param deepSplit parameter for `clusterTopics` for dynamic tree splitting
 #'     when clustering topics (default: 4)
 #' @param colorScheme color scheme for generating colors assigned to topic
 #'     clusters for visualizing. Either "rainbow" or "ggplot" (default: "rainbow")
-#' 
+#'
 #' @return A list that contains
 #' \itemize{
 #' \item beta: topic (rows) by gene (columns) distribution matrix.
@@ -348,18 +364,18 @@ optimalModel <- function(models, opt) {
 buildLDAobject <- function(LDAmodel,
                            deepSplit = 4,
                            colorScheme = "rainbow"){
-  
+
   # get beta and theta list object from the LDA model
   m <- getBetaTheta(LDAmodel)
-  
+
   # cluster topics
   clust <- clusterTopics(beta = m$beta,
                          deepSplit = deepSplit)
-  
+
   # add cluster information to the list
   m$clusters <- clust$clusters
   m$dendro <- clust$dendro
-  
+
   # colors for the topics. Essentially colored by the cluster they are in
   cols <- m$clusters
   if (colorScheme == "rainbow"){
@@ -369,11 +385,11 @@ buildLDAobject <- function(LDAmodel,
     levels(cols) <- gg_color_hue(length(levels(cols)))
   }
   m$cols <- cols
-  
+
   # construct beta and thetas for the topic clusters
   m$betaCombn <- combineTopics(m$beta, clusters = m$clusters, type = "b")
   m$thetaCombn <- combineTopics(m$theta, clusters = m$clusters, type = "t")
-  
+
   # colors for the topic clusters
   # separate factor for ease of use with vizTopicClusters and others
   # note that these color assignments are different than the
@@ -382,25 +398,25 @@ buildLDAobject <- function(LDAmodel,
   names(clusterCols) <- colnames(m$thetaCombn)
   levels(clusterCols) <- levels(m$cols)
   m$clustCols <- clusterCols
-  
+
   m$k <- LDAmodel@k
-  
+
   return(m)
-  
+
 }
 
 
 #' Function to get Hungarian sort pairs via clue::lsat
-#' 
+#'
 #' @description Finds best matches between topics that correlate between
 #'     beta or theta matrices that have been compared via `getCorrMtx`.
 #'     Each row is paired with a column in the output matrix from `getCorrMtx`.
 #'     If there are less rows than columns, then some columns will not be
 #'     matched and not part of the output.
-#' 
+#'
 #' @param mtx output correlation matrix from `getCorrMtx`. Must not have more rows
 #'     than columns
-#' 
+#'
 #' @return A list that contains
 #' \itemize{
 #' \item pairs: output of clue::solve_LSAP. A vectorized object where for each
@@ -408,7 +424,7 @@ buildLDAobject <- function(LDAmodel,
 #' \item rowix: the indices of the rows. Essentially seq_along(pairing)
 #' \item colsix: the indices of each column paired to each row
 #' }
-#' 
+#'
 #' @export
 lsatPairs <- function(mtx){
   # must have equal or more rows than columns
@@ -418,7 +434,7 @@ lsatPairs <- function(mtx){
   # and the second is the paired column
   rowsix <- seq_along(pairing)
   colsix <- as.numeric(pairing)
-  
+
   return(list(pairs = pairing,
               rowix = rowsix,
               colsix = colsix))
