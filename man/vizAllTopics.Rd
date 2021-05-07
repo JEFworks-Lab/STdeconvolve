@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot.R
 \name{vizAllTopics}
 \alias{vizAllTopics}
-\title{Visualize all topic proportions across spots with `scatterpie`}
+\title{Visualize all topic proportions across spots with \code{scatterpie}}
 \usage{
 vizAllTopics(
   theta,
@@ -19,28 +19,28 @@ vizAllTopics(
 )
 }
 \arguments{
-\item{theta}{document (spot) x topic proportion matrix}
+\item{theta}{document (pixel) x cell-type proportion matrix}
 
-\item{pos}{position of documents, x and y columns}
+\item{pos}{position of pixels, as data.frame with \code{x} and \code{y} columns}
 
 \item{topicOrder}{order of topics in theta to visualize as a numeric vector
 and same length as topicCols ( default: seq(ncol(theta)) )}
 
-\item{topicCols}{vector of colors for each of the topics to be visualized.
+\item{topicCols}{vector of colors for each of the cell-types to be visualized.
 Same length and order as topicOrder ( default: rainbow(ncol(theta)) )}
 
-\item{groups}{colors the spot piechart lines based on a group or cell layer
-they belong to. Needs to be a character vector in the order of the spot
+\item{groups}{colors the pixel piechart lines based on a group
+they belong to. Needs to be a character vector in the order of the pixel
 rows in theta. Ex: c("0", "1", "0", ...)}
 
 \item{group_cols}{color labels for the groups. Ex: c("0" = "gray", "1" = "red")}
 
-\item{r}{radius of the circles. Adjust based on size of spots. (default: 1)}
+\item{r}{radius of the scatterpie circles. Adjust based on positions of pixels (default: 1)}
 
 \item{lwd}{width of lines of the pie charts. Increasing helps visualize
 group_cols if being used.}
 
-\item{showLegend}{Boolean to show the legend indicating topics and their color}
+\item{showLegend}{Boolean to show the legend indicating cell-types and their color}
 
 \item{plotTitle}{add title to the resulting plot (default: NA)}
 
@@ -48,7 +48,7 @@ group_cols if being used.}
 (default: NA)}
 }
 \description{
-Note: visualizes all topics in theta at once (could be
-    individual topics or topic clusters) so for accuracy of the proportions
-    of each topic in a spot, the row (spot) should sum to 1.
+Note: visualizes all cell-types in theta at once (could be
+individual cell-types or cell-type-clusters) so for accuracy of the proportions
+of each cell-type in a pixel, the row (pixel) should sum to 1.
 }

@@ -2,43 +2,43 @@
 % Please edit documentation in R/functions.R
 \name{buildLDAobject}
 \alias{buildLDAobject}
-\title{Wrapper to extract beta (topic-gene distribution matrix),
-theta (spot-topic distribution) for individual topic and combined topic-clusters
-for an LDA model in `fitLDA` output list.}
+\title{Wrapper to extract beta (cell type-gene distribution matrix),
+theta (pixel cell-type distribution) for individual cell-types and aggregated cell-type-clusters
+for an LDA model in \code{fitLDA} output list.}
 \usage{
 buildLDAobject(LDAmodel, deepSplit = 4, colorScheme = "rainbow")
 }
 \arguments{
 \item{LDAmodel}{LDA model from fitLDA}
 
-\item{deepSplit}{parameter for `clusterTopics` for dynamic tree splitting
-when clustering topics (default: 4)}
+\item{deepSplit}{parameter for \code{clusterTopics} for dynamic tree splitting
+when aggregating cell-types (default: 4)}
 
-\item{colorScheme}{color scheme for generating colors assigned to topic
+\item{colorScheme}{color scheme for generating colors assigned to cell-type
 clusters for visualizing. Either "rainbow" or "ggplot" (default: "rainbow")}
 }
 \value{
 A list that contains
 \itemize{
-\item beta: topic (rows) by gene (columns) distribution matrix.
-    Each row is a probability distribution of a topic expressing each gene
-    in the corpus
-\item theta: spot (rows) by topics (columns) distribution matrix. Each row
-    is the topic composition for a given spot
-\item topicFreq: overall proportion of each topic in the entire corpus of
-    spots
-\item clusters: factor of the topics (names) and their assigned cluster (levels)
-\item dendro: dendrogram of the clusters. Returned from `stats::hclust()` in `clusterTopics`
-\item cols: factor of colors for each topic where colors correspond to their assigned cluster
-\item betaCombn: topic (rows) by gene (columns) distribution matrix for combined topic-clusters
-\item thetaCombn: spot (rows) by topic (columns) distribution matrix for combined topic-clusters
-\item clustCols: factor of colors for each topic-cluster
-\item k: number of topics K of the model
+\item beta: cell-type (rows) by gene (columns) distribution matrix.
+Each row is a probability distribution of a cell-type expressing each gene
+in the corpus
+\item theta: pixel (rows) by cell-type (columns) distribution matrix. Each row
+is the cell-type composition for a given pixel
+\item topicFreq: overall proportion of each cell-type in the entire corpus of
+pixels
+\item clusters: factor of the cell-types (names) and their assigned cluster (levels)
+\item dendro: dendrogram of the clusters. Returned from \code{stats::hclust()} in \code{clusterTopics}
+\item cols: factor of colors for each cell-type where colors correspond to their assigned cluster
+\item betaCombn: cell-type (rows) by gene (columns) distribution matrix for combined cell-type-clusters
+\item thetaCombn: pixel (rows) by cell-type (columns) distribution matrix for aggregated cell-type-clusters
+\item clustCols: factor of colors for each cell-type-cluster
+\item k: number of cell-types K of the model
 }
 }
 \description{
-Wrapper that combines the functions `getBetaTheta`, `clusterTopics`,
-    `combineTopics` and slots of the topicmodels::LDA object to return a list
-    that contains the most relevant components of a given LDA model for ease
-    of analysis and visualization.
+Wrapper that combines the functions \code{getBetaTheta}, \code{clusterTopics},
+\code{combineTopics} and slots of the topicmodels::LDA object to return a list
+that contains the most relevant components of a given LDA model for ease
+of analysis and visualization.
 }

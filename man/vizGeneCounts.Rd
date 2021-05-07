@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot.R
 \name{vizGeneCounts}
 \alias{vizGeneCounts}
-\title{Visualize gene counts in spots in space. Can also see group assignment of
+\title{Visualize gene counts in pixels in space. Can also see group assignment of
 spots.}
 \usage{
 vizGeneCounts(
@@ -12,6 +12,7 @@ vizGeneCounts(
   group_cols = NA,
   size = 7,
   stroke = 0.5,
+  alpha = 1,
   plotTitle = NA,
   showLegend = TRUE
 )
@@ -40,5 +41,5 @@ rows in df. Ex: c("0", "1", "0", ...)}
 }
 \description{
 Note: visualized one gene at a time. Can set up a loop to plot
-   a different gene column in df individually.
+a different gene column in df individually.
 }

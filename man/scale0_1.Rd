@@ -3,7 +3,7 @@
 \name{scale0_1}
 \alias{scale0_1}
 \title{Helper function to scale values to 0-1 range relative to each other. For use
-with `lsatPairs`}
+with \code{lsatPairs}}
 \usage{
 scale0_1(x)
 }
@@ -15,5 +15,5 @@ vector or matrix with values adjusted to 0-1 scale
 }
 \description{
 Helper function to scale values to 0-1 range relative to each other. For use
-with `lsatPairs`
+with \code{lsatPairs}
 }

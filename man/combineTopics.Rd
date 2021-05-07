@@ -2,30 +2,30 @@
 % Please edit documentation in R/functions.R
 \name{combineTopics}
 \alias{combineTopics}
-\title{Collapse topics in the same cluster into a single topic}
+\title{Aggregate cell-types in the same cluster into a single cell-type}
 \usage{
 combineTopics(mtx, clusters, type)
 }
 \arguments{
-\item{mtx}{either a beta (topic-gene distribution matrix) or a
-theta (spot-topic distribution matrix)}
+\item{mtx}{either a beta (cell-type gene distribution matrix) or a
+theta (pixel-cell type distribution matrix)}
 
-\item{clusters}{factor of the topics (names) and their assigned cluster (levels)}
+\item{clusters}{factor of the cell-types (names) and their assigned cluster (levels)}
 
 \item{type}{either "t" or "b". Affects the adjustment to the combined
-topic vectors. "b" divides summed topic vectors by number of combined topics.}
+cell-type vectors. "b" divides summed cell-type vectors by number of aggregated cell-types}
 }
 \value{
-matrix where topics are now topic-clusters
+matrix where cell-types are now cell-type-clusters
 }
 \description{
-Note: for the beta matrix, each row is a topic, each column
-    is a gene. The topic row is a distribution of terms that sums to 1. So
-    combining topic row vectors, these should be adjusted such that the
-    rowSum == 1. As in, take average of the terms after combining. However, the
-    theta matrix (after inversion) will have topic rows and each column is a
-    document. Because the topic can be represented at various proportions in
-    each doc and these will not necessarily add to 1, should not take average.
-    Just sum topic row vectors together. This way, each document column still
-    adds to 1 when considering the proportion of each topic-cluster in the document.
+Note: for the beta matrix, each row is a cell-type, each column
+is a gene. The cell-type row is a distribution of terms that sums to 1. So
+combining cell-type row vectors, these should be adjusted such that the
+rowSum == 1. As in, take average of the terms after combining. However, the
+theta matrix (after inversion) will have cell-type rows and each column is a
+document. Because the cell-type can be represented at various proportions in
+each doc and these will not necessarily add to 1, should not take average.
+Just sum cell-type row vectors together. This way, each document column still
+adds to 1 when considering the proportion of each cell-type-cluster in the document.
 }

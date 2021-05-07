@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot.R
 \name{vizTopicClusters}
 \alias{vizTopicClusters}
-\title{Visualize proportions of topic clusters individually}
+\title{Visualize proportions of cell-types or aggregated cell-type-clusters individually}
 \usage{
 vizTopicClusters(
   theta,
@@ -21,23 +21,23 @@ vizTopicClusters(
 )
 }
 \arguments{
-\item{theta}{document (spot) x topic proportion matrix}
+\item{theta}{document (pixel) x cell-type proportion matrix}
 
-\item{pos}{position of documents, x and y columns}
+\item{pos}{position of pixels, as data.frame with \code{x} and \code{y} columns}
 
-\item{clusters}{factor of the color (i.e., topic cluster) each cluster is
-assigned to. In this case, the levels should be colors. In `vizAllTopics`,
+\item{clusters}{factor of colors that each cluster (i.e., cell-type-cluster) is
+assigned to. In this case, the levels should be colors. In \code{vizAllTopics},
 clusters is "topicCols" and can just be a vector of colors.}
 
-\item{groups}{colors the spot piechart lines based on a group or cell layer
+\item{groups}{colors the pixel scatterpie lines based on a group or cell layer
 they belong to. Needs to be a character vector in the order of the spot
 rows in theta. Ex: c("0", "1", "0", ...)}
 
 \item{group_cols}{color labels for the groups. Ex: c("0" = "gray", "1" = "red")}
 
-\item{r}{= radius of the circles. Adjust based on size of spots. (default: 1)}
+\item{r}{= radius of the scatterpies. Adjust based on position of pixels (default: 1)}
 
-\item{lwd}{= width of lines of the pie charts. Increasing helps visualize
+\item{lwd}{= width of lines of the scatterpies. Increasing helps visualize
 group_cols if being used.}
 
 \item{showLegend}{Boolean to show the legend indicating topics and their color}
@@ -48,8 +48,8 @@ group_cols if being used.}
 (default: NA)}
 }
 \description{
-Similar to `vizAllTopics` but will generate a separate plot for
-    each topic or topic-cluster where the other topics or clusters will be
-    colored gray. In this way, the actual proportions of each topic in a spot
-    will be maintained such that spot topic proportions still sum to 1.
+Similar to \code{vizAllTopics} but will generate a separate plot for
+each cell-type or cell-type-cluster where the other cell-types or clusters will be
+colored gray. In this way, the actual proportions of each cell-type in a pixel
+will be maintained such that pixel cell-type proportions still sum to 1.
 }

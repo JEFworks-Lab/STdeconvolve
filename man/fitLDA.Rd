@@ -2,23 +2,27 @@
 % Please edit documentation in R/functions.R
 \name{fitLDA}
 \alias{fitLDA}
-\title{Find the optimal number of topics K for topic modeling}
+\title{Find the optimal number of cell-types K for the LDA model}
 \usage{
 fitLDA(
   counts,
   Ks = seq(2, 10, by = 2),
   seed = 0,
+  testSize = NULL,
   ncores = parallel::detectCores(logical = TRUE) - 1,
   plot = TRUE
 )
 }
 \arguments{
 \item{counts}{Gene expression counts with genes as rows or
-slam::simple_triplet_matrix where spots were rows and genes were columns}
+slam::simple_triplet_matrix where pixels were rows and genes were columns}
 
 \item{Ks}{vector of K parameters to search}
 
 \item{seed}{Random seed}
+
+\item{testSize}{fraction of pixels to set aside for test corpus when computing perplexity (default: NULL)
+Either NULL or decimal between 0 and 1.}
 
 \item{ncores}{Number of cores for parallelization}
 }
@@ -26,16 +30,19 @@ slam::simple_triplet_matrix where spots were rows and genes were columns}
 A list that contains
 \itemize{
 \item models: each fitted LDA model for a given K
-\item kOpt1: the optimal K based on Kneed algorithm
-\item kOpt2: the optimal K based on minimum
+\item kneedOpt: the optimal K based on Kneed algorithm
+\item minOpt: the optimal K based on minimum
+\item KMax: Suggested upper bound on K. K in which number of returned cell-types
+with mean proportion < 5\% starts to increases steadily.
+\item numRare: number of cell-types with mean pixel proportion < 5\% for each K
 \item perplexities: perplexity scores for each model
 \item corpus: the corpus that was used to fit each model
 }
 }
 \description{
 The input for topicmodels::LDA needs to be a
-    slam::as.simple_triplet_matrix (docs x words). Access a given model in
-    the returned list via: lda$models[[k]][1]. The models are objects from
-    the library `topicmodels`. The LDA models have slots with additional
-    information.
+slam::as.simple_triplet_matrix (docs x words). Access a given model in
+the returned list via: lda$models[\link{k}][1]. The models are objects from
+the library \code{topicmodels}. The LDA models have slots with additional
+information.
 }

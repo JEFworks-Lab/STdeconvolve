@@ -12,7 +12,7 @@ optimalModel(models, opt)
 \item{opt}{either "kneed" (kOpt1) or "min" (kOpt2), or designate a specific K}
 }
 \value{
-optimal LDA model fitted to the K based on `opt`
+optimal LDA model fitted to the K based on \code{opt}
 }
 \description{
 Get the optimal LDA model

@@ -2,16 +2,18 @@
 % Please edit documentation in R/misc.R
 \name{SPOTlightPredict}
 \alias{SPOTlightPredict}
-\title{Wrapper around functions in `SPOTlight::spotlight_deconvolution()`
+\title{Wrapper around functions in \code{SPOTlight::spotlight_deconvolution()}
 that take place subsequently after training the NMF model.}
 \usage{
-SPOTlightPredict(nmfRef, stCounts)
+SPOTlightPredict(nmfRef, stCounts, min_cont = 0)
 }
 \arguments{
-\item{nmfRef}{the list returned from `SPOTlight::train_nmf()`. In `SPOTlight::spotlight_deconvolution()`,
+\item{nmfRef}{the list returned from \code{SPOTlight::train_nmf()}. In \code{SPOTlight::spotlight_deconvolution()},
 this returned list actually has this nmf input list as its first element}
 
 \item{stCounts}{ST count matrix to deconvolve, genes x spots}
+
+\item{min_cont}{param of \code{mixture_deconvolution_nmf()}. remove topics less than this percent in a spot}
 }
 \value{
 a list that contains
@@ -25,18 +27,17 @@ a list that contains
 }
 \description{
 Allows for applying a trained NMF model to additional
-    ST datasets without retraining a new NMF in spotlight, which can take
-    a very long time (hours depending on number of genes and clusters in scRNAseq ref).
-    
-    Additionally, other useful matrices and information can also be collected
-    that are not returned by `SPOTlight::spotlight_deconvolution()`.
-    
-    This does come with a caveat that one must be careful about:
-    WARNING: SPOTlight functions crash the R session if you use a corpus with a gene set
-    that is not in the NMF W. I think this happens in `SPOTlight::predict_spatial_mixtures()`
-    during the nnls step at the end. Because it generates the full W matrix after selecting
-    genes in the ST mtrx. When the NMF was trained, there was a step that made it only
-    train on the intersecting genes with the ST data set. So under normal circumstances this would not be noticed
-    because all genes should match between W and ST mtrx. But if one were to use a different
-    ST mtrx on the trained NMF, then I bet it would crash because the matrices end up not being comparable shapes.
+ST datasets without retraining a new NMF in spotlight, which can take
+a very long time (hours depending on number of genes and clusters in scRNAseq ref).\preformatted{Additionally, other useful matrices and information can also be collected
+that are not returned by `SPOTlight::spotlight_deconvolution()`.
+
+This does come with a caveat that one must be careful about:
+WARNING: SPOTlight functions crash the R session if you use a corpus with a gene set
+that is not in the NMF W. I think this happens in `SPOTlight::predict_spatial_mixtures()`
+during the nnls step at the end. Because it generates the full W matrix after selecting
+genes in the ST mtrx. When the NMF was trained, there was a step that made it only
+train on the intersecting genes with the ST data set. So under normal circumstances this would not be noticed
+because all genes should match between W and ST mtrx. But if one were to use a different
+ST mtrx on the trained NMF, then I bet it would crash because the matrices end up not being comparable shapes.
+}
 }

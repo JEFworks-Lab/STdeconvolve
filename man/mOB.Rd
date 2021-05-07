@@ -6,7 +6,7 @@
 \title{Spatial transcriptomics transcriptomics of the mouse olfactory bulb}
 \format{
 List where 'counts' is a sparse matrix with columns as voxels and rows as genes and
-                   'pos' is a data frame of x and y position values per voxel
+'pos' is a data frame of x and y position values per voxel
 }
 \source{
 \url{https://science.sciencemag.org/content/353/6294/78}

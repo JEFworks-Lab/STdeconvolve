@@ -6,8 +6,8 @@
 \title{Spatial transcriptomics transcriptomics of 4 breast cancer biopsy sections}
 \format{
 List where 'counts' is a sparse matrix with columns as voxels and rows as genes and
-                   'pos' is a data frame of x and y position values per voxel
-                         and slice index for 4 consecutive slices
+'pos' is a data frame of x and y position values per voxel
+and slice index for 4 consecutive slices
 }
 \source{
 \url{https://science.sciencemag.org/content/353/6294/78}
