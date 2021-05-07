@@ -256,6 +256,7 @@ buildBregmaCorpus <- function (hashTable, bregmaID) {
 #' @param nmfRef the list returned from `SPOTlight::train_nmf()`. In `SPOTlight::spotlight_deconvolution()`,
 #'     this returned list actually has this nmf input list as its first element
 #' @param stCounts ST count matrix to deconvolve, genes x spots
+#' @param min_cont param of `mixture_deconvolution_nmf()`. remove topics less than this percent in a spot
 #' 
 #' @return a list that contains
 #' \itemize{
@@ -267,7 +268,7 @@ buildBregmaCorpus <- function (hashTable, bregmaID) {
 #' }
 #'
 #' @export
-SPOTlightPredict <- function(nmfRef, stCounts) {
+SPOTlightPredict <- function(nmfRef, stCounts, min_cont = 0.0) {
   
   # get basis matrix W [genes x topics]
   w <- basis(nmfRef[[1]])
@@ -345,7 +346,7 @@ SPOTlightPredict <- function(nmfRef, stCounts) {
                                            mixture_transcriptome = stCounts,
                                            transf = "uv", 
                                            reference_profiles = ct_topics, 
-                                           min_cont = 0.0) # only keep topics if 9% or more in a spot
+                                           min_cont = min_cont) # only keep topics if 9% or more in a spot
   # note that last column is an additional columns for the residual error
   # cleanup to get actual spot-celltype predictions:
   rownames(ct_in_spots) <- colnames(stCounts)

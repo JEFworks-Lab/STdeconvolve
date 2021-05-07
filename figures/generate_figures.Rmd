@@ -274,7 +274,7 @@ bregmaCellsGexpFN7 <- bregmaCellsGexpFN7[,!grepl("Blank", colnames(bregmaCellsGe
 ```{r}
 
 # to expand to neuronal subtypes, make a secondary vector of "Cell_class" where
-# "Excitatory and "Inhibitory" are replaces with the respective "Neuron_cluster_ID"
+# "Excititory and "Inhibitory" are replaces with the respective "Neuron_cluster_ID"
 
 Cell_class_major_FN7 <- spatial_position_and_class_FN7$Cell_class
 

@@ -454,7 +454,6 @@ difGenesNeuro <- MERINGUE::getDifferentialGenes(cd = bregmaFN7FullSeur@assays$RN
 majorClusters <- bregmaFN7FullSeur@meta.data$Major_class
 names(majorClusters) <- rownames(bregmaFN7FullSeur@meta.data)
 difGenesMajor <- MERINGUE::getDifferentialGenes(cd = bregmaFN7FullSeur@assays$RNA@counts, cols = majorClusters)
-
                                             
 ```
 

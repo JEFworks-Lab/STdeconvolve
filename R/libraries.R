@@ -1,7 +1,7 @@
 library(topicmodels)
 library(Matrix)
-# library(MERINGUE)
-library(MUDAN) # some MERINGUE functions actually from MUDAN (?) cleanCounts, getDifferentialGenes, normalizeCounts, plotEmbedding
+library(MERINGUE)
+# library(MUDAN) # some MERINGUE functions actually from MUDAN (?) cleanCounts, getDifferentialGenes, normalizeCounts, plotEmbedding
 library(ggplot2)
 library(scatterpie)
 library(viridis) # for "scale_fill_viridis in `vizGeneCounts`

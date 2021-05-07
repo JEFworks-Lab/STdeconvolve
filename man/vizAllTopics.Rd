@@ -2,43 +2,53 @@
 % Please edit documentation in R/plot.R
 \name{vizAllTopics}
 \alias{vizAllTopics}
-\title{Visualize topic proportions across spots with `scatterpie`}
+\title{Visualize all topic proportions across spots with `scatterpie`}
 \usage{
 vizAllTopics(
   theta,
   pos,
   topicOrder = seq(ncol(theta)),
-  cluster_cols = rainbow(ncol(theta)),
+  topicCols = rainbow(ncol(theta)),
   groups = NA,
   group_cols = NA,
   r = 1,
   lwd = 0.5,
   showLegend = TRUE,
-  plotTitle = NA
+  plotTitle = NA,
+  overlay = NA
 )
 }
 \arguments{
-\item{theta}{document x topic proportion matrix}
+\item{theta}{document (spot) x topic proportion matrix}
 
 \item{pos}{position of documents, x and y columns}
 
-\item{topicOrder}{order of topics based on dendrogram; a numeric vector
-from: (clusterTopics$order)}
+\item{topicOrder}{order of topics in theta to visualize as a numeric vector
+and same length as topicCols ( default: seq(ncol(theta)) )}
 
-\item{cluster_cols}{vector of colors for each of the topics
-can use factor of clusters for each topic (via clusterTopics$clusters)
-as long as the cluster levels/values have been converted to colors.
-This gets reordered wrt the topicOrder fyi.}
+\item{topicCols}{vector of colors for each of the topics to be visualized.
+Same length and order as topicOrder ( default: rainbow(ncol(theta)) )}
 
-\item{groups}{color spot piecharts based on a group or cell layer they belong to.
-Needs to be a character vector. Ex: c("0", "1", "0", ...).}
+\item{groups}{colors the spot piechart lines based on a group or cell layer
+they belong to. Needs to be a character vector in the order of the spot
+rows in theta. Ex: c("0", "1", "0", ...)}
 
 \item{group_cols}{color labels for the groups. Ex: c("0" = "gray", "1" = "red")}
 
-\item{r}{= radius of the circles. Adjust based on size of spots.}
+\item{r}{radius of the circles. Adjust based on size of spots. (default: 1)}
 
-\item{lwd}{= width of lines of the pie charts}
+\item{lwd}{width of lines of the pie charts. Increasing helps visualize
+group_cols if being used.}
+
+\item{showLegend}{Boolean to show the legend indicating topics and their color}
+
+\item{plotTitle}{add title to the resulting plot (default: NA)}
+
+\item{overlay}{plot the scatterpies on top of a raster image of the H&E tissue
+(default: NA)}
 }
 \description{
-Visualize topic proportions across spots with `scatterpie`
+Note: visualizes all topics in theta at once (could be
+    individual topics or topic clusters) so for accuracy of the proportions
+    of each topic in a spot, the row (spot) should sum to 1.
 }

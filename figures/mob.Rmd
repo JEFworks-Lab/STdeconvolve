@@ -28,7 +28,7 @@ save(mob_k15, # LDA model of the mob data with k=15 and 93 common OD genes acros
      RCTD_cortexRef_results_norm, # RCTD on raw counts of cortex scRNAseq and `countsClean`. 23 cts
      file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mob_fitted_models.RData")
 
-load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mob_fitted_models.RData")
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_data/mob_fitted_models.RData")
 
 
 # sl_ctTheta <- sl_countsClean$thetaCt[,which(!colnames(sl_countsClean$thetaCt) %in% c("Mural2"))]
@@ -49,9 +49,9 @@ save(mob_se_wt, # processed data matrix for 17709 wt cells and 18560 genes (filt
      W_countsClean, # betaTopics of the sl_countsClean; the W matrix of the NMF fitted model
      file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mob_data_to_assess_beta.RData")
 
-load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mob_data_to_assess_beta.RData")
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_data/mob_data_to_assess_beta.RData")
 
-cortexProxyBetaRaw <- readRDS("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/cortexProxyBetaRaw.Rds")
+cortexProxyBetaRaw <- readRDS("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_data/cortexProxyBetaRaw.Rds")
 # 23 29093 average raw gene counts from the cortex_sc seurat object. The 23 subclasses
 
 ```
@@ -59,6 +59,7 @@ cortexProxyBetaRaw <- readRDS("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/
 ```{r}
 
 fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/figures/"
+draft_fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_figures/"
 
 ```
 

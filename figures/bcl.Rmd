@@ -21,14 +21,14 @@ knitr::opts_chunk$set(echo = TRUE)
 #       bcl_k12, # LDA trained on OD gene intersection (152 genes between layers 1-4 with alpha = 0.2)
 #      file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/bcl_fitted_models.RData")
 
-load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/bcl_fitted_models.RData")
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_data/bcl_fitted_models.RData")
 
 ```
 
 ```{r}
 
 fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/figures/"
-draft_fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/draft_figures/"
+draft_fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_figures/"
 
 ```
 
@@ -128,9 +128,9 @@ k <- 350
 bcl_com <- MERINGUE::getClusters(pcs, k, method=igraph::cluster_louvain)
 
 
-pdf(file = paste0(draft_fig_path, "Fig_3_txn-clustering-shared-ODs.pdf"),   # The directory you want to save the file in
-  width = 6, # The width of the plot in inches
-  height = 5) # The height of the plot in inches
+# pdf(file = paste0(draft_fig_path, "Fig_3_txn-clustering-shared-ODs.pdf"),   # The directory you want to save the file in
+  # width = 6, # The width of the plot in inches
+  # height = 5) # The height of the plot in inches
 par(mfrow=c(2,2), mar=rep(1,4))
 # top row
 # left: all slice spots tSNE embedding and labeled by cluster assignment
@@ -151,7 +151,7 @@ MUDAN::plotEmbedding(bclCorpus$pos, groups=bcl_com,
 MUDAN::plotEmbedding(bclCorpus$pos, groups=bclCorpus$slice,
                      cex=1, xlab=NA, ylab=NA,
                      verbose=FALSE)
-dev.off()
+# dev.off()
 
 # capture the txn cluster assignment of the spots
 bclCorpus$txn <- bcl_com
@@ -307,13 +307,13 @@ ks <- seq(from = 2, to = 10, by = 1)
 
 ```{r}
 
-pdf(file = paste0(draft_fig_path, "Fig_3_bcl-1-4-shared-od-training.pdf"))
+# pdf(file = paste0(draft_fig_path, "Fig_3_bcl-1-4-shared-od-training.pdf"))
 bcl_LDAs <- fitLDA(counts = bclCorpus$slm, # 152 genes, 1029 spots
                         Ks = ks,
                         seed = 0,
                         ncores = 7,
                         plot = TRUE)
-dev.off()
+# dev.off()
 
 ```
 
@@ -2385,7 +2385,7 @@ dev.off()
 
 ```{r}
 
-gsea_bcl_draft_figs <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/draft_figures/gsea_bcl/"
+gsea_bcl_draft_figs <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_figures/gsea_bcl/"
 
 ```
 
@@ -2417,6 +2417,30 @@ names(go.env) <- paste(names(go.env), desc$TERM)
 ```
 
 ## Shared
+
+```{r}
+
+# list of gene sets
+# go.env
+
+# the 152 genes
+corpusGenes <- colnames(bclCorpus$corpus)
+
+# filter down list to only include sets that overlap the corpus genes by 5%
+
+
+includeSets <- lapply(seq(length(go.env)), function(l){
+  setGenes <- go.env[l][[1]]
+  if(length(intersect(corpusGenes, setGenes)) >= 1 ){  # round(length(corpusGenes)*0.05)
+    l
+  }
+})
+unlist(includeSets)
+
+filtGOsets <- go.env[unlist(includeSets)]
+
+```
+
 
 ### k=5
 
@@ -2451,7 +2475,7 @@ for (i in seq(5)){
 
 ```{r}
 
-gset <- go.env
+gset <- filtGOsets
 for (i in seq(10)){
   
   vals <- sort(bcl_k10$beta[i,], decreasing=TRUE)

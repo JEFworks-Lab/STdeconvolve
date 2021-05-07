@@ -1,15 +1,46 @@
 Package: STdeconvolve
 Type: Package
-Title: What the Package Does (Title Case)
+Title: Reference-free cell-type deconvolution of multi-cellular spatially resolved transcriptomics data 
 Version: 0.1.0
-Author: Who wrote it
-Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
-License: What license is it under?
+Authors@R:
+    c(person(given = "Brendan",
+           family = "Miller",
+           role = c("aut", "cre"),
+           email = "bmille79@jh.edu",
+           comment = c(ORCID = "")),
+           person(given = "Jean",
+                  family = "Fan",
+                  role = c("aut"),
+                  email = "jeanfan@jhu.edu",
+                  comment = c(ORCID = "0000-0002-0212-5451")),
+           person(given = "Feiyang",
+                  family = "Huang",
+                  role = c("aut"),
+                  email = "fhuang15@jhu.edu",
+                  comment = c(ORCID = "")))
+Description: STdeconvolve uses latent Dirichlet allocation to infer latent cell-type proportions and transcriptional profiles within multi-cellular spatially-resolved pixels from spatial transcriptomics datasets.  
+biocViews: Transcriptomics, Visualization, Deconvolution, RNASeq, TopicModels, Spatial
+License: GPL-3
 Encoding: UTF-8
 LazyData: true
-Imports: 
-    topicmodels,
-    parallel
+Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
+Imports:
+    topicmodels,
+    parallel,
+    Matrix,
+    ggplot2,
+    scatterpie,
+    viridis,
+    dynamicTreeCut,
+    slam,
+    stats
+LinkingTo:
+    Rcpp
+Depends:
+    R (>= 4.0)
+Suggests: 
+    knitr,
+    rmarkdown,
+    testthat
+VignetteBuilder: knitr

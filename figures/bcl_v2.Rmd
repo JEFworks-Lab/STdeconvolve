@@ -1,0 +1,3097 @@
+---
+title: "Untitled"
+author: "Brendan F. Miller"
+date: "3/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# BCL layers 1-4
+
+# Intersect OD genes
+
+```{r}
+
+# save(bcl_countsClean,
+#       bcl_CPM, # 12821 filteres genes and 1029 spots after cleaning and CPM normalized
+#       bclCorpus, # corpus of the 152 genes and 1029 spots (2 dropped)
+#       bcl_k12, # LDA trained on OD gene intersection (152 genes between layers 1-4 with alpha = 0.2)
+#      file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/bcl_fitted_models.RData")
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_data/bcl_fitted_models.RData")
+
+```
+
+```{r}
+
+fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/figures/"
+draft_fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_figures/"
+
+```
+
+```{r}
+
+data(BCL)
+# 4 layers, 1031 total spots.
+
+bcl_pos <- BCL$pos[,1:2]
+bcl_slice <- BCL$pos[,3]
+names(bcl_slice) <- rownames(bcl_pos)
+length(bcl_slice)
+
+# filter spots in bcl_slice based on those kept in the corpus
+bcl_slice_filt <- bcl_slice[names(bcl_slice) %in% rownames(bclCorpus$pos)]
+length(bcl_slice_filt)
+
+bclCorpus$slice <- bcl_slice_filt
+
+# clean
+# bcl_countsClean <- MERINGUE::cleanCounts(counts = BCL$counts, # genes x spots mtx
+#                                         min.reads = 10,
+#                                         min.lib.size = 10,
+#                                         verbose=TRUE)
+# 
+# bcl_CPM <- MERINGUE::normalizeCounts(counts = bcl_countsClean,
+#                                           verbose=TRUE, log=FALSE)
+
+```
+
+The shared OD genes across the 4 layers:
+
+```{r}
+
+# list of either the mob data sets or paths to the data for inputs into `preprocess`
+
+bcl_paths <- list()
+bcl_paths[[1]] <- as.matrix(t(BCL$counts[,names(bcl_slice[bcl_slice == 1])]))
+bcl_paths[[2]] <- as.matrix(t(BCL$counts[,names(bcl_slice[bcl_slice == 2])]))
+bcl_paths[[3]] <- as.matrix(t(BCL$counts[,names(bcl_slice[bcl_slice == 3])]))
+bcl_paths[[4]] <- as.matrix(t(BCL$counts[,names(bcl_slice[bcl_slice == 4])]))
+
+```
+
+```{r}
+
+# collect OD genes for each slice
+bcl_ODgenes <- lapply(bcl_paths, function(p) {
+  dat <- preprocess(p,
+                   alignFile = NA,
+                   extractPos = FALSE,
+                   selected.genes = NA,
+                   nTopGenes = NA, # top expressed genes to remove
+                   genes.to.remove = NA,
+                   perc.spots = NA,
+                   min.reads = 10,
+                   min.lib.size = 10,
+                   ODgenes = TRUE, # select the overdispersed genes
+                   od.genes.alpha = 0.2, # more flexible because taking shared ODs will reduce drastically
+                   gam.k = 5,
+                   nTopOD = NA) # option to keep just the top n OD genes
+  colnames(dat$corpus)
+})
+
+# get intersection of the OD genes
+sharedBCLGenes <- Reduce(intersect, bcl_ODgenes)
+length(sharedBCLGenes)
+
+```
+
+## Txn clustering
+
+In the original paper, 3 clusters ID:
+- ductal carcinoma in situ
+- invasive ductal carcinoma
+- non-malignant
+
+```{r}
+
+set.seed(888)
+
+# use the CPM adjusted counts
+
+pcs.info <- prcomp(t(log10(as.matrix(bcl_CPM[sharedBCLGenes,rownames(bclCorpus$pos)])+1)), center=TRUE)
+plot(pcs.info$sdev[1:30])
+nPcs <- 5
+pcs <- pcs.info$x[,1:nPcs]
+# 2D embedding by tSNE
+emb <- Rtsne::Rtsne(pcs,
+                    is_distance=FALSE,
+                    perplexity=30,
+                    num_threads=1,
+                    verbose=FALSE)$Y
+rownames(emb) <- rownames(pcs)
+# Graph-based cluster detection
+k <- 350
+bcl_com <- MERINGUE::getClusters(pcs, k, method=igraph::cluster_louvain)
+
+
+# pdf(file = paste0(draft_fig_path, "Fig_3_txn-clustering-shared-ODs.pdf"),   # The directory you want to save the file in
+  # width = 6, # The width of the plot in inches
+  # height = 5) # The height of the plot in inches
+par(mfrow=c(2,2), mar=rep(1,4))
+# top row
+# left: all slice spots tSNE embedding and labeled by cluster assignment
+MUDAN::plotEmbedding(emb, groups=bcl_com,
+                     show.legend=TRUE, xlab=NA, ylab=NA,
+                     verbose=FALSE)
+# right: all slice spots tSNE embedding and labeled by tissuse slice assignment
+MUDAN::plotEmbedding(emb, groups=bclCorpus$slice,
+                     show.legend=TRUE, xlab=NA, ylab=NA,
+                     verbose=FALSE)
+# bottom row
+# left: spots labeld by cluster assignment and overlayed on each slice.
+# Same clusters seem to be at similar spot locations on slices. Nice to see
+MUDAN::plotEmbedding(bclCorpus$pos, groups=bcl_com,
+                     cex=1, xlab=NA, ylab=NA,
+                     verbose=FALSE)
+# right: spots colored by slice and slices overlayed
+MUDAN::plotEmbedding(bclCorpus$pos, groups=bclCorpus$slice,
+                     cex=1, xlab=NA, ylab=NA,
+                     verbose=FALSE)
+# dev.off()
+
+# capture the txn cluster assignment of the spots
+bclCorpus$txn <- bcl_com
+
+```
+
+```{r}
+
+bclTxnClustCols <- c('1' = lighten('red', factor = 0.4),
+                     '2' = lighten('green', factor = 0.4),
+                     '3' = lighten('blue', factor = 0.4))
+
+```
+
+```{r}
+
+# proxy theta for the txn clusters
+bclProxyTheta <- model.matrix(~ 0 + bclCorpus$txn)
+rownames(bclProxyTheta) <- names(bclCorpus$txn)
+# fix names
+colnames(bclProxyTheta) <- c("1", "2", "3")
+bclProxyTheta <- as.data.frame.matrix(bclProxyTheta)
+dim(bclProxyTheta)
+
+```
+
+```{r}
+
+for (s in unique(bclCorpus$slice)){
+  slice <- bclCorpus$slice == s
+  # m <- bcl_shared_k3$theta[slice,]
+  p <- bclCorpus$pos[slice,]
+  # sliceTxnClusters <- bclCorpus$txn[slice]
+  m <- as.matrix(bclProxyTheta[slice,])
+
+  plt <- vizAllTopics(theta = m,
+                       pos = p,
+                       topicOrder=colnames(m),
+                       topicCols=as.vector(bclTxnClustCols[colnames(m)]),
+                       groups = rep("0", dim(m)[1]),
+                       group_cols = c("0" = "black"),
+                       r = 0.4, # different size piecharts for mOB data sets
+                       lwd = 0.3,
+                       showLegend = TRUE,
+                       plotTitle = paste("Txn clusters section", s))
+  print(plt)
+  
+}
+
+```
+
+# Union of OD genes
+
+152 genes useful but maybe capture more variation if keep OD genes regardless of the slice (take union)
+
+```{r}
+
+# lets also make sure we are using genes that are present across all slices
+# because the final corpus will be all the spots across all the slices
+# and each one will also need to contain the genes in the union
+all_genes <- lapply(bcl_paths, function(p){
+  print(dim(p))
+  genes <- colnames(p)
+  print(length(genes))
+  genes
+})
+all_genes <- Reduce(intersect, all_genes)
+length(all_genes)
+
+```
+seems like each slice has the same genes anyways
+
+```{r}
+
+# find shared set of OD genes across sections to try and identify common transcriptional patterns
+
+bcl_ODgenes <- lapply(bcl_paths, function(p) {
+  dat <- preprocess(p,
+                   alignFile = NA,
+                   extractPos = FALSE,
+                   selected.genes = all_genes, # use the set of shared genes across all slices
+                   nTopGenes = 5,
+                   genes.to.remove = NA,
+                   perc.spots = 0.95,
+                   min.reads = 10,
+                   min.lib.size = 10,
+                   min.detected = 1,
+                   ODgenes = TRUE, # select the overdispersed genes
+                   od.genes.alpha = 0.05, # use a smaller alpha to use the union of the top OD genes in each section
+                   gam.k = 5,
+                   nTopOD = 100) # it turns out the final list is too large for the topic modeling. So select just the top OD genes in each slice
+  colnames(dat$corpus)
+})
+
+# because very few genes are OD across all sections, instead take the union and consider genes
+# that are OD in any slice
+unionBCLGenes <- Reduce(union, bcl_ODgenes)
+length(unionBCLGenes)
+
+```
+
+Build the corpus with the union set of OD genes. Here its 372. 
+
+```{r}
+
+bclCorpusUnion <- preprocess(t(as.matrix(BCL$counts)),
+                       alignFile = NA,
+                       extractPos = FALSE,
+                       selected.genes = unionBCLGenes,
+                       nTopGenes = NA,
+                       genes.to.remove = NA,
+                       perc.spots = NA,
+                       min.reads = 0, 
+                       min.lib.size = 0, # because using specific set of genes, remove spots with 0 counts but keep others
+                       ODgenes = FALSE,
+                       od.genes.alpha = 0.05, # ODgenes ignored; so is this
+                       gam.k = 5) # ODgenes ignored; so is this
+
+# positions already included in `mOB$pos` but make sure only use the filtered positions in the corpus
+bclCorpusUnion$pos <- bcl_pos[rownames(bclCorpusUnion$corpus), ]
+
+# add in slice info for the spots that were kept after filtering with the new gene set.
+# With the new genes, some different spots may not have any gene counts and will be empty and should be removed
+bcl_slice_filt <- bcl_slice[names(bcl_slice) %in% rownames(bclCorpusUnion$pos)]
+length(bcl_slice_filt)
+
+bclCorpusUnion$slice <- bcl_slice_filt
+
+```
+
+## Txn clustering
+
+txn clustering of the spots using the union set of OD genes
+
+```{r}
+
+set.seed(888)
+
+# use the CPM adjusted counts
+
+pcs.info <- prcomp(t(log10(as.matrix(bcl_CPM[unionBCLGenes,rownames(bclCorpusUnion$pos)])+1)), center=TRUE)
+plot(pcs.info$sdev[1:30])
+nPcs <- 5
+pcs <- pcs.info$x[,1:nPcs]
+# 2D embedding by tSNE
+emb <- Rtsne::Rtsne(pcs,
+                    is_distance=FALSE,
+                    perplexity=30,
+                    num_threads=1,
+                    verbose=FALSE)$Y
+rownames(emb) <- rownames(pcs)
+# Graph-based cluster detection
+k <- 350
+bcl_com <- MERINGUE::getClusters(pcs, k, method=igraph::cluster_louvain)
+
+bcl_colors <- bcl_com
+levels(bcl_colors)[levels(bcl_colors) == "1"] <- "green" #"#66FF66"
+levels(bcl_colors)[levels(bcl_colors) == "2"] <- "blue" #"#6666FF"
+levels(bcl_colors)[levels(bcl_colors) == "3"] <- "red" #"#FF6666"
+bcl_colors <- as.vector(bcl_colors)
+names(bcl_colors) <- names(bcl_com)
+
+# pdf(file = paste0(draft_fig_path, "Fig_3_txn-clustering-union-ODs.pdf"),   # The directory you want to save the file in
+#   width = 6, # The width of the plot in inches
+#   height = 5) # The height of the plot in inches
+par(mfrow=c(2,2), mar=rep(1,4))
+# top row
+# left: all slice spots tSNE embedding and labeled by cluster assignment
+MERINGUE::plotEmbedding(emb, groups=bcl_com, colors = bcl_colors,
+                     show.legend=FALSE, xlab=NA, ylab=NA,
+                     verbose=TRUE)
+# right: all slice spots tSNE embedding and labeled by tissuse slice assignment
+MUDAN::plotEmbedding(emb, groups=bclCorpusUnion$slice,
+                     show.legend=TRUE, xlab=NA, ylab=NA,
+                     verbose=FALSE)
+# bottom row
+# left: spots labeld by cluster assignment and overlayed on each slice.
+# Same clusters seem to be at similar spot locations on slices. Nice to see
+MUDAN::plotEmbedding(bclCorpusUnion$pos, groups=bcl_com, colors = bcl_colors,
+                     cex=1, xlab=NA, ylab=NA,
+                     verbose=FALSE)
+# right: spots colored by slice and slices overlayed
+MUDAN::plotEmbedding(bclCorpusUnion$pos, groups=bclCorpusUnion$slice,
+                     cex=1, xlab=NA, ylab=NA,
+                     verbose=FALSE)
+# dev.off()
+
+# capture the txn cluster assignment of the spots
+bclCorpusUnion$txn <- bcl_com
+
+```
+
+```{r}
+
+bclUnionTxnClustCols <- c('1' = lighten('green', factor = 0.4),
+                     '2' = lighten('blue', factor = 0.4),
+                     '3' = lighten('red', factor = 0.4))
+
+```
+
+```{r}
+
+# proxy theta for the txn clusters
+bclProxyTheta_Union <- model.matrix(~ 0 + bclCorpusUnion$txn)
+rownames(bclProxyTheta_Union) <- names(bclCorpusUnion$txn)
+# fix names
+colnames(bclProxyTheta_Union) <- c("1", "2", "3")
+bclProxyTheta_Union <- as.data.frame.matrix(bclProxyTheta_Union)
+dim(bclProxyTheta_Union)
+
+```
+
+```{r}
+
+for (s in unique(bclCorpusUnion$slice)){
+  slice <- bclCorpusUnion$slice == s
+  # p <- bclCorpusUnion$pos[slice,]
+  p <- posScaleAll[slice,]
+  m <- as.matrix(bclProxyTheta_Union[slice,])
+
+  plt <- vizAllTopics(theta = m,
+                       pos = p,
+                       topicOrder=colnames(m),
+                       topicCols=as.vector(bclUnionTxnClustCols[colnames(m)]),
+                       groups = rep("0", dim(m)[1]),
+                       group_cols = c("0" = "black"),
+                       r = 100, # different size piecharts for mOB data sets
+                       lwd = 0.3,
+                       showLegend = TRUE,
+                       plotTitle = paste("Txn clusters section", s))
+  print(plt)
+  
+}
+
+```
+
+# Compare Shared/Union Txn
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = as.matrix(bclProxyTheta),
+                     m2 = as.matrix(bclProxyTheta_Union),
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+gplots::heatmap.2(x = corMtx_paired,
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+diags <- diag(corMtx_paired)
+
+# hist(rctd_vs_lda_theta, breaks = 10)
+summary(diags)
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+    # width = 5, # The width of the plot in inches
+    # height = 3) # The height of the plot in inches
+par( mfrow = c(1,3) )
+boxplot(diags,
+        medcol = "black", # medium line color
+        medlty = 1, # line type
+        medlwd = 1, # line width
+        boxfill = "white", # color fill of box
+        boxcol = "black", # outline color of box
+        boxlty = 1, # box line type
+        boxlwd = 1, # width of box line
+        whisklty = 1, # whisker type
+        whisklwd = 1,
+        staplelwd = 0, # the ends of the whiskers
+        outpch = 1, # type of outlies
+        outcex = 0,
+        main = "",
+        cex.main = 1,
+        xlab = "",
+        ylab = "Correlation") # size of outliers
+stripchart(diags, vertical = TRUE,
+    method = "jitter", add = TRUE, pch = 20, col = 'black')
+# dev.off()
+
+```
+
+# LDA training
+
+```{r}
+
+# fit models to a range of K's that include 5 (5 original txn clusters) and
+# 37 and 38 (for the cts in the scRNAseq refs; 38 originally but SL doesn't find and Meis2 so dropped)
+ks <- seq(from = 2, to = 20, by = 1)
+
+```
+
+## Shared ODs
+
+```{r}
+
+# pdf(file = paste0(draft_fig_path, "Fig_3_bcl-1-4-shared-od-training.pdf"))
+bclShared_LDAs <- fitLDA(counts = bclCorpus$slm, # 152 genes, 1029 spots
+                        Ks = ks,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+# dev.off()
+
+```
+
+### k=3 (histological)
+
+```{r}
+
+bcl_shared_k3 <- buildLDAobject(LDAmodel = optimalModel(bclShared_LDAs, opt = 3),
+                      deepSplit = 4,
+                      colorScheme = "rainbow")
+
+```
+
+### k=5 (kneed)
+
+```{r}
+
+bcl_shared_k5 <- buildLDAobject(LDAmodel = optimalModel(bclShared_LDAs, opt = "kneed"),
+                      deepSplit = 4,
+                      colorScheme = "rainbow")
+
+```
+
+### k=12 (min)
+
+```{r}
+
+bcl_shared_k12 <- buildLDAobject(LDAmodel = optimalModel(bclShared_LDAs, opt = "min"),
+                      deepSplit = 4,
+                      colorScheme = "rainbow")
+
+```
+
+## Union ODs
+
+```{r}
+
+# pdf(file = paste0(draft_fig_path, "Fig_3_bcl-1-4-union-od-training.pdf"))
+bclUnion_LDAs <- fitLDA(counts = bclCorpusUnion$slm, # 372 genes 1029 spots
+                        Ks = ks,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+# dev.off()
+
+```
+
+### k=3 (histological)
+
+```{r}
+
+bcl_union_k3 <- buildLDAobject(LDAmodel = optimalModel(bclUnion_LDAs, opt = 3),
+                      deepSplit = 4,
+                      colorScheme = "rainbow")
+
+```
+
+### k=5 (kneed)
+
+```{r}
+
+bcl_union_k5 <- buildLDAobject(LDAmodel = optimalModel(bclUnion_LDAs, opt = "kneed"),
+                      deepSplit = 4,
+                      colorScheme = "rainbow")
+
+```
+
+### k=18 (min)
+
+```{r}
+
+bcl_union_k18 <- buildLDAobject(LDAmodel = optimalModel(bclUnion_LDAs, opt = "min"),
+                      deepSplit = 4,
+                      colorScheme = "rainbow")
+
+```
+
+# ---------------------------------
+
+# adjusted positions for images
+
+## he1
+
+```{r}
+
+he1 <- readJPEG('/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/HE_BrightfieldImages/HE_layer1_BC.jpg')
+
+# alignment matrices came with these images
+he_align1 <- matrix(unlist(read.table("/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/Alignments/Layer1_BC_transformation.txt")), nrow = 3, ncol = 3)
+
+posScale1 <- bclCorpus$pos[bclCorpus$slice==1,]
+
+# use the alignment file to adjust
+posScale1[,"x"] <- posScale1[,"x"] * he_align1[1,1]
+posScale1[,"y"] <- posScale1[,"y"] * he_align1[2,2]
+
+# bring coordinates to positive values. set the x and y to start  at 0
+posScale1[,"x"] <- posScale1[,"x"] - min(posScale1[,"x"])
+posScale1[,"y"] <- posScale1[,"y"] - min(posScale1[,"y"])
+
+# posScale1 <- MERINGUE::rotatePos(posScale1, theta = pi/(180/32))
+
+# Flip the spots horizontally
+posScale1[,"y"] <- posScale1[,"y"] + 2*((dim(he1)[1]/2) - posScale1[,"y"])
+# posScale1[,"x"] <- posScale1[,"x"] + 2*((dim(he1)[2]/2) - posScale1[,"x"])
+
+# posScale1 <- MERINGUE::rotatePos(posScale1, theta = pi/(180/30))
+
+# set the x and y to start at 0 again, after flipping
+posScale1[,"x"] <- posScale1[,"x"] - min(posScale1[,"x"])
+posScale1[,"y"] <- posScale1[,"y"] - min(posScale1[,"y"])
+
+posScale1 <- MERINGUE::rotatePos(posScale1, theta = pi/(180/91))
+
+posScale1[,"x"] <- posScale1[,"x"] - min(posScale1[,"x"])
+posScale1[,"y"] <- posScale1[,"y"] - min(posScale1[,"y"])
+
+# final adjustment
+# based on the Stahl et al spot coordinates (from Layer1_BC_count_matrix-1.tsv)
+# that were adjusted with the alignment matrix, get the minimum x and y coords of these spots
+# also double checked that the range of both sets of spot coordinates
+# matched these, which they do. So just a matter of shifting spots in x and y direction
+# equal to where the positions of the spots are in the stahl data
+posScale1[,"x"] <- posScale1[,"x"] + 1500
+posScale1[,"y"] <- posScale1[,"y"] + 1400
+
+```
+
+## he2
+
+```{r}
+
+he2 <- readJPEG('/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/HE_BrightfieldImages/HE_layer2_BC.jpg')
+
+# alignment matrices came with these images
+he_align2 <- matrix(unlist(read.table("/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/Alignments/Layer2_BC_transformation.txt")), nrow = 3, ncol = 3)
+
+posScale2 <- bclCorpus$pos[bclCorpus$slice==2,]
+
+# use the alignment file to adjust
+posScale2[,"x"] <- posScale2[,"x"] * he_align2[1,1]
+posScale2[,"y"] <- posScale2[,"y"] * he_align2[2,2]
+
+# bring coordinates to positive values. set the x and y to start  at 0
+posScale2[,"x"] <- posScale2[,"x"] - min(posScale2[,"x"])
+posScale2[,"y"] <- posScale2[,"y"] - min(posScale2[,"y"])
+
+# posScale1 <- MERINGUE::rotatePos(posScale1, theta = pi/(180/32))
+
+# Flip the spots horizontally
+posScale2[,"y"] <- posScale2[,"y"] + 2*((dim(he2)[1]/2) - posScale2[,"y"])
+# posScale2[,"x"] <- posScale2[,"x"] + 2*((dim(he2)[2]/2) - posScale2[,"x"])
+
+# set the x and y to start at 0 again, after flipping
+posScale2[,"x"] <- posScale2[,"x"] - min(posScale2[,"x"])
+posScale2[,"y"] <- posScale2[,"y"] - min(posScale2[,"y"])
+
+posScale2 <- MERINGUE::rotatePos(posScale2, theta = pi/(180/78))
+
+posScale2[,"x"] <- posScale2[,"x"] - min(posScale2[,"x"])
+posScale2[,"y"] <- posScale2[,"y"] - min(posScale2[,"y"])
+
+# final adjustment
+# based on the Stahl et al spot coordinates (from Layer1_BC_count_matrix-1.tsv)
+# that were adjusted with the alignment matrix, get the minimum x and y coords of these spots
+# also double checked that the range of both sets of spot coordinates
+# matched these, which they do. So just a matter of shifting spots in x and y direction
+# equal to where the positions of the spots are in the stahl data
+posScale2[,"x"] <- posScale2[,"x"] + 1200
+posScale2[,"y"] <- posScale2[,"y"] + 2050
+
+```
+
+## he3
+
+```{r}
+
+he3 <- readJPEG('/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/HE_BrightfieldImages/HE_layer3_BC.jpg')
+
+# alignment matrices came with these images
+he_align3 <- matrix(unlist(read.table("/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/Alignments/Layer3_BC_transformation.txt")), nrow = 3, ncol = 3)
+
+posScale3 <- bclCorpus$pos[bclCorpus$slice==3,]
+# use the alignment file to adjust
+posScale3[,"x"] <- posScale3[,"x"] * he_align3[1,1]
+posScale3[,"y"] <- posScale3[,"y"] * he_align3[2,2]
+# bring coordinates to positive values
+posScale3[,"x"] <- posScale3[,"x"] - min(posScale3[,"x"])
+posScale3[,"y"] <- posScale3[,"y"] - min(posScale3[,"y"])
+# final adjustments
+
+posScale3 <- MERINGUE::rotatePos(posScale3, theta = -pi/(180/32))
+# for image 3, need to flip the spots across a vertical axis
+# flip spots
+posScale3[,"y"] <- posScale3[,"y"] + 2*((dim(he3)[1]/2) - posScale3[,"y"])
+# posScale3[,"x"] <- posScale3[,"x"] + 2*((dim(he3)[2]/2) - posScale3[,"x"])
+# then rotate the spots in radians
+# posScale3 <- MERINGUE::rotatePos(posScale3, theta = -pi/(180/32))
+# now reset the x and y to start at 0
+posScale3[,"x"] <- posScale3[,"x"] - min(posScale3[,"x"])
+posScale3[,"y"] <- posScale3[,"y"] - min(posScale3[,"y"])
+# and finally shift by the start of the x and y coordinates for the stahl points (flipped across horizontal)
+posScale3[,"x"] <- posScale3[,"x"] + 2300
+posScale3[,"y"] <- posScale3[,"y"] + 2350
+
+```
+
+## he4
+
+```{r}
+
+he4 <- readJPEG('/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/HE_BrightfieldImages/HE_layer4_BC.jpg')
+
+# alignment matrices came with these images
+he_align4 <- matrix(unlist(read.table("/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/Alignments/Layer4_BC_transformation.txt")), nrow = 3, ncol = 3)
+
+posScale4 <- bclCorpus$pos[bclCorpus$slice==4,]
+
+# use the alignment file to adjust
+posScale4[,"x"] <- posScale4[,"x"] * he_align4[1,1]
+posScale4[,"y"] <- posScale4[,"y"] * he_align4[2,2]
+
+# bring coordinates to positive values. set the x and y to start  at 0
+posScale4[,"x"] <- posScale4[,"x"] - min(posScale4[,"x"])
+posScale4[,"y"] <- posScale4[,"y"] - min(posScale4[,"y"])
+
+# posScale1 <- MERINGUE::rotatePos(posScale1, theta = pi/(180/32))
+
+# Flip the spots horizontally
+posScale4[,"y"] <- posScale4[,"y"] + 2*((dim(he4)[1]/2) - posScale4[,"y"])
+# posScale4[,"x"] <- posScale4[,"x"] + 2*((dim(he4)[2]/2) - posScale4[,"x"])
+
+# set the x and y to start at 0 again, after flipping
+posScale4[,"x"] <- posScale4[,"x"] - min(posScale4[,"x"])
+posScale4[,"y"] <- posScale4[,"y"] - min(posScale4[,"y"])
+
+posScale4 <- MERINGUE::rotatePos(posScale4, theta = pi/(180/5))
+
+posScale4[,"x"] <- posScale4[,"x"] - min(posScale4[,"x"])
+posScale4[,"y"] <- posScale4[,"y"] - min(posScale4[,"y"])
+
+# final adjustment
+# based on the Stahl et al spot coordinates (from Layer1_BC_count_matrix-1.tsv)
+# that were adjusted with the alignment matrix, get the minimum x and y coords of these spots
+# also double checked that the range of both sets of spot coordinates
+# matched these, which they do. So just a matter of shifting spots in x and y direction
+# equal to where the positions of the spots are in the stahl data
+posScale4[,"x"] <- posScale4[,"x"] + 900
+posScale4[,"y"] <- posScale4[,"y"] + 2300
+
+```
+
+combined adjusted positions
+
+```{r}
+
+posScaleAll <- rbind(posScale1,
+      posScale2,
+      posScale3,
+      posScale4)
+
+```
+
+# ---------------------------------
+
+# Shared ODs
+
+## k=3
+
+### Adjust proportions
+
+```{r}
+
+summary(bcl_shared_k3$theta)
+ggplot(data = reshape2::melt(bcl_shared_k3$theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("")
+
+
+bcl_shared_k3_theta <- bcl_shared_k3$theta
+bcl_shared_k3_theta[bcl_shared_k3_theta < 0.05] <- 0
+
+
+# readjust proportions
+bcl_shared_k3_theta <- bcl_shared_k3_theta/rowSums(bcl_shared_k3_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+bcl_shared_k3_theta[is.na(bcl_shared_k3_theta)] <- 0
+
+summary(bcl_shared_k3_theta)
+
+ggplot(data = reshape2::melt(bcl_shared_k3_theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("")
+
+
+# drop ant cts that are 0 for all pixels
+bcl_shared_k3_theta <- bcl_shared_k3_theta[,which(colSums(bcl_shared_k3_theta) > 0)]
+
+dim(bcl_shared_k3_theta)
+
+```
+
+Because LDA is looking for gene occurrences in pixels, and pixels share topics at different mixtures. Whereas the txn clustering groups pixels based on their overall txn profile. Because this is a lot more heterogeneous than the MOB, I wouldn't expect much correlation between topics and txn clusters.
+
+### Txn cluster compare
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = as.matrix(bclProxyTheta),
+                     m2 = bcl_shared_k3_theta,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+gplots::heatmap.2(x = corMtx_paired,
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+diags <- diag(corMtx_paired)
+
+# hist(rctd_vs_lda_theta, breaks = 10)
+summary(diags)
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+    # width = 5, # The width of the plot in inches
+    # height = 3) # The height of the plot in inches
+par( mfrow = c(1,3) )
+boxplot(diags,
+        medcol = "black", # medium line color
+        medlty = 1, # line type
+        medlwd = 1, # line width
+        boxfill = "white", # color fill of box
+        boxcol = "black", # outline color of box
+        boxlty = 1, # box line type
+        boxlwd = 1, # width of box line
+        whisklty = 1, # whisker type
+        whisklwd = 1,
+        staplelwd = 0, # the ends of the whiskers
+        outpch = 1, # type of outlies
+        outcex = 0,
+        main = "",
+        cex.main = 1,
+        xlab = "",
+        ylab = "Correlation") # size of outliers
+stripchart(diags, vertical = TRUE,
+    method = "jitter", add = TRUE, pch = 20, col = 'black')
+# dev.off()
+
+```
+
+not as strong correlation but honestly still pretty good. Given the heterogeneousness of the tissue.
+Perhaps worth stating.
+
+### viz
+
+```{r}
+
+# Each topic versus the 3 txn clsuters, each section separately
+for (s in unique(bclCorpus$slice)){
+  slice <- bclCorpus$slice == s
+  # m <- bcl_shared_k3$theta[slice,]
+  p <- bclCorpus$pos[slice,]
+  # sliceTxnClusters <- bclCorpus$txn[slice]
+  m <- as.matrix(bclProxyTheta[slice,])
+
+  for(i in colnames(bcl_shared_k3_theta)){
+    # for each topic, subtract its proportion from the txn cluster.
+    # Adjust the 0's that went negative back to 0
+    m_ <- m - bcl_shared_k3_theta[slice,i]
+    m_ <- cbind(m_, bcl_shared_k3_theta[slice,i])
+    colnames(m_) <- c(colnames(m), paste0("Ct.",i))
+    m_[m_ < 0] <- 0
+    
+    cc <- as.vector(bclTxnClustCols[colnames(m)])
+    cc <- c(cc, "black")
+    
+    plt <- vizAllTopics(theta = m_,
+                       pos = p,
+                       topicOrder=colnames(m_),
+                       topicCols=cc,
+                       groups = rep("0", dim(m)[1]),
+                       group_cols = c("0" = "black"),
+                       r = 0.4, # different size piecharts for mOB data sets
+                       lwd = 0.3,
+                       showLegend = TRUE,
+                       plotTitle = paste("Txn clusters section", s, "CT", i))
+    print(plt)
+  }
+  
+}
+
+```
+
+```{r}
+
+# each topic on top of all the sections
+for (i in seq(3)){
+
+  m <- bcl_shared_k3_theta[,i]
+  p <- bclCorpus$pos
+  sliceTxnClusters <- bclCorpus$txn
+
+  other <- 1 - m
+  m <- cbind(m, other)
+  colnames(m) <- c(as.character(i), "other")
+
+  cc <- c(
+    transparentCol("black", percent = 30),
+    # transparentCol("blue", percent = 50),
+    transparentCol("white", percent = 100))
+
+  group_cc <- c("1" = transparentCol(bclTxnClustCols["1"], percent = 30),
+                "2" = transparentCol(bclTxnClustCols["2"], percent = 30),
+                "3" = transparentCol(bclTxnClustCols["3"], percent = 30))
+
+  p <- vizAllTopics(theta = m,
+                 pos = p,
+                 topicOrder=seq(ncol(m)),
+                 topicCols=cc,
+                 groups = sliceTxnClusters,
+                 group_cols = group_cc,
+                 r = 0.4,
+                 lwd = 0.1,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+  # ggsave(filename = paste0("bcl_k5-layers-topic-", i, ".pdf"),
+  #        device = "pdf",
+  #        path = draft_fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+
+  print(p)
+
+}
+
+# All topics for each section
+for (s in unique(bclCorpus$slice)){
+  slice <- bclCorpus$slice == s
+  m <- bcl_shared_k3_theta[slice,]
+  p <- bclCorpus$pos[slice,]
+  sliceTxnClusters <- bclCorpus$txn[slice]
+  
+  p <- vizAllTopics(theta = m,
+               pos = p,
+               topicOrder=seq(ncol(m)),
+               topicCols=gg_color_hue(ncol(m)),
+               groups = sliceTxnClusters,
+               group_cols = c("black", "black", "black"),
+               r = 0.4, # different size piecharts for mOB data sets
+               lwd = 0.3,
+               showLegend = TRUE,
+               plotTitle = NA)
+  # ggsave(filename = paste0("bcl_k5-layer-", s, "-all-topics.pdf"),
+  #        device = "pdf",
+  #        path = draft_fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+  
+  print(p)
+}
+
+```
+
+## k=5
+
+### Adjust proportions
+
+```{r}
+
+summary(bcl_shared_k5$theta)
+ggplot(data = reshape2::melt(bcl_shared_k5$theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("")
+
+
+bcl_shared_k5_theta <- bcl_shared_k5$theta
+bcl_shared_k5_theta[bcl_shared_k5_theta < 0.05] <- 0
+
+
+# readjust proportions
+bcl_shared_k5_theta <- bcl_shared_k5_theta/rowSums(bcl_shared_k5_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+bcl_shared_k5_theta[is.na(bcl_shared_k5_theta)] <- 0
+
+summary(bcl_shared_k5_theta)
+
+ggplot(data = reshape2::melt(bcl_shared_k5_theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("")
+
+
+# drop ant cts that are 0 for all pixels
+bcl_shared_k5_theta <- bcl_shared_k5_theta[,which(colSums(bcl_shared_k5_theta) > 0)]
+
+dim(bcl_shared_k5_theta)
+
+```
+
+Because LDA is looking for gene occurrences in pixels, and pixels share topics at different mixtures. Whereas the txn clustering groups pixels based on their overall txn profile. Because this is a lot more heterogeneous than the MOB, I wouldn't expect much correlation between topics and txn clusters.
+
+### Txn cluster compare
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = as.matrix(bclProxyTheta),
+                     m2 = bcl_shared_k5_theta,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+gplots::heatmap.2(x = corMtx_paired,
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+diags <- diag(corMtx_paired)
+
+# hist(rctd_vs_lda_theta, breaks = 10)
+summary(diags)
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+    # width = 5, # The width of the plot in inches
+    # height = 3) # The height of the plot in inches
+par( mfrow = c(1,3) )
+boxplot(diags,
+        medcol = "black", # medium line color
+        medlty = 1, # line type
+        medlwd = 1, # line width
+        boxfill = "white", # color fill of box
+        boxcol = "black", # outline color of box
+        boxlty = 1, # box line type
+        boxlwd = 1, # width of box line
+        whisklty = 1, # whisker type
+        whisklwd = 1,
+        staplelwd = 0, # the ends of the whiskers
+        outpch = 1, # type of outlies
+        outcex = 0,
+        main = "",
+        cex.main = 1,
+        xlab = "",
+        ylab = "Correlation") # size of outliers
+stripchart(diags, vertical = TRUE,
+    method = "jitter", add = TRUE, pch = 20, col = 'black')
+# dev.off()
+
+```
+
+not as strong correlation but honestly still pretty good. Given the heterogeneousness of the tissue.
+Perhaps worth stating.
+
+### viz
+
+```{r}
+
+# Each topic versus the 3 txn clsuters, each section separately
+for (s in unique(bclCorpus$slice)){
+  slice <- bclCorpus$slice == s
+  # m <- bcl_shared_k3$theta[slice,]
+  p <- bclCorpus$pos[slice,]
+  # sliceTxnClusters <- bclCorpus$txn[slice]
+  m <- as.matrix(bclProxyTheta[slice,])
+
+  for(i in colnames(bcl_shared_k5_theta)){
+    # for each topic, subtract its proportion from the txn cluster.
+    # Adjust the 0's that went negative back to 0
+    m_ <- m - bcl_shared_k5_theta[slice,i]
+    m_ <- cbind(m_, bcl_shared_k5_theta[slice,i])
+    colnames(m_) <- c(colnames(m), paste0("Ct.",i))
+    m_[m_ < 0] <- 0
+    
+    cc <- as.vector(bclTxnClustCols[colnames(m)])
+    cc <- c(cc, "black")
+    
+    plt <- vizAllTopics(theta = m_,
+                       pos = p,
+                       topicOrder=colnames(m_),
+                       topicCols=cc,
+                       groups = rep("0", dim(m)[1]),
+                       group_cols = c("0" = "black"),
+                       r = 0.4, # different size piecharts for mOB data sets
+                       lwd = 0.3,
+                       showLegend = TRUE,
+                       plotTitle = paste("Txn clusters section", s, "CT", i))
+    print(plt)
+  }
+  
+}
+
+```
+
+```{r}
+
+
+# each topic on top of all the sections
+for (i in seq(5)){
+
+  m <- bcl_shared_k5_theta[,i]
+  p <- bclCorpus$pos
+  sliceTxnClusters <- bclCorpus$txn
+
+  other <- 1 - m
+  m <- cbind(m, other)
+  colnames(m) <- c(as.character(i), "other")
+
+  cc <- c(
+    transparentCol("black", percent = 30),
+    # transparentCol("blue", percent = 50),
+    transparentCol("white", percent = 100))
+
+  group_cc <- c("1" = transparentCol(bclTxnClustCols["1"], percent = 30),
+                "2" = transparentCol(bclTxnClustCols["2"], percent = 30),
+                "3" = transparentCol(bclTxnClustCols["3"], percent = 30))
+
+  p <- vizAllTopics(theta = m,
+                 pos = p,
+                 topicOrder=seq(ncol(m)),
+                 topicCols=cc,
+                 groups = sliceTxnClusters,
+                 group_cols = group_cc,
+                 r = 0.4,
+                 lwd = 0.1,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+  # ggsave(filename = paste0("bcl_k5-layers-topic-", i, ".pdf"),
+  #        device = "pdf",
+  #        path = draft_fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+
+  print(p)
+
+}
+
+# All topics for each section
+for (s in unique(bclCorpus$slice)){
+  slice <- bclCorpus$slice == s
+  m <- bcl_shared_k5_theta[slice,]
+  p <- bclCorpus$pos[slice,]
+  sliceTxnClusters <- bclCorpus$txn[slice]
+  
+  p <- vizAllTopics(theta = m,
+               pos = p,
+               topicOrder=seq(ncol(m)),
+               topicCols=gg_color_hue(ncol(m)),
+               groups = sliceTxnClusters,
+               group_cols = c("black", "black", "black"),
+               r = 0.4, # different size piecharts for mOB data sets
+               lwd = 0.3,
+               showLegend = TRUE,
+               plotTitle = NA)
+  # ggsave(filename = paste0("bcl_k5-layer-", s, "-all-topics.pdf"),
+  #        device = "pdf",
+  #        path = draft_fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+  
+  print(p)
+}
+
+```
+
+## k=12
+
+### Adjust proportions
+
+```{r}
+
+summary(bcl_shared_k12$theta)
+ggplot(data = reshape2::melt(bcl_shared_k12$theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("")
+
+
+bcl_shared_k12_theta <- bcl_shared_k12$theta
+bcl_shared_k12_theta[bcl_shared_k12_theta < 0.05] <- 0
+
+
+# readjust proportions
+bcl_shared_k12_theta <- bcl_shared_k12_theta/rowSums(bcl_shared_k12_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+bcl_shared_k12_theta[is.na(bcl_shared_k12_theta)] <- 0
+
+summary(bcl_shared_k12_theta)
+
+ggplot(data = reshape2::melt(bcl_shared_k12_theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("")
+
+
+# drop ant cts that are 0 for all pixels
+bcl_shared_k12_theta <- bcl_shared_k12_theta[,which(colSums(bcl_shared_k12_theta) > 0)]
+
+dim(bcl_shared_k12_theta)
+
+```
+
+Because LDA is looking for gene occurrences in pixels, and pixels share topics at different mixtures. Whereas the txn clustering groups pixels based on their overall txn profile. Because this is a lot more heterogeneous than the MOB, I wouldn't expect much correlation between topics and txn clusters.
+
+### Txn cluster compare
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = as.matrix(bclProxyTheta),
+                     m2 = bcl_shared_k12_theta,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+gplots::heatmap.2(x = corMtx_paired,
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+diags <- diag(corMtx_paired)
+
+# hist(rctd_vs_lda_theta, breaks = 10)
+summary(diags)
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+    # width = 5, # The width of the plot in inches
+    # height = 3) # The height of the plot in inches
+par( mfrow = c(1,3) )
+boxplot(diags,
+        medcol = "black", # medium line color
+        medlty = 1, # line type
+        medlwd = 1, # line width
+        boxfill = "white", # color fill of box
+        boxcol = "black", # outline color of box
+        boxlty = 1, # box line type
+        boxlwd = 1, # width of box line
+        whisklty = 1, # whisker type
+        whisklwd = 1,
+        staplelwd = 0, # the ends of the whiskers
+        outpch = 1, # type of outlies
+        outcex = 0,
+        main = "",
+        cex.main = 1,
+        xlab = "",
+        ylab = "Correlation") # size of outliers
+stripchart(diags, vertical = TRUE,
+    method = "jitter", add = TRUE, pch = 20, col = 'black')
+# dev.off()
+
+```
+
+not as strong correlation but honestly still pretty good. Given the heterogeneousness of the tissue.
+Perhaps worth stating.
+
+### viz
+
+```{r}
+
+# Each topic versus the 3 txn clsuters, each section separately
+for (s in unique(bclCorpus$slice)){
+  slice <- bclCorpus$slice == s
+  # m <- bcl_shared_k3$theta[slice,]
+  p <- bclCorpus$pos[slice,]
+  # sliceTxnClusters <- bclCorpus$txn[slice]
+  m <- as.matrix(bclProxyTheta[slice,])
+
+  for(i in colnames(bcl_shared_k12_theta)){
+    # for each topic, subtract its proportion from the txn cluster.
+    # Adjust the 0's that went negative back to 0
+    m_ <- m - bcl_shared_k12_theta[slice,i]
+    m_ <- cbind(m_, bcl_shared_k12_theta[slice,i])
+    colnames(m_) <- c(colnames(m), paste0("Ct.",i))
+    m_[m_ < 0] <- 0
+    
+    cc <- as.vector(bclTxnClustCols[colnames(m)])
+    cc <- c(cc, "black")
+    
+    plt <- vizAllTopics(theta = m_,
+                       pos = p,
+                       topicOrder=colnames(m_),
+                       topicCols=cc,
+                       groups = rep("0", dim(m)[1]),
+                       group_cols = c("0" = "black"),
+                       r = 0.4, # different size piecharts for mOB data sets
+                       lwd = 0.3,
+                       showLegend = TRUE,
+                       plotTitle = paste("Txn clusters section", s, "CT", i))
+    print(plt)
+  }
+  
+}
+
+```
+
+```{r}
+
+
+# each topic on top of all the sections
+for (i in seq(12)){
+
+  m <- bcl_shared_k12_theta[,i]
+  p <- bclCorpus$pos
+  sliceTxnClusters <- bclCorpus$txn
+
+  other <- 1 - m
+  m <- cbind(m, other)
+  colnames(m) <- c(as.character(i), "other")
+
+  cc <- c(
+    transparentCol("black", percent = 30),
+    # transparentCol("blue", percent = 50),
+    transparentCol("white", percent = 100))
+
+  group_cc <- c("1" = transparentCol(bclTxnClustCols["1"], percent = 30),
+                "2" = transparentCol(bclTxnClustCols["2"], percent = 30),
+                "3" = transparentCol(bclTxnClustCols["3"], percent = 30))
+
+  p <- vizAllTopics(theta = m,
+                 pos = p,
+                 topicOrder=seq(ncol(m)),
+                 topicCols=cc,
+                 groups = sliceTxnClusters,
+                 group_cols = group_cc,
+                 r = 0.4,
+                 lwd = 0.1,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+  # ggsave(filename = paste0("bcl_k5-layers-topic-", i, ".pdf"),
+  #        device = "pdf",
+  #        path = draft_fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+
+  print(p)
+
+}
+
+# All topics for each section
+for (s in unique(bclCorpus$slice)){
+  slice <- bclCorpus$slice == s
+  m <- bcl_shared_k12_theta[slice,]
+  p <- bclCorpus$pos[slice,]
+  sliceTxnClusters <- bclCorpus$txn[slice]
+  
+  p <- vizAllTopics(theta = m,
+               pos = p,
+               topicOrder=seq(ncol(m)),
+               topicCols=gg_color_hue(ncol(m)),
+               groups = sliceTxnClusters,
+               group_cols = c("black", "black", "black"),
+               r = 0.4, # different size piecharts for mOB data sets
+               lwd = 0.3,
+               showLegend = TRUE,
+               plotTitle = NA)
+  # ggsave(filename = paste0("bcl_k5-layer-", s, "-all-topics.pdf"),
+  #        device = "pdf",
+  #        path = draft_fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+  
+  print(p)
+}
+
+```
+
+# Union ODs
+
+## k=3
+
+### Adjust proportions
+
+```{r}
+
+summary(bcl_union_k3$theta)
+ggplot(data = reshape2::melt(bcl_union_k3$theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("")
+
+
+bcl_union_k3_theta <- bcl_union_k3$theta
+bcl_union_k3_theta[bcl_union_k3_theta < 0.05] <- 0
+
+
+# readjust proportions
+bcl_union_k3_theta <- bcl_union_k3_theta/rowSums(bcl_union_k3_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+bcl_union_k3_theta[is.na(bcl_union_k3_theta)] <- 0
+
+summary(bcl_union_k3_theta)
+
+ggplot(data = reshape2::melt(bcl_union_k3_theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("")
+
+
+# drop ant cts that are 0 for all pixels
+bcl_union_k3_theta <- bcl_union_k3_theta[,which(colSums(bcl_union_k3_theta) > 0)]
+
+dim(bcl_union_k3_theta)
+
+```
+
+Because LDA is looking for gene occurrences in pixels, and pixels share topics at different mixtures. Whereas the txn clustering groups pixels based on their overall txn profile. Because this is a lot more heterogeneous than the MOB, I wouldn't expect much correlation between topics and txn clusters.
+
+### Txn cluster compare
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = as.matrix(bclProxyTheta_Union),
+                     m2 = bcl_union_k3_theta,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+gplots::heatmap.2(x = corMtx_paired,
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+diags <- diag(corMtx_paired)
+
+# hist(rctd_vs_lda_theta, breaks = 10)
+summary(diags)
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+    # width = 5, # The width of the plot in inches
+    # height = 3) # The height of the plot in inches
+par( mfrow = c(1,3) )
+boxplot(diags,
+        medcol = "black", # medium line color
+        medlty = 1, # line type
+        medlwd = 1, # line width
+        boxfill = "white", # color fill of box
+        boxcol = "black", # outline color of box
+        boxlty = 1, # box line type
+        boxlwd = 1, # width of box line
+        whisklty = 1, # whisker type
+        whisklwd = 1,
+        staplelwd = 0, # the ends of the whiskers
+        outpch = 1, # type of outlies
+        outcex = 0,
+        main = "",
+        cex.main = 1,
+        xlab = "",
+        ylab = "Correlation") # size of outliers
+stripchart(diags, vertical = TRUE,
+    method = "jitter", add = TRUE, pch = 20, col = 'black')
+# dev.off()
+
+```
+
+not as strong correlation but honestly still pretty good. Given the heterogeneousness of the tissue.
+Perhaps worth stating.
+
+### viz
+
+```{r}
+
+# Each topic versus the 3 txn clsuters, each section separately
+for (s in unique(bclCorpusUnion$slice)){
+  slice <- bclCorpusUnion$slice == s
+  p <- bclCorpusUnion$pos[slice,]
+  m <- as.matrix(bclProxyTheta_Union[slice,])
+
+  for(i in colnames(bcl_union_k3_theta)){
+    # for each topic, subtract its proportion from the txn cluster.
+    # Adjust the 0's that went negative back to 0
+    m_ <- m - bcl_union_k3_theta[slice,i]
+    m_ <- cbind(m_, bcl_union_k3_theta[slice,i])
+    colnames(m_) <- c(colnames(m), paste0("Ct.",i))
+    m_[m_ < 0] <- 0
+    
+    cc <- as.vector(bclUnionTxnClustCols[colnames(m)])
+    cc <- c(cc, "black")
+    
+    plt <- vizAllTopics(theta = m_,
+                       pos = p,
+                       topicOrder=colnames(m_),
+                       topicCols=cc,
+                       groups = rep("0", dim(m)[1]),
+                       group_cols = c("0" = "black"),
+                       r = 0.4, # different size piecharts for mOB data sets
+                       lwd = 0.3,
+                       showLegend = TRUE,
+                       plotTitle = paste("Txn clusters section", s, "CT", i))
+    print(plt)
+  }
+  
+}
+
+```
+
+```{r}
+
+# each topic on top of all the sections
+for (i in seq(3)){
+
+  m <- bcl_union_k3_theta[,i]
+  p <- bclCorpusUnion$pos
+  sliceTxnClusters <- bclCorpusUnion$txn
+
+  other <- 1 - m
+  m <- cbind(m, other)
+  colnames(m) <- c(as.character(i), "other")
+
+  cc <- c(
+    transparentCol("black", percent = 30),
+    # transparentCol("blue", percent = 50),
+    transparentCol("white", percent = 100))
+
+  group_cc <- c("1" = transparentCol(bclUnionTxnClustCols["1"], percent = 30),
+                "2" = transparentCol(bclUnionTxnClustCols["2"], percent = 30),
+                "3" = transparentCol(bclUnionTxnClustCols["3"], percent = 30))
+
+  p <- vizAllTopics(theta = m,
+                 pos = p,
+                 topicOrder=seq(ncol(m)),
+                 topicCols=cc,
+                 groups = sliceTxnClusters,
+                 group_cols = group_cc,
+                 r = 0.4,
+                 lwd = 0.1,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+  # ggsave(filename = paste0("bcl_k5-layers-topic-", i, ".pdf"),
+  #        device = "pdf",
+  #        path = draft_fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+
+  print(p)
+
+}
+
+# All topics for each section
+for (s in unique(bclCorpusUnion$slice)){
+  slice <- bclCorpusUnion$slice == s
+  m <- bcl_union_k3_theta[slice,]
+  p <- bclCorpusUnion$pos[slice,]
+  sliceTxnClusters <- bclCorpusUnion$txn[slice]
+  
+  p <- vizAllTopics(theta = m,
+               pos = p,
+               topicOrder=seq(ncol(m)),
+               topicCols=gg_color_hue(ncol(m)),
+               groups = sliceTxnClusters,
+               group_cols = c("black", "black", "black"),
+               r = 0.4, # different size piecharts for mOB data sets
+               lwd = 0.3,
+               showLegend = TRUE,
+               plotTitle = NA)
+  # ggsave(filename = paste0("bcl_k5-layer-", s, "-all-topics.pdf"),
+  #        device = "pdf",
+  #        path = draft_fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+  
+  print(p)
+}
+
+```
+
+## k=5
+
+### Adjust proportions
+
+```{r}
+
+summary(bcl_union_k5$theta)
+ggplot(data = reshape2::melt(bcl_union_k5$theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("")
+
+
+bcl_union_k5_theta <- bcl_union_k5$theta
+bcl_union_k5_theta[bcl_union_k5_theta < 0.05] <- 0
+
+
+# readjust proportions
+bcl_union_k5_theta <- bcl_union_k5_theta/rowSums(bcl_union_k5_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+bcl_union_k5_theta[is.na(bcl_union_k5_theta)] <- 0
+
+summary(bcl_union_k5_theta)
+
+ggplot(data = reshape2::melt(bcl_union_k5_theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("")
+
+
+# drop ant cts that are 0 for all pixels
+bcl_union_k5_theta <- bcl_union_k5_theta[,which(colSums(bcl_union_k5_theta) > 0)]
+
+dim(bcl_union_k5_theta)
+
+```
+
+Because LDA is looking for gene occurrences in pixels, and pixels share topics at different mixtures. Whereas the txn clustering groups pixels based on their overall txn profile. Because this is a lot more heterogeneous than the MOB, I wouldn't expect much correlation between topics and txn clusters.
+
+### Txn cluster compare
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = as.matrix(bclProxyTheta_Union),
+                     m2 = bcl_union_k5_theta,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+gplots::heatmap.2(x = corMtx_paired,
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+diags <- diag(corMtx_paired)
+
+# hist(rctd_vs_lda_theta, breaks = 10)
+summary(diags)
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+    # width = 5, # The width of the plot in inches
+    # height = 3) # The height of the plot in inches
+par( mfrow = c(1,3) )
+boxplot(diags,
+        medcol = "black", # medium line color
+        medlty = 1, # line type
+        medlwd = 1, # line width
+        boxfill = "white", # color fill of box
+        boxcol = "black", # outline color of box
+        boxlty = 1, # box line type
+        boxlwd = 1, # width of box line
+        whisklty = 1, # whisker type
+        whisklwd = 1,
+        staplelwd = 0, # the ends of the whiskers
+        outpch = 1, # type of outlies
+        outcex = 0,
+        main = "",
+        cex.main = 1,
+        xlab = "",
+        ylab = "Correlation") # size of outliers
+stripchart(diags, vertical = TRUE,
+    method = "jitter", add = TRUE, pch = 20, col = 'black')
+# dev.off()
+
+```
+
+not as strong correlation but honestly still pretty good. Given the heterogeneousness of the tissue.
+Perhaps worth stating.
+
+### viz
+
+```{r}
+
+# Each topic versus the 3 txn clsuters, each section separately
+for (s in unique(bclCorpusUnion$slice)){
+  slice <- bclCorpusUnion$slice == s
+  p <- bclCorpusUnion$pos[slice,]
+  m <- as.matrix(bclProxyTheta_Union[slice,])
+
+  for(i in colnames(bcl_union_k5_theta)){
+    # for each topic, subtract its proportion from the txn cluster.
+    # Adjust the 0's that went negative back to 0
+    m_ <- m - bcl_union_k5_theta[slice,i]
+    m_ <- cbind(m_, bcl_union_k5_theta[slice,i])
+    colnames(m_) <- c(colnames(m), paste0("Ct.",i))
+    m_[m_ < 0] <- 0
+    
+    cc <- as.vector(bclUnionTxnClustCols[colnames(m)])
+    cc <- c(cc, "black")
+    
+    plt <- vizAllTopics(theta = m_,
+                       pos = p,
+                       topicOrder=colnames(m_),
+                       topicCols=cc,
+                       groups = rep("0", dim(m)[1]),
+                       group_cols = c("0" = "black"),
+                       r = 0.4, # different size piecharts for mOB data sets
+                       lwd = 0.3,
+                       showLegend = TRUE,
+                       plotTitle = paste("Txn clusters section", s, "CT", i))
+    print(plt)
+  }
+  
+}
+
+```
+
+```{r}
+
+# each topic on top of all the sections
+for (i in seq(5)){
+
+  m <- bcl_union_k5_theta[,i]
+  p <- bclCorpusUnion$pos
+  sliceTxnClusters <- bclCorpusUnion$txn
+
+  other <- 1 - m
+  m <- cbind(m, other)
+  colnames(m) <- c(as.character(i), "other")
+
+  cc <- c(
+    transparentCol("black", percent = 30),
+    # transparentCol("blue", percent = 50),
+    transparentCol("white", percent = 100))
+
+  group_cc <- c("1" = transparentCol(bclUnionTxnClustCols["1"], percent = 30),
+                "2" = transparentCol(bclUnionTxnClustCols["2"], percent = 30),
+                "3" = transparentCol(bclUnionTxnClustCols["3"], percent = 30))
+
+  p <- vizAllTopics(theta = m,
+                 pos = p,
+                 topicOrder=seq(ncol(m)),
+                 topicCols=cc,
+                 groups = sliceTxnClusters,
+                 group_cols = group_cc,
+                 r = 0.4,
+                 lwd = 0.1,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+  # ggsave(filename = paste0("bcl_k5-layers-topic-", i, ".pdf"),
+  #        device = "pdf",
+  #        path = draft_fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+
+  print(p)
+
+}
+
+# All topics for each section
+for (s in unique(bclCorpusUnion$slice)){
+  slice <- bclCorpusUnion$slice == s
+  m <- bcl_union_k5_theta[slice,]
+  p <- bclCorpusUnion$pos[slice,]
+  sliceTxnClusters <- bclCorpusUnion$txn[slice]
+  
+  p <- vizAllTopics(theta = m,
+               pos = p,
+               topicOrder=seq(ncol(m)),
+               topicCols=gg_color_hue(ncol(m)),
+               groups = sliceTxnClusters,
+               group_cols = c("black", "black", "black"),
+               r = 0.4, # different size piecharts for mOB data sets
+               lwd = 0.3,
+               showLegend = TRUE,
+               plotTitle = NA)
+  # ggsave(filename = paste0("bcl_k5-layer-", s, "-all-topics.pdf"),
+  #        device = "pdf",
+  #        path = draft_fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+  
+  print(p)
+}
+
+```
+
+## ** k=18
+
+### Adjust proportions
+
+```{r}
+
+summary(bcl_union_k18$theta)
+ggplot(data = reshape2::melt(bcl_union_k18$theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("")
+
+
+bcl_union_k18_theta <- bcl_union_k18$theta
+bcl_union_k18_theta[bcl_union_k18_theta < 0.05] <- 0
+
+
+# readjust proportions
+bcl_union_k18_theta <- bcl_union_k18_theta/rowSums(bcl_union_k18_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+bcl_union_k18_theta[is.na(bcl_union_k18_theta)] <- 0
+
+summary(bcl_union_k18_theta)
+
+ggplot(data = reshape2::melt(bcl_union_k18_theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("")
+
+
+# drop ant cts that are 0 for all pixels
+bcl_union_k18_theta <- bcl_union_k18_theta[,which(colSums(bcl_union_k18_theta) > 0)]
+
+dim(bcl_union_k18_theta)
+
+```
+
+Because LDA is looking for gene occurrences in pixels, and pixels share topics at different mixtures. Whereas the txn clustering groups pixels based on their overall txn profile. Because this is a lot more heterogeneous than the MOB, I wouldn't expect much correlation between topics and txn clusters.
+
+### Txn cluster compare
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = as.matrix(bclProxyTheta_Union),
+                     m2 = bcl_union_k18_theta,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+gplots::heatmap.2(x = corMtx_paired,
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+diags <- diag(corMtx_paired)
+
+# hist(rctd_vs_lda_theta, breaks = 10)
+summary(diags)
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+    # width = 5, # The width of the plot in inches
+    # height = 3) # The height of the plot in inches
+par( mfrow = c(1,3) )
+boxplot(diags,
+        medcol = "black", # medium line color
+        medlty = 1, # line type
+        medlwd = 1, # line width
+        boxfill = "white", # color fill of box
+        boxcol = "black", # outline color of box
+        boxlty = 1, # box line type
+        boxlwd = 1, # width of box line
+        whisklty = 1, # whisker type
+        whisklwd = 1,
+        staplelwd = 0, # the ends of the whiskers
+        outpch = 1, # type of outlies
+        outcex = 0,
+        main = "",
+        cex.main = 1,
+        xlab = "",
+        ylab = "Correlation") # size of outliers
+stripchart(diags, vertical = TRUE,
+    method = "jitter", add = TRUE, pch = 20, col = 'black')
+# dev.off()
+
+```
+
+not as strong correlation but honestly still pretty good. Given the heterogeneousness of the tissue.
+Perhaps worth stating.
+
+### viz
+
+```{r}
+
+# Each topic versus the 3 txn clsuters, each section separately
+for (s in unique(bclCorpusUnion$slice)){
+  slice <- bclCorpusUnion$slice == s
+  # p <- bclCorpusUnion$pos[slice,]
+  p <- posScaleAll[slice,]
+  m <- as.matrix(bclProxyTheta_Union[slice,])
+
+  for(i in colnames(bcl_union_k18_theta)){
+    # for each topic, subtract its proportion from the txn cluster.
+    # Adjust the 0's that went negative back to 0
+    m_ <- m - bcl_union_k18_theta[slice,i]
+    m_ <- cbind(m_, bcl_union_k18_theta[slice,i])
+    colnames(m_) <- c(colnames(m), paste0("Ct.",i))
+    m_[m_ < 0] <- 0
+    
+    cc <- as.vector(bclUnionTxnClustCols[colnames(m)])
+    cc <- c(cc, "black")
+    
+    plt <- vizAllTopics(theta = m_,
+                       pos = p,
+                       topicOrder=colnames(m_),
+                       topicCols=cc,
+                       groups = rep("0", dim(m)[1]),
+                       group_cols = c("0" = "black"),
+                       r = 100, # different size piecharts for mOB data sets
+                       lwd = 0.3,
+                       showLegend = TRUE,
+                       plotTitle = paste("Txn clusters section", s, "CT", i))
+    print(plt)
+  }
+  
+}
+
+```
+
+```{r}
+
+# each topic on top of all the sections
+for (i in seq(18)){
+  slice <- bclCorpusUnion$slice == 1
+  m <- bcl_union_k18_theta[slice,i]
+  # p <- bclCorpusUnion$pos[slice,]
+  p <- posScaleAll[slice,]
+  sliceTxnClusters <- bclCorpusUnion$txn[slice]
+
+  other <- 1 - m
+  m <- cbind(m, other)
+  colnames(m) <- c(as.character(i), "other")
+
+  cc <- c(
+    transparentCol("black", percent = 30),
+    # transparentCol("blue", percent = 50),
+    transparentCol("white", percent = 100))
+
+  group_cc <- c("1" = transparentCol(bclUnionTxnClustCols["1"], percent = 30),
+                "2" = transparentCol(bclUnionTxnClustCols["2"], percent = 30),
+                "3" = transparentCol(bclUnionTxnClustCols["3"], percent = 30))
+
+  plt <- vizAllTopics(theta = m,
+                 pos = p,
+                 topicOrder=seq(ncol(m)),
+                 topicCols=cc,
+                 groups = sliceTxnClusters,
+                 group_cols = group_cc,
+                 r = 100,
+                 lwd = 0.1,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+  # ggsave(filename = paste0("bcl_k5-layers-topic-", i, ".pdf"),
+  #        device = "pdf",
+  #        path = draft_fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+
+  print(plt)
+
+}
+
+# All topics for each section
+for (s in unique(bclCorpusUnion$slice)){
+  slice <- bclCorpusUnion$slice == s
+  m <- bcl_union_k18_theta[slice,]
+  # p <- bclCorpusUnion$pos[slice,]
+  p <- posScaleAll[slice,]
+  sliceTxnClusters <- bclCorpusUnion$txn[slice]
+  
+  plt <- vizAllTopics(theta = m,
+               pos = p,
+               topicOrder=seq(ncol(m)),
+               topicCols=gg_color_hue(ncol(m)),
+               groups = sliceTxnClusters,
+               group_cols = c("black", "black", "black"),
+               r = 100, # different size piecharts for mOB data sets
+               lwd = 0.3,
+               showLegend = TRUE,
+               plotTitle = NA)
+  # ggsave(filename = paste0("bcl_k5-layer-", s, "-all-topics.pdf"),
+  #        device = "pdf",
+  #        path = draft_fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+  
+  plt <- plt + guides(fill=guide_legend(ncol=2))
+  print(plt)
+}
+
+```
+
+```{r}
+
+# Each topic versus the 3 txn clsuters, each section separately
+for (s in unique(bclCorpusUnion$slice)){
+  slice <- bclCorpusUnion$slice == s
+  # p <- bclCorpusUnion$pos[slice,]
+  p <- posScaleAll[slice,]
+  m <- as.matrix(bclProxyTheta_Union[slice,])
+
+  for(i in colnames(bcl_union_k18_theta)){
+    # for each topic, subtract its proportion from the txn cluster.
+    # Adjust the 0's that went negative back to 0
+    m_ <- m - bcl_union_k18_theta[slice,i]
+    m_ <- cbind(m_, bcl_union_k18_theta[slice,i])
+    colnames(m_) <- c(colnames(m), paste0("Ct.",i))
+    m_[m_ < 0] <- 0
+    
+    cc <- as.vector(bclUnionTxnClustCols[colnames(m)])
+    cc <- c(cc, "black")
+    
+    plt <- vizAllTopics(theta = m_,
+                       pos = p,
+                       topicOrder=colnames(m_),
+                       topicCols=cc,
+                       groups = rep("0", dim(m)[1]),
+                       group_cols = c("0" = "black"),
+                       r = 100, # different size piecharts for mOB data sets
+                       lwd = 0.1,
+                       showLegend = TRUE,
+                       plotTitle = paste("Txn clusters section", s, "CT", i))
+    print(plt)
+  }
+  
+}
+
+```
+
+# Convert RGB to grayscale for intensity measurements
+
+```{r rgb-to-pixel-intensity, fig.width=10, fig.height=11, eval=FALSE}
+
+# https://en.wikipedia.org/wiki/Grayscale
+
+# convert RGB values from gamma-compressed to linear scale
+c.linear <- (function(c) if (c <= 0.04045) {
+  c/12.92 } else {
+    ((c + 0.055)/1.055)^2.4 } )
+
+tiffLinear <- structure(sapply(he1, c.linear), dim=dim(he1))
+
+# take weighted sum to calculate linear Luminance
+tiffYlinear <- (tiffLinear[, , 1] * 0.2126) + (tiffLinear[, , 2] * 0.7152) + (tiffLinear[, , 3] * 0.0722)
+
+# transform back to gamma-compressed scale
+srgb <- (function(y) if (y <= 0.0031308) {12.92*y} else { (1.055*(y^(1/2.2))) - 0.055 })
+
+tiffGray <- structure(sapply(tiffYlinear, srgb), dim=dim(tiffYlinear))
+
+# library(wvtool)
+# tiffGray <- rgb2gray(tiff)
+
+# check if it worked
+plot.new()
+plot(c(0,dim(tiffGray)[2]), c(0,dim(tiffGray)[1]))
+rasterImage(tiffGray[,],
+            0, 0,
+            dim(tiffGray)[2], dim(tiffGray)[1])
+
+```
+
+```{r}
+
+for (i in c(11, 13, 17)){
+  slice <- bclCorpusUnion$slice == 1
+  m <- bcl_union_k18_theta[slice,i]
+  p <- posScaleAll[slice,]
+  sliceTxnClusters <- bclCorpusUnion$txn[slice]
+
+  other <- 1 - m
+  m <- cbind(m, other)
+  colnames(m) <- c(as.character(i), "other")
+
+  cc <- c(
+    transparentCol("magenta", percent = 30),
+    # transparentCol("blue", percent = 50),
+    transparentCol("white", percent = 100))
+
+  group_cc <- c("1" = transparentCol(bclUnionTxnClustCols["1"], percent = 30),
+                "2" = transparentCol(bclUnionTxnClustCols["2"], percent = 30),
+                "3" = transparentCol(bclUnionTxnClustCols["3"], percent = 30))
+
+  plt <- vizAllTopics(theta = m,
+                 pos = p,
+                 topicOrder=seq(ncol(m)),
+                 topicCols=cc,
+                 groups = NA,
+                 group_cols = NA,
+                 r = 100,
+                 lwd = 0.1,
+                 showLegend = TRUE,
+                 plotTitle = NA,
+                 overlay = tiffGray)
+  # ggsave(filename = paste0("bcl_k5-layers-topic-", i, ".pdf"),
+  #        device = "pdf",
+  #        path = draft_fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+
+  print(plt)
+
+}
+
+```
+
+
+```{r}
+
+green_ramp <- colorRampPalette(c(lighten('green', factor = 0.1), darken('green', factor = 2)))
+clust_1 <- green_ramp(9)
+
+blue_ramp <- colorRampPalette(c(lighten('blue', factor = 0.1), darken('blue', factor = 2)))
+clust_2 <- blue_ramp(5)
+
+red_ramp <- colorRampPalette(c(lighten('red', factor = 0.1), darken('red', factor = 2)))
+clust_3 <- red_ramp(4)
+
+perc_transp <- 40
+bcl_union_k18_cols <- c("1" = transparentCol(clust_2[1], percent = perc_transp),
+                       "2" = transparentCol(clust_2[2], percent = perc_transp),
+                       "3" = transparentCol(clust_1[1], percent = perc_transp),
+                       "4" = transparentCol(clust_1[2], percent = perc_transp),
+                       "5" = transparentCol(clust_2[3], percent = perc_transp),
+                       "6" = transparentCol(clust_2[4], percent = perc_transp),
+                       "7" = transparentCol(clust_1[3], percent = perc_transp),
+                       "8" = transparentCol(clust_1[4], percent = perc_transp),
+                       "9" = transparentCol(clust_1[5], percent = perc_transp),
+                       "10" = transparentCol(clust_1[6], percent = perc_transp),
+                       "11" = transparentCol(clust_3[1], percent = perc_transp),
+                       "12" = transparentCol(clust_3[2], percent = perc_transp),
+                       "13" = transparentCol(clust_2[5], percent = perc_transp),
+                       "14" = transparentCol(clust_3[3], percent = perc_transp),
+                       "15" = transparentCol(clust_1[7], percent = perc_transp),
+                       "16" = transparentCol(clust_1[8], percent = perc_transp),
+                       "17" = transparentCol(clust_3[4], percent = perc_transp),
+                       "18" = transparentCol(clust_1[9], percent = perc_transp)
+                       )
+
+
+m <- bcl_union_k18_theta
+p <- bclCorpusUnion$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=as.vector(bcl_union_k18_cols[as.character(seq(18))]),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "")
+print(plt)
+
+
+for (s in unique(bclCorpusUnion$slice)){
+  slice <- bclCorpusUnion$slice == s
+  m <- bcl_union_k18_theta[slice,]
+  p <- bclCorpusUnion$pos[slice,]
+  sliceTxnClusters <- bclCorpusUnion$txn[slice]
+  
+  p <- vizAllTopics(theta = m,
+               pos = p,
+               topicOrder=seq(ncol(m)),
+               topicCols=as.vector(bcl_union_k18_cols[as.character(seq(18))]),
+               groups = rep("0", dim(m)[1]),
+               group_cols = c("0" = "black"),
+               r = 0.4, # different size piecharts for mOB data sets
+               lwd = 0.1,
+               showLegend = TRUE,
+               plotTitle = s)
+  # ggsave(filename = paste0("bcl_k5-layer-", s, "-all-topics.pdf"),
+  #        device = "pdf",
+  #        path = draft_fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+  
+  print(p)
+}
+
+```
+
+```{r}
+
+for (s in unique(bclCorpusUnion$slice)[1]){
+  slice <- bclCorpusUnion$slice == s
+  m <- bcl_union_k18_theta[slice,]
+  p <- bclCorpusUnion$pos[slice,]
+  
+  cc <- as.factor(bcl_union_k18_cols)
+  names(cc) <- colnames(m)
+  
+  vizTopicClusters(theta = m,
+                   pos = p,
+                   clusters = as.factor(bcl_union_k18_cols),
+                   sharedCol = TRUE,
+                   groups = rep("0", dim(m)[1]),
+                   group_cols = c("0" = "black"),
+                   r = 0.4,
+                   lwd = 0.3,
+                   showLegend = TRUE,
+                   plotTitle = "slice 1")
+}
+
+```
+
+# ---------------------------------
+# GO
+
+```{r}
+
+library(liger)
+data(org.Hs.GO2Symbol.list) ## load built in GO gene sets
+
+# list of GO terms and associated genes
+go.env <- org.Hs.GO2Symbol.list
+
+library(GO.db)
+library(AnnotationDbi)
+
+# annotate the GO terms
+# dataframe of GO ID and the associated term annotation
+desc <- AnnotationDbi::select(
+  GO.db,
+  keys = names(go.env),
+  columns = c("TERM"),
+  multiVals = 'CharacterList'
+)
+
+# append GO term list names with their annotations
+names(go.env) <- paste(names(go.env), desc$TERM)
+
+```
+
+## Shared
+
+```{r}
+
+# list of gene sets
+# go.env
+
+# the 152 genes
+corpusGenes <- colnames(bclCorpus$corpus)
+
+# filter down list to only include sets that overlap the corpus genes
+
+
+includeSets <- lapply(seq(length(go.env)), function(l){
+  setGenes <- go.env[l][[1]]
+  if(length(intersect(corpusGenes, setGenes)) >= 1 ){  # round(length(corpusGenes)*0.05)
+    l
+  }
+})
+# unlist(includeSets)
+
+filtGOsets_shared <- go.env[unlist(includeSets)]
+print(length(filtGOsets_shared))
+
+```
+
+### k=3
+
+```{r}
+
+gset <- filtGOsets_shared
+for (i in seq(3)){
+  
+  vals <- sort(bcl_shared_k3$beta[i,], decreasing=TRUE)
+  print(head(vals))
+  gsea.results <- iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
+  print(head(gsea.results[order(gsea.results$p.val),], n = 30))
+  
+  # filter for top hits
+  gsea.sig <- gsea.results[gsea.results$q.val < 0.1,]
+  gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
+  print(dim(gsea.sig))
+  print(head(gsea.sig, n = 10))
+  
+  # visualize the top 5
+  # for (j in seq(3)){
+  #   pdf(file = paste0(gsea_bcl_draft_figs, "Fig_3_gsea-GO-bcl_k5-topic-", i, "-", rownames(gsea.sig)[j], ".pdf"),
+  #     width = 6, height = 5)
+  #   gsea(values=vals, geneset=gset[[rownames(gsea.sig)[j]]], plot=TRUE, rank=TRUE, main = paste("topic", i, rownames(gsea.sig)[j]))
+  #   dev.off()
+  # }
+}
+
+```
+
+### k=5
+
+```{r}
+
+gset <- filtGOsets_shared
+for (i in seq(5)){
+  
+  vals <- sort(bcl_shared_k5$beta[i,], decreasing=TRUE)
+  print(head(vals))
+  gsea.results <- iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
+  print(head(gsea.results[order(gsea.results$p.val),], n = 30))
+  
+  # filter for top hits
+  gsea.sig <- gsea.results[gsea.results$q.val < 0.1,]
+  gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
+  print(dim(gsea.sig))
+  print(head(gsea.sig, n = 10))
+  
+  # visualize the top 5
+  # for (j in seq(3)){
+  #   pdf(file = paste0(gsea_bcl_draft_figs, "Fig_3_gsea-GO-bcl_k5-topic-", i, "-", rownames(gsea.sig)[j], ".pdf"),
+  #     width = 6, height = 5)
+  #   gsea(values=vals, geneset=gset[[rownames(gsea.sig)[j]]], plot=TRUE, rank=TRUE, main = paste("topic", i, rownames(gsea.sig)[j]))
+  #   dev.off()
+  # }
+}
+
+```
+
+### k=12
+
+```{r}
+
+gset <- filtGOsets_shared
+for (i in seq(12)){
+  
+  vals <- sort(bcl_shared_k12$beta[i,], decreasing=TRUE)
+  print(head(vals))
+  gsea.results <- iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
+  print(head(gsea.results[order(gsea.results$p.val),], n = 30))
+  
+  # filter for top hits
+  gsea.sig <- gsea.results[gsea.results$q.val < 0.1,]
+  gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
+  print(dim(gsea.sig))
+  print(head(gsea.sig, n = 10))
+  
+  # visualize the top 5
+  # for (j in seq(3)){
+  #   pdf(file = paste0(gsea_bcl_draft_figs, "Fig_3_gsea-GO-bcl_k5-topic-", i, "-", rownames(gsea.sig)[j], ".pdf"),
+  #     width = 6, height = 5)
+  #   gsea(values=vals, geneset=gset[[rownames(gsea.sig)[j]]], plot=TRUE, rank=TRUE, main = paste("topic", i, rownames(gsea.sig)[j]))
+  #   dev.off()
+  # }
+}
+
+```
+
+## Union
+
+```{r}
+
+# list of gene sets
+# go.env
+
+# the 372 genes
+corpusGenes <- colnames(bclCorpusUnion$corpus)
+
+# filter down list to only include sets that overlap the corpus genes
+
+includeSets <- lapply(seq(length(go.env)), function(l){
+  setGenes <- go.env[l][[1]]
+  if(length(intersect(corpusGenes, setGenes)) >= 1 ){  # round(length(corpusGenes)*0.05)
+    l
+  }
+})
+# unlist(includeSets)
+
+filtGOsets_union <- go.env[unlist(includeSets)]
+print(length(filtGOsets_union))
+
+```
+
+### k=3
+
+```{r}
+
+gset <- filtGOsets_union
+for (i in seq(3)){
+  
+  vals <- sort(bcl_union_k3$beta[i,], decreasing=TRUE)
+  print(head(vals))
+  gsea.results <- iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
+  print(head(gsea.results[order(gsea.results$p.val),], n = 30))
+  
+  # filter for top hits
+  gsea.sig <- gsea.results[gsea.results$q.val < 0.1,]
+  gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
+  print(dim(gsea.sig))
+  print(head(gsea.sig, n = 10))
+  
+  # visualize the top 5
+  # for (j in seq(3)){
+  #   pdf(file = paste0(gsea_bcl_draft_figs, "Fig_3_gsea-GO-bcl_k5-topic-", i, "-", rownames(gsea.sig)[j], ".pdf"),
+  #     width = 6, height = 5)
+  #   gsea(values=vals, geneset=gset[[rownames(gsea.sig)[j]]], plot=TRUE, rank=TRUE, main = paste("topic", i, rownames(gsea.sig)[j]))
+  #   dev.off()
+  # }
+}
+
+```
+
+### k=5
+
+```{r}
+
+gset <- filtGOsets_union
+for (i in seq(5)){
+  
+  vals <- sort(bcl_union_k5$beta[i,], decreasing=TRUE)
+  print(head(vals))
+  gsea.results <- iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
+  print(head(gsea.results[order(gsea.results$p.val),], n = 30))
+  
+  # filter for top hits
+  gsea.sig <- gsea.results[gsea.results$q.val < 0.1,]
+  gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
+  print(dim(gsea.sig))
+  print(head(gsea.sig, n = 30))
+  
+  # visualize the top 5
+  # for (j in seq(3)){
+  #   pdf(file = paste0(gsea_bcl_draft_figs, "Fig_3_gsea-GO-bcl_k5-topic-", i, "-", rownames(gsea.sig)[j], ".pdf"),
+  #     width = 6, height = 5)
+  #   gsea(values=vals, geneset=gset[[rownames(gsea.sig)[j]]], plot=TRUE, rank=TRUE, main = paste("topic", i, rownames(gsea.sig)[j]))
+  #   dev.off()
+  # }
+}
+
+```
+
+### ** k=18
+
+```{r}
+
+gset <- filtGOsets_union
+for (i in seq(18)){
+  
+  vals <- sort(bcl_union_k18$beta[i,], decreasing=TRUE)
+  print(head(vals))
+  gsea.results <- iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
+  print(head(gsea.results[order(gsea.results$p.val),], n = 30))
+  
+  # filter for top hits
+  gsea.sig <- gsea.results[gsea.results$q.val < 0.1,]
+  gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
+  print(dim(gsea.sig))
+  print(head(gsea.sig, n = 30))
+  
+  # visualize the top 5
+  # for (j in seq(3)){
+  #   pdf(file = paste0(gsea_bcl_draft_figs, "Fig_3_gsea-GO-bcl_k5-topic-", i, "-", rownames(gsea.sig)[j], ".pdf"),
+  #     width = 6, height = 5)
+  #   gsea(values=vals, geneset=gset[[rownames(gsea.sig)[j]]], plot=TRUE, rank=TRUE, main = paste("topic", i, rownames(gsea.sig)[j]))
+  #   dev.off()
+  # }
+}
+
+```
+
+17 has positive score immune terms
+
+```{r}
+
+gset <- filtGOsets_union
+vals <- sort(bcl_union_k18$beta[17,], decreasing=TRUE)
+print(head(vals))
+gsea.results <- iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
+print(head(gsea.results[order(gsea.results$p.val),], n = 30))
+
+# filter for top hits
+gsea.sig <- gsea.results[gsea.results$q.val < 0.05,]
+gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
+print(dim(gsea.sig))
+print(head(gsea.sig, n = 30))
+
+```
+
+```{r}
+
+gsea.sig$term <- rownames(gsea.sig)
+
+highlights <- ifelse(grepl("immune", arrange(gsea.sig, -q.val)$term), "red", "black")
+
+
+ggplot(data = gsea.sig, aes(x = reorder(term, -log10(q.val)), y = -log10(q.val))) +
+  geom_col() +
+  coord_flip()  +
+  theme(axis.text.y = element_text(colour = highlights)) +
+  geom_hline(yintercept=-log10(0.05), color = "red", linetype = "dashed")
+
+```
+
+### viz gexp
+
+of signature and also top genes
+
+CD74 top by a lot
+It is involved in the formation and transport of MHC class II peptide complexes for the generation of CD4+ T cell responses.
+
+CXCL10 is secreted by several cell types in response to IFN-γ. These cell types include monocytes, endothelial cells and fibroblasts.
+
+
+way to viz each section separately but also way to overlay the gexp for all the sections?
+
+```{r}
+
+correlation_palette2 <- colorRampPalette(c("blue", "white", "red"))(n = 209)
+correlation_breaks2 = c(seq(-1,-0.01,length=100),
+                       seq(-0.009,0.009,length=10),
+                       seq(0.01,10,length=100))
+
+vizGeneCounts2 <- function(df, gene,
+                          groups = NA,
+                          group_cols = NA,
+                          size = 3, stroke = 0.1, alpha = 1,
+                          plotTitle = NA,
+                          showLegend = TRUE) {
+
+  counts <- df[,gene]
+
+  # color spots by group:
+  if (is.na(groups[1]) == TRUE) {
+    groups <- " "
+    # stroke <- 0.5
+  } else {
+    groups <- as.character(groups)
+  }
+  if (is.na(group_cols[1]) == TRUE) {
+    group_cols <- c(" " = "white")
+  }
+
+  p <- ggplot() +
+    geom_point(data = df, aes(x=x, y=y, fill=counts, color = groups),
+               shape = 21,
+               stroke = stroke, size = size,
+               alpha = alpha) +
+    scale_fill_gradientn(colours = c("white", "red")) +
+    scale_color_manual(values = group_cols)
+  
+  if (showLegend == FALSE) {
+    p <- p + guides(fill=FALSE)
+  }
+  if (is.na(plotTitle) == FALSE) {
+    p <- p + ggtitle(plotTitle)
+  }
+  
+  p <- p +
+    theme(
+      #panel.background = element_rect(fill = "white"),
+      panel.grid = element_blank(),
+      axis.line=element_blank(),
+      axis.text.x=element_blank(),
+      axis.text.y=element_blank(),
+      axis.ticks=element_blank(),
+      axis.title.x=element_blank(),
+      axis.title.y=element_blank(),
+      panel.background=element_blank())
+    # theme_classic()
+  print(p)
+}
+
+```
+
+
+```{r}
+
+slice <- bclCorpusUnion$slice == 1
+
+# pos <- bclCorpusUnion$pos[slice,]
+pos <- posScaleAll[slice,]
+pixels <- rownames(pos)[slice]
+
+# top genes from topic gene probabilities
+vals <- sort(bcl_union_k18$beta[17,], decreasing=TRUE)[1:3]
+
+bcl_genes <- rownames(bcl_CPM[unionBCLGenes, pixels])
+setGenes <- filtGOsets_union[["GO:0045089 positive regulation of innate immune response"]]
+sig_genes <- intersect(bcl_genes, setGenes)
+sig_genes
+
+sig_gexp <- as.matrix(scale(colSums(bcl_CPM[sig_genes, pixels]))) #[,1]
+colnames(sig_gexp) <- c("GO:0045089")
+
+topic_gene_counts <- t(bcl_CPM[labels(vals), pixels])
+
+gexp <- cbind(sig_gexp, topic_gene_counts)
+
+
+df <- merge(pos, as.data.frame(gexp), by=0)
+rownames(df) <- df$Row.names
+df
+
+# df <- t(bcl_CPM)[pixels, genes]
+# df <- merge(pos, as.data.frame(df), by=0)
+# rownames(df) <- df$Row.names
+# df
+
+```
+
+```{r, fig.height=5, fig.width=6}
+
+for(g in colnames(df)[4:7]){
+  vizGeneCounts(df = df,
+                  gene = g,
+                  groups = NA,
+                  group_cols = "black",
+                  size = 5, stroke = 0.5,
+                  alpha = 0.5,
+                  plotTitle = g,
+                  showLegend = TRUE)
+}
+
+```
+
+```{r}
+
+vals <- sort(bcl_union_k18$beta[17,], decreasing=TRUE)
+dat <- data.frame(values = as.vector(vals), genes = names(vals), order = seq(length(vals)))
+
+# Hide all of the text labels.
+dat$selectedLabels <- ""
+# Let's just label these items.
+ix_label <- seq(5)
+dat$selectedLabels[ix_label] <- dat$genes[ix_label]
+
+ggplot(data = dat) +
+  geom_col(aes(x = order, y = values)) +
+  labs(title = "Cell-type 17",
+       x = "Genes", y = "Normalized expression") +
+  # coord_cartesian(clip = "off") +
+  geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = 10, direction = "y", hjust = "left",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  theme_classic()
+
+```
+
+
+# fgsea
+
+# -----------------------------------
+
+Try the other msgea categories? immune?
+
+
+```{r}
+
+fitLDA2 <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
+                   ncores = parallel::detectCores(logical = TRUE) - 1,
+                   plot = TRUE) {
+  
+  if (is.null(testSize)){
+    set.seed(seed)
+    testingPixels <- seq(nrow(counts))
+    fittingPixels <- seq(nrow(counts))
+  } else if ((0 < testSize) & (testSize < 1.0)){
+    cat("Splitting pixels into", testSize*100, "% and", 100-testSize*100, "% testing and fitting corpuses", "\n")
+    set.seed(seed)
+    testingPixels <- sample(nrow(counts), round(nrow(counts)*testSize))
+    fittingPixels <- seq(nrow(counts))[-testingPixels]
+  } else {
+    stop("`testSize` must be NULL or decimal between 0 and 1")
+  }
+  
+  ## counts must be pixels (rows) x genes (cols) matrix
+  corpusFit <- slam::as.simple_triplet_matrix((as.matrix(counts[fittingPixels,])))
+  corpusTest <- slam::as.simple_triplet_matrix((as.matrix(counts[testingPixels,])))
+  
+  # if (slam::is.simple_triplet_matrix(counts) == TRUE){
+  #   corpus <- counts
+  # } else {
+  #   corpus <- slam::as.simple_triplet_matrix(t(as.matrix(counts)))
+  # }
+  
+  controls <- list(seed = seed,
+                   verbose = 1, keep = 1, estimate.alpha = TRUE)
+  
+  start_time <- Sys.time()
+  fitted_models <- parallel::mclapply(Ks, function(k) {
+    topicmodels::LDA(corpusFit, k=k, control = controls)
+  },
+  mc.cores = ncores
+  )
+  names(fitted_models) <- Ks
+  total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+  print(sprintf("Time to fit LDA models was %smins", total_t))
+  
+  print("Computing perplexity for each fitted model...")
+  pScores <- unlist(lapply(fitted_models, function(model){
+    p <- topicmodels::perplexity(model, newdata = corpusTest)
+    return(p)
+  }))
+
+  ## Kneed algorithm
+  kOpt1 <- Ks[where.is.knee(pScores)]
+  ## Min
+  kOpt2 <- Ks[which(pScores == min(pScores))]
+  
+  ## check number of predicted cell-types at low proportions
+  out <- lapply(1:length(Ks), function(i) {
+    apply(getBetaTheta(fitted_models[[i]])$theta, 2, mean)
+    })
+  ## number of topics present at fewer than 5% on average across pixels
+  numrare <- unlist(lapply(out, function(x) sum(x < 0.05)))
+  kOpt3 <- Ks[where.is.knee(numrare)]
+
+  if(plot) {
+    plot(Ks, pScores, ylab = "perplexity", xlab = "K", main = "K vs perplexity")
+    abline(v = kOpt1, col='blue')
+    abline(v = kOpt2, col='red')
+    legend(x = "top",
+           legend = c("kneed", "min"), col = c("blue", "red"), lty = 1, lwd = 1)
+    
+    plot(Ks, numrare, ylab = "number of cell-types at < 5% mean proportion", xlab = "K", main = "K vs number of rare predicted cell-types")
+    abline(v = kOpt3, col='red')
+    legend(x = "top",
+           legend = c("kneed"), col = c("red"), lty = 1, lwd = 1)
+  }
+
+  return(list(models = fitted_models,
+              kOpt1 = kOpt1,
+              kOpt2 = kOpt2,
+              kOpt3 = kOpt3,
+              numRare = numrare,
+              perplexities = pScores,
+              fitCorpus = corpusFit,
+              testCorpus = corpusTest))
+}
+
+```
+
+
+```{r}
+
+ks <- seq(from = 2, to = 30, by = 2)
+
+```
+
+
+```{r}
+
+# pdf(file = paste0(draft_fig_path, "Fig_3_bcl-1-4-union-od-training.pdf"))
+bclUnion_LDAs2 <- fitLDA2(counts = bclCorpusUnion$corpus, # 372 genes 1029 spots
+                        Ks = ks,
+                        testSize = NULL,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+# dev.off()
+
+# pdf(file = paste0(draft_fig_path, "Fig_3_bcl-1-4-union-od-training.pdf"))
+bclUnion_LDAs3 <- fitLDA2(counts = bclCorpusUnion$corpus, # 372 genes 1029 spots
+                        Ks = ks,
+                        testSize = 0.2,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+# dev.off()
+
+```
+
+```{r}
+
+ks <- seq(from = 2, to = 20, by = 1)
+## look at distribution of cell-type proportions
+out <- lapply(1:length(ks), function(i) {
+  apply(getBetaTheta(bclUnion_LDAs$models[[i]])$theta, 2, mean)
+})
+## number of topics present at fewer than 5% on average across pixels
+numrare <- unlist(lapply(out, function(x) sum(x < 0.05)))
+ks[where.is.knee(numrare)]
+plot(ks, numrare, type="l")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+

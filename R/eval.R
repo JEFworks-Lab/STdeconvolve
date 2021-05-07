@@ -1,14 +1,14 @@
-#' Find Pearson correlations between topics (cell types) with respect to their
-#' proportions across documents (spots), i.e. thetas, or gene probabilities,
+#' Find Pearson's correlations between topics (cell-types) with respect to their
+#' proportions across documents (pixels), i.e. thetas, or gene probabilities,
 #' i.e. betas.
 #' 
 #' @param m1 first matrix
 #' @param m2 second matrix
-#' @param type must be either "t" (theta) or "b" (beta)
+#' @param type must be either "t" (theta; cell-type proportions across pixels) or "b" (beta; cell-type gene expression profiles)
 #' @param thresh if comparing betas, use to compare genes above this probability.
 #'               NULL or 0 < numeric < 1.0 (default: NULL)
 #' 
-#' @return matrix of pearson correlations between topics m1 (rows) by topics m2 (cols)
+#' @return matrix of Pearson's correlations; m1 (rows) by m2 (cols)
 #' @export
 getCorrMtx <- function(m1, m2, type, thresh = NULL) {
   
@@ -19,12 +19,12 @@ getCorrMtx <- function(m1, m2, type, thresh = NULL) {
     stop("`type` must be either 't' or 'b'")
   }
   
-  # if comparing thetas the topics are the columns (spots x topics)
+  # if comparing thetas the cell-types are the columns (pixels x cell-types)
   if (type == "t"){
     
-    # make sure the same spots are being compared
+    # make sure the same pixels are being compared
     keep_spots <- intersect(rownames(m1), rownames(m2))
-    cat("topic correlations based on", length(keep_spots), "shared spots between m1 and m2.", "\n")
+    cat("cell-type correlations based on", length(keep_spots), "shared pixels between m1 and m2.", "\n")
     
     corMtx <- do.call(rbind, lapply(1:ncol(m1), function(i) {
       sapply(1:ncol(m2), function(j) {
@@ -36,20 +36,20 @@ getCorrMtx <- function(m1, m2, type, thresh = NULL) {
     return(corMtx)
     }
   
-  # if comparing betas the topics are the rows (topics x genes)
+  # if comparing betas the cell-types are the rows (cell-types x genes)
   if (type == "b"){
     
     # make sure the same genes are being compared
     keep_genes <- intersect(colnames(m1), colnames(m2))
-    cat("topic correlations based on", length(keep_genes), "shared genes between m1 and m2.", "\n")
+    cat("cell-type correlations based on", length(keep_genes), "shared genes between m1 and m2.", "\n")
     
     if (is.numeric(thresh)){
-      cat("comparing genes with topic probability >", thresh, "\n")
+      cat("comparing genes with cell-type probability >", thresh, "\n")
     }
     
     corMtx <- do.call(rbind, lapply(1:nrow(m1), function(i) {
       
-      # if choosing top genes for a topic using thresh
+      # if choosing top genes for a cell-type using thresh
       if (is.null(thresh)){
         genes <- keep_genes
       } else if (is.numeric(thresh) & thresh > 0 & thresh < 1){
@@ -67,7 +67,9 @@ getCorrMtx <- function(m1, m2, type, thresh = NULL) {
           genes <- intersect(m1genes, m2genes)
           # cat(length(genes), "genes compared for m1 topic", i, "and m2 topic", j, "\n")
           if (length(genes) < 2){
-            warning(cat("WARNING: 0 or 1 shared genes >", thresh, "for both m1 topic", i, "and m2 topic", j, "; corr will be NA.", "\n"))
+            warning(cat("WARNING: 0 or 1 shared genes >", thresh,
+                        "for both m1 cell-type", i, "and m2 cell-type", j,
+                        "; corr will be NA.", "\n"))
           }
         }
         cor(m1[i,genes], m2[j,genes])
@@ -92,27 +94,27 @@ scale0_1 <- function(x) {
 }
 
 
-#' Pre-process ST count matrices to construct corpus for input into LDA
+#' Pre-process ST gene count matrices to construct corpus for input into LDA
 #' 
-#' @description Takes spot (row) x gene (columns) mtx and filters out poor genes
-#'              and spots. Then selects for genes to be included in corpus.
-#'              If the spot IDs are made up of their positions in "XxY" these
-#'              can be extracted as the spot position coordinates.
+#' @description Takes pixel (row) x gene (columns) mtx and filters out poor genes
+#'              and pixels. Then selects for genes to be included in corpus.
+#'              If the pixel IDs are made up of their positions in "XxY" these
+#'              can be extracted as the pixel position coordinates.
 #'              
 #'              Order of filtering options:
-#'              1. MERINGUE::cleanCounts to remove poor spots and genes
+#'              1. `cleanCounts` to remove poor pixels and genes
 #'              2. Selection to use specific genes only
 #'              3. Remove top expressed genes in matrix
 #'              4. Remove specific genes based on grepl pattern matching
-#'              5. Remove genes that appear in more than a percentage of spots
+#'              5. Remove genes that appear in more than a percentage of pixels
 #'              6. Use the overdispersed genes computed from the remaining genes
 #'                 after filtering steps 1-5 (if selected)
 #'              
-#' @param dat spot (row) x gene (columns) mtx with gene counts OR path to it
-#' @param alignFile path to 3x3 alignment file to adjust spot coordinates
+#' @param dat pixel (row) x gene (columns) mtx with gene counts OR path to it
+#' @param alignFile path to 3x3 alignment file to adjust pixel coordinates
 #'     (optional).
 #'    Stahl 2016 datasets (default: NA)
-#' @param extractPos Boolean to extract spot positional coordinates from spot
+#' @param extractPos Boolean to extract pixel positional coordinates from pixel name
 #'     names
 #'    (default: FALSE)
 #' @param selected.genes vector of gene names to use specifically for the corpus
@@ -122,27 +124,27 @@ scale0_1 <- function(x) {
 #' @param genes.to.remove vector of gene names or patterns for matching to genes
 #'     to remove (default: NA). ex: c("^mt-") or c("^MT", "^RPL", "^MRPL")
 #' @param perc.spots non-negative numeric <=1 to use as a percentage.
-#'    Removes genes present in this fraction of spots (default: NA)
-#' @param min.reads MERINGUE::cleanCounts param; minimum number of reads to keep
+#'    Removes genes present in this fraction of pixels (default: NA)
+#' @param min.reads `cleanCounts` param; minimum number of reads to keep
 #'     a gene (default: 100)
-#' @param min.lib.size MERINGUE::cleanCounts param; minimum number of counts a
-#'     spot needs to keep (default: 100)
-#' @param min.detected MERIGNUE::cleanCounts param; minimum number of spots a gene
+#' @param min.lib.size `cleanCounts` param; minimum number of counts a
+#'     pixel needs to keep (default: 100)
+#' @param min.detected `cleanCounts` param; minimum number of pixels a gene
 #'     needs to have been detected in to keep (default: 1)
-#' @param ODgenes Boolean to use MERINGUE::getOverdispersedGenes for the corpus
+#' @param ODgenes Boolean to use ``getOverdispersedGenes`` for the corpus
 #'    genes (default: TRUE)
-#' @param nTopOD number of top OD genes to use. int (default: NA)
-#' @param od.genes.alpha alpha parameter for MERINGUE::getOverdispersedGenes.
-#'     Higher = less stringent and more OD genes returned (default: 0.05)
-#' @param gam.k gam.k parameter for MERINGUE::getOverdispersedGenes. Dimension
+#' @param nTopOD number of top overdispersed genes to use. int (default: NA)
+#' @param od.genes.alpha alpha parameter for `getOverdispersedGenes`.
+#'     Higher = less stringent and more overdispersed genes returned (default: 0.05)
+#' @param gam.k gam.k parameter for `getOverdispersedGenes`. Dimension
 #'     of the "basis" functions in the GAM used to fit, higher = "smoother"
 #'     (default: 5)
 #' 
 #' @return A list that contains
 #' \itemize{
-#' \item corpus: (spots x genes) matrix of the counts of the selected genes 
+#' \item corpus: (pixels x genes) matrix of the counts of the selected genes 
 #' \item slm: slam::as.simple_triplet_matrix(corpus); required format for topicmodels::LDA input
-#' \item positions: matrix of x and y coordinates of spots. rownames = spots, colnames = "x", "y"
+#' \item positions: matrix of x and y coordinates of pixels rownames = pixels, colnames = "x", "y"
 #' }
 #' 
 #' @export
@@ -173,7 +175,7 @@ preprocess <- function(dat,
     stop("`dat` is not a viable path or matrix")
   }
   
-  cat("Initial genes:", dim(t(counts))[1], "Initial spots:", dim(t(counts))[2], "\n")
+  cat("Initial genes:", dim(t(counts))[1], "Initial pixels:", dim(t(counts))[2], "\n")
   
   # use specific genes in the corpus
   if (is.na(selected.genes[1]) == FALSE) {
@@ -182,9 +184,9 @@ preprocess <- function(dat,
     cat(" ", dim(counts)[2], "genes are present in dataset.", "\n")
   }
   
-  # remove poor spots and genes
-  cat("- Removing poor spots with <=", min.lib.size, "reads", "\n")
-  cat("- Removing genes with <=", min.reads, "reads across spots and detected in <=", min.detected, "spots.", "\n")
+  # remove poor pixels and genes
+  cat("- Removing poor pixels with <=", min.lib.size, "reads", "\n")
+  cat("- Removing genes with <=", min.reads, "reads across pixels and detected in <=", min.detected, "pixels", "\n")
   countsClean <- cleanCounts(counts = t(counts), 
                                        min.reads = min.reads, 
                                        min.lib.size = min.lib.size, 
@@ -192,15 +194,15 @@ preprocess <- function(dat,
                                        plot=TRUE,
                                        verbose=FALSE)
   
-  cat("  Remaining genes:", dim(countsClean)[1], "and remaining spots:", dim(countsClean)[2], "\n")
+  cat("  Remaining genes:", dim(countsClean)[1], "and remaining pixels:", dim(countsClean)[2], "\n")
   
-  # adjust spot coordinates, optional.
+  # adjust pixel coordinates, optional.
   # based on Stahl 2016 ST data with alignment matrices
   if (is.na(alignFile) == FALSE) {
     if (file.exists(alignFile) == TRUE){
-      cat("- Adjusting spot positions based on alignment file.")
+      cat("- Adjusting pixel positions based on alignment file.")
       align <- matrix(unlist(read.table(alignFile)), nrow = 3, ncol = 3)
-      (positions[,"x"] * align[1,1]) - 290 # note that I found they were off by one spot distance in pixels
+      (positions[,"x"] * align[1,1]) - 290 # note that I found they were off by one pixel distance in pixels
       (positions[,"y"] * align[2,2]) - 290
     } else {
       cat("Warning: `alignFile` path does not exists. Skipping position adjustments.", "\n")
@@ -227,19 +229,19 @@ preprocess <- function(dat,
         " Remaining genes:", dim(countsClean)[1], "\n")
   }
   
-  # remove genes that appear in certain percentage of the spots
+  # remove genes that appear in certain percentage of the pixels
   if (is.na(perc.spots) == FALSE & is.numeric(perc.spots) == TRUE){
     if (perc.spots >= 0 & perc.spots <= 1){
       # matrix where all positive gene counts are set to 1
       countsClean_ <- countsClean
       countsClean_[which(countsClean_ > 0)] <- 1
-      # convert the percentage to number of spots
+      # convert the percentage to number of pixels
       numberSpots <- (perc.spots * ncol(countsClean_))
-      # rowSums of countsClean_ equate to number of spots where each gene is expressed
-      # remove genes expressed in "numberSpots" or more spots
+      # rowSums of countsClean_ equate to number of pixels where each gene is expressed
+      # remove genes expressed in "numberSpots" or more pixels
       countsClean <- countsClean[which(rowSums(countsClean_) < numberSpots),]
       cat("- Removed genes present in", 
-                  as.character(perc.spots*100), "% or more of spots", "\n",
+                  as.character(perc.spots*100), "% or more of pixels", "\n",
                   " Remaining genes:", dim(countsClean)[1], "\n")
     } else {
       cat("Warning: `perc.spots` must be a numeric from 0 to 1. Skipping perc.spots gene filter.", "\n")
@@ -256,14 +258,14 @@ preprocess <- function(dat,
                                 plot = TRUE,
                                 details = TRUE)
     
-    # option to select just the top n OD genes based on
+    # option to select just the top n overdispersed genes based on
     # log p-val adjusted
     if (is.na(nTopOD) == FALSE){
       cat("- Using top", nTopOD, "overdispersed genes.", "\n")
       OD_filt <- OD$df[OD$ods,]
       # check if actual number of OD genes less than `nTopOD`
       if (dim(OD_filt)[1] < nTopOD){
-        cat(" number of top OD genes available:", dim(OD_filt)[1], "\n")
+        cat(" number of top overdispersed genes available:", dim(OD_filt)[1], "\n")
         od_genes <- rownames(OD_filt)
       } else {
         od_genes <- rownames(OD_filt[order(OD_filt$lpa),][1:nTopOD,])
@@ -279,17 +281,17 @@ preprocess <- function(dat,
   
   # last filter: each row must have at least 1 non-zero entry
   # to be compatible with `topicmodels`.
-  cat("- Check that each spot has at least 1 non-zero gene count entry..", "\n")
+  cat("- Check that each pixel has at least 1 non-zero gene count entry..", "\n")
   corpus <- corpus[which(!rowSums(corpus) == 0),]
   corpus_slm <- slam::as.simple_triplet_matrix(corpus)
   cat("Final corpus:", "\n")
   print(corpus_slm)
   
-  # get spot positions if spot colnames contain the positions
+  # get pixel positions if pixel colnames contain the positions
   # this is the case for some ST datasets like Stahl 2016 sets
   # ex: "20x30" -> 20 x, 30 y positions
   if (extractPos) {
-    cat("Extracting positions from spot names.", "\n")
+    cat("Extracting positions from pixel names.", "\n")
     positions <- do.call(rbind, lapply(rownames(corpus), function(spotID) {
       coords <- as.numeric(strsplit(spotID, "x")[[1]])
       coords

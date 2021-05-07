@@ -37,13 +37,14 @@ save(bregmaCellsGexpFN7, # 59651 cells in FN7 bregmas x 125 gene counts (blanks 
       RCTD_FN7_noNeuro_results_norm, # 3070 spots and 6 cts deconvovled with RCTD using `bregmaFN7FullSeur_noNeuro` 
       file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/merfish_fitted_models.RData")
 
-load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/merfish_fitted_models.RData")
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_data/merfish_fitted_models.RData")
 
 ```
 
 ```{r}
 
 fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/figures/"
+draft_fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_figures/"
 
 ```
 

@@ -1,23 +1,23 @@
 #' Visualize all topic proportions across spots with `scatterpie`
 #'
-#' @description Note: visualizes all topics in theta at once (could be
-#'     individual topics or topic clusters) so for accuracy of the proportions
-#'     of each topic in a spot, the row (spot) should sum to 1.
+#' @description Note: visualizes all cell-types in theta at once (could be
+#'     individual cell-types or cell-type-clusters) so for accuracy of the proportions
+#'     of each cell-type in a pixel, the row (pixel) should sum to 1.
 #'
-#' @param theta document (spot) x topic proportion matrix
-#' @param pos position of documents, x and y columns
+#' @param theta document (pixel) x cell-type proportion matrix
+#' @param pos position of pixels, as data.frame with `x` and `y` columns
 #' @param topicOrder order of topics in theta to visualize as a numeric vector
 #'     and same length as topicCols ( default: seq(ncol(theta)) )
-#' @param topicCols vector of colors for each of the topics to be visualized.
+#' @param topicCols vector of colors for each of the cell-types to be visualized.
 #'     Same length and order as topicOrder ( default: rainbow(ncol(theta)) )
-#' @param groups colors the spot piechart lines based on a group or cell layer
-#'     they belong to. Needs to be a character vector in the order of the spot
+#' @param groups colors the pixel piechart lines based on a group
+#'     they belong to. Needs to be a character vector in the order of the pixel
 #'     rows in theta. Ex: c("0", "1", "0", ...)
 #' @param group_cols color labels for the groups. Ex: c("0" = "gray", "1" = "red")
-#' @param r radius of the circles. Adjust based on size of spots. (default: 1)
+#' @param r radius of the scatterpie circles. Adjust based on positions of pixels (default: 1)
 #' @param lwd width of lines of the pie charts. Increasing helps visualize
 #'     group_cols if being used.
-#' @param showLegend Boolean to show the legend indicating topics and their color
+#' @param showLegend Boolean to show the legend indicating cell-types and their color
 #' @param plotTitle add title to the resulting plot (default: NA)
 #' @param overlay plot the scatterpies on top of a raster image of the H&E tissue
 #'     (default: NA)
@@ -34,7 +34,7 @@ vizAllTopics <- function(theta, pos,
                          plotTitle = NA,
                          overlay = NA) {
 
-  # doc-topic distribution reordered based on topicOrder
+  # pixel cell-type distribution reordered based on topicOrder
   theta_ordered <- theta[, topicOrder]
   theta_ordered <- as.data.frame(theta_ordered)
   # colnames(theta_ordered) <- paste0("Topic.", topicOrder)
@@ -44,7 +44,7 @@ vizAllTopics <- function(theta, pos,
   theta_ordered_pos <- merge(data.frame(theta_ordered),
                              data.frame(pos), by=0)
 
-  # column names of topics in DF, in order of topicOrder
+  # column names of cell-types, in order of topicOrder
   # topicColumns <- paste0("Topic.", topicOrder)
 
   # first column after merge is "Row.names", last two are "x" and "y"
@@ -119,27 +119,27 @@ vizAllTopics <- function(theta, pos,
 }
 
 
-#' Visualize proportions of topic clusters individually
+#' Visualize proportions of cell-types or aggregated cell-type-clusters individually
 #' 
 #' @description Similar to `vizAllTopics` but will generate a separate plot for
-#'     each topic or topic-cluster where the other topics or clusters will be
-#'     colored gray. In this way, the actual proportions of each topic in a spot
-#'     will be maintained such that spot topic proportions still sum to 1.
+#'     each cell-type or cell-type-cluster where the other cell-types or clusters will be
+#'     colored gray. In this way, the actual proportions of each cell-type in a pixel
+#'     will be maintained such that pixel cell-type proportions still sum to 1.
 #'
-#' @param theta document (spot) x topic proportion matrix
-#' @param pos position of documents, x and y columns
-#' @param clusters factor of the color (i.e., topic cluster) each cluster is
+#' @param theta document (pixel) x cell-type proportion matrix
+#' @param pos position of pixels, as data.frame with `x` and `y` columns
+#' @param clusters factor of colors that each cluster (i.e., cell-type-cluster) is
 #'     assigned to. In this case, the levels should be colors. In `vizAllTopics`,
 #'     clusters is "topicCols" and can just be a vector of colors.
-#' @sharedCol Boolean indicating if the topics in a cluster will be plotted with
-#'     the same color or if each topic will be colored by its own shade to also
-#'     show how the topics in a cluster are distributed in space wrt each other.
-#' @param groups colors the spot piechart lines based on a group or cell layer
+#' @sharedCol Boolean indicating if the cell-types in a cluster will be plotted with
+#'     the same color or if each celll-type will be colored by its own shade to also
+#'     show how the cell-types in a cluster are distributed in space wrt each other.
+#' @param groups colors the pixel scatterpie lines based on a group or cell layer
 #'     they belong to. Needs to be a character vector in the order of the spot
 #'     rows in theta. Ex: c("0", "1", "0", ...)
 #' @param group_cols color labels for the groups. Ex: c("0" = "gray", "1" = "red")
-#' @param r = radius of the circles. Adjust based on size of spots. (default: 1)
-#' @param lwd = width of lines of the pie charts. Increasing helps visualize
+#' @param r = radius of the scatterpies. Adjust based on position of pixels (default: 1)
+#' @param lwd = width of lines of the scatterpies. Increasing helps visualize
 #'     group_cols if being used.
 #' @param showLegend Boolean to show the legend indicating topics and their color
 #' @param plotTitle add title to the resulting plot (default: NA)
@@ -160,19 +160,19 @@ vizTopicClusters <- function(theta, pos, clusters,
                              fig_prefix = NA) {
 
   print("Topic cluster members:")
-  # produce a plot for each topic cluster:
+  # produce a plot for each cell-type-cluster:
   for (cluster in levels(clusters)) {
 
-    # select the topics in the cluster
+    # select the cell-types in the cluster
     topics <- labels(clusters[which(clusters == cluster)])
 
     cat(cluster, ":", topics, "\n")
 
-    # doc-topic distribution reordered based on topicOrder and selected cluster topics
+    # pixel cell-type distribution reordered based on topicOrder and selected cluster cell-types
     theta_ordered <- theta[, topics]
 
-    # get percentage of other topics not in cluster to maintain actual
-    # spot proportions that sum to 1
+    # get percentage of other cell-types not in cluster to maintain actual
+    # pixel cell-type proportions that sum to 1
     if (is.null(dim(theta_ordered))) {
       other <- 1 - theta_ordered
     } else {
@@ -183,22 +183,22 @@ vizTopicClusters <- function(theta, pos, clusters,
     colnames(theta_ordered) <- paste0("Topic.", topics)
     theta_ordered$other <- other
     
-    # if any topics not represented at all, drop them
-    # Apparently if a topic is 0 for all pie charts, it is not plotted
+    # if any cell-types not represented at all, drop them
+    # Apparently if proportion of a  cell-type is 0 for all pixels, it is not plotted
     # and doesn't appear in the legend and messes with the colors such that
-    # "other" takes one of the colors of the topics and is not gray
+    # "other" takes one of the colors of the cell-types and is not gray
     if ( length(which(colSums(theta_ordered) == 0)) > 0 ) {
       missing_topics <- colnames(theta_ordered)[which(colSums(theta_ordered) == 0)]
-      cat("NOTE:", missing_topics, "not present in any spots and will be dropped.", "\n")
+      cat("NOTE:", missing_topics, "not present in any pixels and will be dropped.", "\n")
       theta_ordered <- theta_ordered[,which(!colSums(theta_ordered) == 0)]
       # if the entire cluster/topic is represented in no spots, skip
       if (is.null(dim(theta_ordered))){
-        cat("No spots contain this topic-cluster. Skipping", "\n")
+        cat("No pixels contain this cell-type. Skipping", "\n")
         next
       }
     }
     
-    # add columns with document positions
+    # add columns with pixel positions
     rownames(theta_ordered) <- rownames(pos)
     theta_ordered_pos <- merge(data.frame(theta_ordered),
                                data.frame(pos), by=0)
@@ -207,7 +207,7 @@ vizTopicClusters <- function(theta, pos, clusters,
     # problem is that data frame will replace "-" and " " with "."
     topicColumns <- colnames(theta_ordered_pos)[2:(dim(theta_ordered_pos)[2]-2)]
 
-    # get a hue of colors for each topic in topic-cluster
+    # get a hue of colors for each cell-type in cell-type-cluster
     if (sharedCol){
       color_ramp <- colorRampPalette(c(cluster, cluster))
     } else {
@@ -218,7 +218,7 @@ vizTopicClusters <- function(theta, pos, clusters,
     # topic_colors <- append(topic_colors, c("gray")) # add gray to other here
     topic_colors <- append(topic_colors, c(transparentCol("white", percent = 60)))
 
-    # color of piechart groups (lines of piechart):
+    # color of scatterpie groups (lines of scatterpies):
     if (is.na(groups[1]) == TRUE) {
       groups <- rep("0", dim(theta_ordered_pos)[1])
       theta_ordered_pos$groups <- groups
@@ -304,7 +304,7 @@ vizTopicClusters <- function(theta, pos, clusters,
 }
 
 
-#' Visualize gene counts in spots in space. Can also see group assignment of
+#' Visualize gene counts in pixels in space. Can also see group assignment of
 #' spots.
 #' 
 #' @description Note: visualized one gene at a time. Can set up a loop to plot
@@ -329,6 +329,7 @@ vizGeneCounts <- function(df, gene,
                           groups = NA,
                           group_cols = NA,
                           size = 7, stroke = 0.5,
+                          alpha = 1,
                           plotTitle = NA,
                           showLegend = TRUE) {
 
@@ -348,16 +349,10 @@ vizGeneCounts <- function(df, gene,
   p <- ggplot() +
     geom_point(data = df, aes(x=x, y=y, fill=counts, color = groups),
                shape = 21,
-               stroke = stroke, size = size) +
+               stroke = stroke, size = size, 
+               alpha = alpha) +
     scale_fill_viridis(option = "A", direction = -1) +
     scale_color_manual(values = group_cols)
-  
-  if (showLegend == FALSE) {
-    p <- p + guides(fill=FALSE)
-  }
-  if (is.na(plotTitle) == FALSE) {
-    p <- p + ggtitle(plotTitle)
-  }
   
   p <- p +
     theme(
@@ -371,6 +366,15 @@ vizGeneCounts <- function(df, gene,
       axis.title.y=element_blank(),
       panel.background=element_blank())
     # theme_classic()
+  
+  if (showLegend == FALSE) {
+    p <- p + guides(fill=FALSE)
+  }
+  
+  if (is.na(plotTitle) == FALSE) {
+    p <- p + ggtitle(plotTitle)
+  }
+  
   print(p)
 }
 

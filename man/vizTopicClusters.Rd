@@ -2,42 +2,54 @@
 % Please edit documentation in R/plot.R
 \name{vizTopicClusters}
 \alias{vizTopicClusters}
-\title{Visualize proportions of topic clusters}
+\title{Visualize proportions of topic clusters individually}
 \usage{
 vizTopicClusters(
   theta,
   pos,
-  topicOrder,
   clusters,
+  sharedCol = FALSE,
   groups = NA,
   group_cols = NA,
-  sharedCol = FALSE,
-  r = 40,
+  r = 1,
   lwd = 0.5,
-  plotTitle = NA
+  showLegend = TRUE,
+  plotTitle = NA,
+  overlay = NA,
+  fig_path = "./",
+  fig_prefix = NA
 )
 }
 \arguments{
-\item{theta}{document topic proportion matrix}
+\item{theta}{document (spot) x topic proportion matrix}
 
 \item{pos}{position of documents, x and y columns}
 
-\item{topicOrder}{order of topics based on dendrogram; a numeric vector}
+\item{clusters}{factor of the color (i.e., topic cluster) each cluster is
+assigned to. In this case, the levels should be colors. In `vizAllTopics`,
+clusters is "topicCols" and can just be a vector of colors.}
 
-\item{clusters}{factor of the color (topic cluster) each cluster is assigned to
-In this case, the levels should be colors. In `vizAllTopics`,
-clusters is "cluster_cols" and can just be a vector of colors.}
-
-\item{groups}{color spot piecharts based on a group or cell layer they belong to.
-Needs to be a character vector. Ex: c("0", "1", "0", ...).}
+\item{groups}{colors the spot piechart lines based on a group or cell layer
+they belong to. Needs to be a character vector in the order of the spot
+rows in theta. Ex: c("0", "1", "0", ...)}
 
 \item{group_cols}{color labels for the groups. Ex: c("0" = "gray", "1" = "red")}
 
-\item{r}{= radius of the circles. Adjust based on size of spots.
-40 = merfish; 0.4 = mOB}
+\item{r}{= radius of the circles. Adjust based on size of spots. (default: 1)}
 
-\item{lwd}{= width of lines of the pie charts}
+\item{lwd}{= width of lines of the pie charts. Increasing helps visualize
+group_cols if being used.}
+
+\item{showLegend}{Boolean to show the legend indicating topics and their color}
+
+\item{plotTitle}{add title to the resulting plot (default: NA)}
+
+\item{overlay}{plot the scatterpies on top of a raster image of the H&E tissue
+(default: NA)}
 }
 \description{
-Visualize proportions of topic clusters
+Similar to `vizAllTopics` but will generate a separate plot for
+    each topic or topic-cluster where the other topics or clusters will be
+    colored gray. In this way, the actual proportions of each topic in a spot
+    will be maintained such that spot topic proportions still sum to 1.
 }

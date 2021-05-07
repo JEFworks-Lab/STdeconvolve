@@ -2,18 +2,30 @@
 % Please edit documentation in R/functions.R
 \name{combineTopics}
 \alias{combineTopics}
-\title{combine topics within same cluster.
-the term beta distriubtions are added
-or the theta document proportions are added}
+\title{Collapse topics in the same cluster into a single topic}
 \usage{
-combineTopics(mtx, clusters, mtxType)
+combineTopics(mtx, clusters, type)
+}
+\arguments{
+\item{mtx}{either a beta (topic-gene distribution matrix) or a
+theta (spot-topic distribution matrix)}
+
+\item{clusters}{factor of the topics (names) and their assigned cluster (levels)}
+
+\item{type}{either "t" or "b". Affects the adjustment to the combined
+topic vectors. "b" divides summed topic vectors by number of combined topics.}
+}
+\value{
+matrix where topics are now topic-clusters
 }
 \description{
-mtx = needs to be topic (row) x feature (term or document) (column) format
-clusters = factor of the topics (names) and their assigned cluster (levels)
-}
-\details{
-mtxType = either "b" (beta) or "t" (theta). Affects the adjustment to the
-          combined topic vectors. "b" divides summed topic vectors by number
-          of combined topics.
+Note: for the beta matrix, each row is a topic, each column
+    is a gene. The topic row is a distribution of terms that sums to 1. So
+    combining topic row vectors, these should be adjusted such that the
+    rowSum == 1. As in, take average of the terms after combining. However, the
+    theta matrix (after inversion) will have topic rows and each column is a
+    document. Because the topic can be represented at various proportions in
+    each doc and these will not necessarily add to 1, should not take average.
+    Just sum topic row vectors together. This way, each document column still
+    adds to 1 when considering the proportion of each topic-cluster in the document.
 }

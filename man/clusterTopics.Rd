@@ -13,7 +13,7 @@ clusterTopics(
 )
 }
 \arguments{
-\item{beta}{Beta matrix (topic-word distributions)}
+\item{beta}{Beta matrix (topic-gene distribution matrix)}
 
 \item{clustering}{Clustering agglomeration method to be used (default: ward.D)}
 
@@ -28,9 +28,9 @@ clusterTopics(
 \value{
 A list that contains
 \itemize{
-\item order = vector of the dendrogram index order for the topics
-\item clusters = factor of the topics (names) and their assigned cluster (levels)
-\item dendro = dendrogram of the clusters
+\item order: vector of the dendrogram index order for the topics
+\item clusters: factor of the topics (names) and their assigned cluster (levels)
+\item dendro: dendrogram of the clusters
 }
 }
 \description{

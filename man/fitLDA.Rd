@@ -13,7 +13,8 @@ fitLDA(
 )
 }
 \arguments{
-\item{counts}{Gene expression counts with genes as rows}
+\item{counts}{Gene expression counts with genes as rows or
+slam::simple_triplet_matrix where spots were rows and genes were columns}
 
 \item{Ks}{vector of K parameters to search}
 
@@ -24,7 +25,7 @@ fitLDA(
 \value{
 A list that contains
 \itemize{
-\item models: each fitted LDA model
+\item models: each fitted LDA model for a given K
 \item kOpt1: the optimal K based on Kneed algorithm
 \item kOpt2: the optimal K based on minimum
 \item perplexities: perplexity scores for each model
@@ -32,5 +33,9 @@ A list that contains
 }
 }
 \description{
-Find the optimal number of topics K for topic modeling
+The input for topicmodels::LDA needs to be a
+    slam::as.simple_triplet_matrix (docs x words). Access a given model in
+    the returned list via: lda$models[[k]][1]. The models are objects from
+    the library `topicmodels`. The LDA models have slots with additional
+    information.
 }

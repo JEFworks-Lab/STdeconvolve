@@ -1,0 +1,4131 @@
+---
+title: "Untitled"
+author: "Brendan F. Miller"
+date: "3/23/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Data
+
+```{r}
+
+# all of the trained models for mob:
+save(mob_k15, # LDA model of the mob data with k=15 and 93 common OD genes across the 12 MOB samples
+     mob_k38, # LDA model ofthe mob data with k=38 and 93 common OD genes across the 12 MOB samples
+     mobCorpus, # corpus of all the mob datasets and also has the spot positions
+     mobProxyTheta, # table of mob 260 spots and which of the 5 txn clusters it was assigned
+     countsClean, # 260 x 7365 genes of mob corpus after removing bad spots and genes
+     nmf_mod_mob_wt_countsClean_ls, # SL fitted model trained with log-norm `mob_se_wt_obj` and `countsClean` ST data
+     sl_countsClean, # above model after cleanup. 6338 genes kept that were in ST data and the scRNAseq. 38 cts but Mural2 is 0
+     RCTD_mob_results_norm, # RCTD model trained with `mob_se_wt_raw_obj` and deconvolved `countsClean` ST. 28 cts
+     nmf_mod_mob_wt_countsClean_noOECs_ls, # SL trained with log-norm `mob_se_wt_obj` and `countsClean` ST data but no OEC so 6317 genes and 33 cts
+     sl_countsClean_noOEC, # above model after cleanup.
+     RCTD_mob_noOEC_results_norm, # RCTD # RCTD model trained with `mob_se_wt_raw_obj` and deconvolved `countsClean` ST. but 33 cts now
+     sl_cortexRef_countsClean_ls, # SL on cortex SCT data and on `countsClean`. 7072 shared genes with ST and 23 cts
+     sl_countsClean_cortexRef, # above model after cleanup. but L5.IT is 0
+     RCTD_cortexRef_results_norm, # RCTD on raw counts of cortex scRNAseq and `countsClean`. 23 cts
+     file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mob_fitted_models.RData")
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_data/mob_fitted_models.RData")
+
+
+# sl_ctTheta <- sl_countsClean$thetaCt[,which(!colnames(sl_countsClean$thetaCt) %in% c("Mural2"))]
+# sl_countsClean$thetaCt but no Mural2 because 0 in all spots
+
+# for assessing beta values
+save(mob_se_wt, # processed data matrix for 17709 wt cells and 18560 genes (filtered genes during the processing)
+     mob_se_wt_obj, # seurat object of the processed data and meta data
+     mob_se_wt_raw, # raw counts of the 17709 wt cells and 18560 genes
+     mob_se_wt_raw_obj_sct, # seurat object of raw data, and also my own SCT processing (but turned out different than the supplied data)
+     cluster_markers_mob_se_wt, # Seurat::FindAllMarkers for the processed wt cells and 38 clusters
+     cluster_markers_mob_se_wt_raw, # Seurat::FindAllMarkers for the raw counts wt cells and 38 clusters
+     mobWtCellProxyBeta, # averaged relative counts for the 38 clusters for 18560 genes by averaging the processed log-norm data
+     mobWtCellProxyBetaRaw, # averaged relative counts for the 38 clusters for 18560 genes by averaging the raw counts
+     mob_k15, # LDA model of the mob data with k=15 and 93 common OD genes across the 12 MOB samples
+     sl_countsClean, # SL model trained on `mob_se_wt_obj` and `countsClean` ST data of the `mOB` data (260 spots and 6336 shared genes)
+     sl_ctTheta, # thetaCt of the above model, but Mural2 removed because 0 in all spots
+     W_countsClean, # betaTopics of the sl_countsClean; the W matrix of the NMF fitted model
+     file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mob_data_to_assess_beta.RData")
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_data/mob_data_to_assess_beta.RData")
+
+cortexProxyBetaRaw <- readRDS("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_data/cortexProxyBetaRaw.Rds")
+# 23 29093 average raw gene counts from the cortex_sc seurat object. The 23 subclasses
+
+```
+
+```{r}
+
+fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/figures/"
+draft_fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_figures/"
+
+```
+
+# mOB dataset
+
+mOB dataset. Get the cleaned data set, CPM normalized, and build corpus using the cleaned dataset and over dispered genes.
+
+```{r}
+
+# load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mOB.rda")
+
+mobClean <- cleanCounts(mOB$counts,
+                        min.lib.size = 100,
+                        max.lib.size = Inf,
+                        min.reads = 100,
+                        min.detected = 1,
+                        verbose = TRUE,
+                        plot=TRUE)
+
+mobCPM <- MERINGUE::normalizeCounts(counts = mobClean, 
+                       log=FALSE,
+                       verbose=TRUE)
+
+mobCorpus <- preprocess(t(mOB$counts),
+                       alignFile = NA,
+                       extractPos = FALSE,
+                       selected.genes = NA,
+                       nTopGenes = NA,
+                       genes.to.remove = NA,
+                       perc.spots = NA,
+                       min.reads = 100,
+                       min.lib.size = 100,
+                       min.detected = 1,
+                       ODgenes = TRUE,
+                       nTopOD = NA,
+                       od.genes.alpha = 0.05,
+                       gam.k = 5)
+mobCorpus$pos <- mOB$pos[rownames(mobCorpus$corpus), ]
+
+```
+
+try the transcriptional clustering with the over dispersed genes
+
+(I suppose could cluster with all genes as done before, and then reason for LDA to find meaningful cell types, reduce to set of most over dispersed genes)
+
+## txn clustering
+
+```{r}
+
+set.seed(888)
+
+# Dimensionality reduction by PCA on log10 CPM expression values
+pcs.info <- prcomp(t(log10(as.matrix(mobCPM[colnames(mobCorpus$corpus),])+1)), center=TRUE)
+nPcs <- 5
+pcs <- pcs.info$x[,1:nPcs]
+
+# 2D embedding by tSNE
+emb <- Rtsne::Rtsne(pcs,
+             is_distance=FALSE,
+             perplexity=30,
+             num_threads=1,
+             verbose=FALSE)$Y
+rownames(emb) <- rownames(pcs)
+
+# Graph-based cluster detection
+k <- 30
+com <- MERINGUE::getClusters(pcs, k, weight=TRUE)
+
+# Manually annotate identified clusters with cell-types
+mob_annot <- as.character(com); names(mob_annot) <- names(com)
+mob_annot[com==5] <- 'Granule Cell Layer'
+mob_annot[com==2] <- 'Mitral Cell Layer'
+mob_annot[com==1] <- 'Outer Plexiform Layer'
+mob_annot[com==4] <- 'Glomerular Layer'
+mob_annot[com==3] <- 'Olfactory Nerve Layer'
+mob_annot <- as.factor(mob_annot)
+
+# Plot
+par(mfrow=c(1,1), mar=rep(1,4))
+MERINGUE::plotEmbedding(emb, groups=mob_annot, 
+                        show.legend=TRUE, xlab=NA, ylab=NA,
+                        verbose=FALSE)
+# MERINGUE::plotEmbedding(mobCorpus$pos, groups=mob_annot, 
+#                         cex=1, xlab=NA, ylab=NA,
+#                         verbose=FALSE)
+
+```
+
+Even with just the over dispersed genes still clusters well. Just a few pixels change.
+
+```{r}
+
+# proxy theta for the txn clusters
+mobProxyTheta <- model.matrix(~ 0 + mob_annot)
+rownames(mobProxyTheta) <- names(mob_annot)
+
+# fix names
+colnames(mobProxyTheta) <- unlist(lapply(colnames(mobProxyTheta), function(x) {
+  unlist(strsplit(x, "mob_annot"))[2]
+}))
+
+mobProxyTheta <- as.data.frame.matrix(mobProxyTheta)
+
+mobTxnClustCols <- c('Outer Plexiform Layer' = 'purple',
+                     'Mitral Cell Layer' = "green",
+                     'Olfactory Nerve Layer' = "blue",
+                     'Glomerular Layer' = "red",
+                     'Granule Cell Layer' = "yellow")
+
+```
+
+Lets try LDA
+
+```{r}
+
+ks <- seq(from = 2, to = 20, by = 1)
+ks <- c(ks, 28, 37, 38)
+
+```
+
+```{r}
+
+# pdf(file = paste0(fig_path, "Fig1_D-1_mob_lda_fit.pdf"))
+mobLDAs <- fitLDA(counts = mobCorpus$slm,
+                        Ks = ks,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+# dev.off()
+
+```
+
+select some different models for comparison
+
+```{r}
+
+# first do the Stahl data because can get positional information from the spot IDs
+mobLDAsBuilt <- lapply(seq(3,20), function(l) {
+  lda <- buildLDAobject(LDAmodel = optimalModel(mobLDAs, opt = l),
+                      deepSplit = 4,
+                      colorScheme = "rainbow")
+  lda
+})
+
+names(mobLDAsBuilt) <- as.character(seq(3,20))
+
+```
+
+```{r}
+
+for (n in names(mobLDAsBuilt)){
+  
+  m <- mobLDAsBuilt[[n]]$theta
+  p <- mobCorpus$pos
+  
+  plt <- vizAllTopics(theta = m,
+                       pos = p,
+                       topicOrder=seq(ncol(m)),
+                       topicCols=gg_color_hue(ncol(m)),
+                       groups = rep("0", dim(m)[1]),
+                       group_cols = c("0" = "black"),
+                       r = 0.4, # different size piecharts for mOB data sets
+                       lwd = 0.1,
+                       showLegend = TRUE,
+                       plotTitle = n)
+  print(plt)
+}
+
+# m <- mobLDAsBuilt$`10`$theta
+# p <- mobCorpus$pos 
+# 
+# vizAllTopics(theta = m,
+#              pos = p,
+#              topicOrder=seq(ncol(m)),
+#              topicCols=gg_color_hue(ncol(m)),
+#              groups = rep("0", dim(m)[1]),
+#              group_cols = c("0" = "black"),
+#              r = 0.4, # different size piecharts for mOB data sets
+#              lwd = 0.1,
+#              showLegend = TRUE,
+#              plotTitle = NA)
+# ggsave(filename = "Fig_2_mob-k15.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+
+```
+
+# Other mOB datasets
+
+```{r}
+
+# list of either the mob data sets or paths to the data for inputs into `preprocess`
+
+mobRepPaths <- list()
+
+# paths to Stahl data:
+p <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/"
+stahlMobDatPaths <- list.files(path = p, pattern = "*MOB_count_matrix-1.tsv", full.names = FALSE)
+# add to the list
+i <- 1
+while(i < length(stahlMobDatPaths) + 1){
+  mobRepPaths[[i]] <- paste0(p, stahlMobDatPaths[i])
+  i <- i + 1
+}
+
+names(mobRepPaths) <- unlist(strsplit(stahlMobDatPaths, "_MOB_count_matrix-1.tsv"))
+
+```
+
+```{r}
+
+# first do the Stahl data because can get positional information from the spot IDs
+mobCorpusReps <- lapply(mobRepPaths, function(p) {
+  dat <- preprocess(p,
+                   alignFile = NA,
+                   extractPos = TRUE,
+                   selected.genes = NA,
+                   nTopGenes = NA,
+                   genes.to.remove = NA,
+                   perc.spots = NA,
+                   min.reads = 100,
+                   min.lib.size = 100,
+                   min.detected = 1,
+                   ODgenes = TRUE,
+                   nTopOD = NA,
+                   od.genes.alpha = 0.05,
+                   gam.k = 5) # ODgenes ignored; so is this
+  dat
+})
+
+names(mobCorpusReps) <- unlist(strsplit(stahlMobDatPaths, "_MOB_count_matrix-1.tsv"))
+
+```
+
+Check out rep12 and rep5 because both less genes than pixels and by reasonable amount. Next worth checking out reps with more genes than pixels
+
+## Rep 5
+
+```{r}
+
+ks <- seq(from = 2, to = 20, by = 1)
+# ks <- c(ks, 37, 38, seq(from = 25, to = 75, by = 10))
+
+```
+
+```{r}
+
+# pdf(file = paste0(fig_path, "Fig1_D-1_mob_lda_fit.pdf"))
+mobLDAs_Rep5 <- fitLDA(counts = mobCorpusReps$Rep5$slm,
+                        Ks = ks,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+# dev.off()
+
+```
+
+select some different models for comparison
+
+```{r}
+
+# first do the Stahl data because can get positional information from the spot IDs
+mobLDAsBuilt_Rep5 <- lapply(seq(3,20), function(l) {
+  lda <- buildLDAobject(LDAmodel = optimalModel(mobLDAs_Rep5, opt = l),
+                      deepSplit = 4,
+                      colorScheme = "rainbow")
+  lda
+})
+
+names(mobLDAsBuilt_Rep5) <- as.character(seq(3,20))
+
+```
+
+```{r}
+
+for (n in names(mobLDAsBuilt_Rep5)){
+  
+  m <- mobLDAsBuilt_Rep5[[n]]$theta
+  p <- mobCorpusReps$Rep5$pos
+  
+  plt <- vizAllTopics(theta = m,
+                       pos = p,
+                       topicOrder=seq(ncol(m)),
+                       topicCols=gg_color_hue(ncol(m)),
+                       groups = rep("0", dim(m)[1]),
+                       group_cols = c("0" = "black"),
+                       r = 0.4, # different size piecharts for mOB data sets
+                       lwd = 0.1,
+                       showLegend = TRUE,
+                       plotTitle = n)
+  print(plt)
+}
+
+# m <- mobLDAsBuilt$`10`$theta
+# p <- mobCorpus$pos 
+# 
+# vizAllTopics(theta = m,
+#              pos = p,
+#              topicOrder=seq(ncol(m)),
+#              topicCols=gg_color_hue(ncol(m)),
+#              groups = rep("0", dim(m)[1]),
+#              group_cols = c("0" = "black"),
+#              r = 0.4, # different size piecharts for mOB data sets
+#              lwd = 0.1,
+#              showLegend = TRUE,
+#              plotTitle = NA)
+# ggsave(filename = "Fig_2_mob-k15.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+
+```
+
+## Rep 12
+
+```{r}
+
+# pdf(file = paste0(fig_path, "Fig1_D-1_mob_lda_fit.pdf"))
+mobLDAs_Rep12 <- fitLDA(counts = mobCorpusReps$Rep12$slm,
+                        Ks = ks,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+# dev.off()
+
+```
+
+select some different models for comparison
+
+```{r}
+
+# first do the Stahl data because can get positional information from the spot IDs
+mobLDAsBuilt_Rep12 <- lapply(seq(3,20), function(l) {
+  lda <- buildLDAobject(LDAmodel = optimalModel(mobLDAs_Rep12, opt = l),
+                      deepSplit = 4,
+                      colorScheme = "rainbow")
+  lda
+})
+
+names(mobLDAsBuilt_Rep12) <- as.character(seq(3,20))
+
+```
+
+```{r}
+
+for (n in names(mobLDAsBuilt_Rep12)){
+  
+  m <- mobLDAsBuilt_Rep12[[n]]$theta
+  p <- mobCorpusReps$Rep12$pos
+  
+  plt <- vizAllTopics(theta = m,
+                       pos = p,
+                       topicOrder=seq(ncol(m)),
+                       topicCols=gg_color_hue(ncol(m)),
+                       groups = rep("0", dim(m)[1]),
+                       group_cols = c("0" = "black"),
+                       r = 0.4, # different size piecharts for mOB data sets
+                       lwd = 0.1,
+                       showLegend = TRUE,
+                       plotTitle = n)
+  print(plt)
+}
+
+# m <- mobLDAsBuilt$`10`$theta
+# p <- mobCorpus$pos 
+# 
+# vizAllTopics(theta = m,
+#              pos = p,
+#              topicOrder=seq(ncol(m)),
+#              topicCols=gg_color_hue(ncol(m)),
+#              groups = rep("0", dim(m)[1]),
+#              group_cols = c("0" = "black"),
+#              r = 0.4, # different size piecharts for mOB data sets
+#              lwd = 0.1,
+#              showLegend = TRUE,
+#              plotTitle = NA)
+# ggsave(filename = "Fig_2_mob-k15.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+
+```
+
+## Rep 2
+
+Rep2 has 279 pixels and 385 genes so more genes than pixels this time
+
+```{r}
+
+# pdf(file = paste0(fig_path, "Fig1_D-1_mob_lda_fit.pdf"))
+mobLDAs_Rep2 <- fitLDA(counts = mobCorpusReps$Rep2$slm,
+                        Ks = ks,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+# dev.off()
+
+```
+
+select some different models for comparison
+
+```{r}
+
+# first do the Stahl data because can get positional information from the spot IDs
+mobLDAsBuilt_Rep2 <- lapply(seq(3,20), function(l) {
+  lda <- buildLDAobject(LDAmodel = optimalModel(mobLDAs_Rep2, opt = l),
+                      deepSplit = 4,
+                      colorScheme = "rainbow")
+  lda
+})
+
+names(mobLDAsBuilt_Rep2) <- as.character(seq(3,20))
+
+```
+
+```{r}
+
+for (n in names(mobLDAsBuilt_Rep2)){
+  
+  m <- mobLDAsBuilt_Rep2[[n]]$theta
+  p <- mobCorpusReps$Rep2$pos
+  
+  plt <- vizAllTopics(theta = m,
+                       pos = p,
+                       topicOrder=seq(ncol(m)),
+                       topicCols=gg_color_hue(ncol(m)),
+                       groups = rep("0", dim(m)[1]),
+                       group_cols = c("0" = "black"),
+                       r = 0.4, # different size piecharts for mOB data sets
+                       lwd = 0.1,
+                       showLegend = TRUE,
+                       plotTitle = n)
+  print(plt)
+}
+
+# m <- mobLDAsBuilt$`10`$theta
+# p <- mobCorpus$pos 
+# 
+# vizAllTopics(theta = m,
+#              pos = p,
+#              topicOrder=seq(ncol(m)),
+#              topicCols=gg_color_hue(ncol(m)),
+#              groups = rep("0", dim(m)[1]),
+#              group_cols = c("0" = "black"),
+#              r = 0.4, # different size piecharts for mOB data sets
+#              lwd = 0.1,
+#              showLegend = TRUE,
+#              plotTitle = NA)
+# ggsave(filename = "Fig_2_mob-k15.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+
+```
+
+# Comparisons
+
+could do correlations between the reps for every K. 
+
+then somehow compare Ks for same dataset
+
+so kinda like inter/intra "K" or "model" stability
+
+## intra
+
+```{r}
+
+mat <- mobLDAsBuilt[1:18]
+
+m <- lapply(seq(length((mat))), function(ix){
+  
+  i <- names(mat)[ix]
+  
+  medians <- lapply(seq(ix, length(mat)), function(ij){
+    
+    j <- names(mat)[ij]
+  
+    corMtx <- getCorrMtx(m1 = mat[[i]]$theta,
+                         m2 = mat[[j]]$theta,
+                         type = "t")
+    
+    # pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+    # gplots::heatmap.2(x = corMtx,
+    #                   density.info = "none",
+    #                   trace = "none",
+    #                   col = correlation_palette,
+    #                   breaks = correlation_breaks,
+    #                   key.xlab = "Correlation",
+    #                   xlab = "Major cell class",
+    #                   ylab = "Predicted topics",
+    #                   key.title = NA,
+    #                   cexRow = 1,
+    #                   cexCol = 0.9,
+    #                   # lhei = c(1,3),
+    #                   margins = c(7,4))
+    # dev.off()
+    
+    # pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+    # pair up best matching cell class to a predicted topic
+    # print(corMtx)
+    pairs <- lsatPairs(corMtx)
+    # gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+    #                   Rowv = NA, # to order topics based on pairs and not dendrogram
+    #                   Colv = NA,
+    #                   density.info = "none",
+    #                   trace = "none",
+    #                   col = correlation_palette,
+    #                   breaks = correlation_breaks,
+    #                   key.xlab = "Correlation",
+    #                   xlab = "Major cell class",
+    #                   ylab = "Predicted topics",
+    #                   key.title = NA,
+    #                   cexRow = 1,
+    #                   cexCol = 0.9,
+    #                   # lhei = c(1,3),
+    #                   margins = c(7,4))
+    # dev.off()
+    corrs <- diag(corMtx[pairs$rowix, pairs$colsix])
+    median(corrs)
+    
+    # pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+        # width = 5, # The width of the plot in inches
+        # height = 3) # The height of the plot in inches
+    # par( mfrow = c(1,3) )
+    # boxplot(corrs,
+    #         medcol = "black", # medium line color
+    #         medlty = 1, # line type
+    #         medlwd = 1, # line width
+    #         boxfill = "white", # color fill of box
+    #         boxcol = "black", # outline color of box
+    #         boxlty = 1, # box line type
+    #         boxlwd = 1, # width of box line
+    #         whisklty = 1, # whisker type
+    #         whisklwd = 1,
+    #         staplelwd = 0, # the ends of the whiskers
+    #         outpch = 1, # type of outlies
+    #         outcex = 0,
+    #         main = "",
+    #         cex.main = 1,
+    #         xlab = "",
+    #         ylab = "Correlation") # size of outliers
+    # stripchart(corrs, vertical = TRUE,
+    #     method = "jitter", add = TRUE, pch = 20, col = 'black')
+    # dev.off()
+    
+  })
+  medians
+  
+})
+
+## Compute maximum length
+max.length <- max(sapply(m, length))
+## Add NA values to list elements
+m <- lapply(m, function(v) { as.numeric(c(rep(NA, max.length-length(v)), v))})
+## Rbind
+m <- do.call(rbind, m)
+
+colnames(m) <- names(mat)
+rownames(m) <- names(mat)
+
+mobLDAsBuilt_intra <- m
+
+```
+
+```{r}
+
+dat <- mobLDAsBuilt_intra
+diag(dat) <- NA
+
+ggplot(data = reshape2::melt(dat)) +
+  geom_tile(aes(x = Var2, y = Var1, fill=value)) +
+  # scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1), na.value = "white") +
+  scale_fill_gradientn(colors = c("yellow", "red"), na.value = "white") +
+  scale_y_continuous(breaks=seq(from=3, to=20, by=1), labels=seq(from=3, to=20, by=1)) +
+  scale_x_continuous(breaks=seq(from=3, to=20, by=1), labels=seq(from=3, to=20, by=1)) +
+  xlab("K") +
+  ylab("K") +
+  ggtitle("") +
+  theme(axis.text.x=element_text(angle=-90),
+        panel.grid = element_blank(),
+        axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        # axis.title.x=element_blank(),
+        # axis.title.y=element_blank(),
+        panel.background=element_blank()) +
+  coord_fixed()
+
+```
+
+```{r}
+
+mat <- mobLDAsBuilt[1:18]
+
+m <- lapply(seq(length((mat))), function(ix){
+  
+  i <- names(mat)[ix]
+  
+  medians <- lapply(seq(ix, length(mat)), function(ij){
+    
+    j <- names(mat)[ij]
+  
+    corMtx <- getCorrMtx(m1 = mat[[i]]$beta,
+                         m2 = mat[[j]]$beta,
+                         type = "b")
+    
+    # pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+    # gplots::heatmap.2(x = corMtx,
+    #                   density.info = "none",
+    #                   trace = "none",
+    #                   col = correlation_palette,
+    #                   breaks = correlation_breaks,
+    #                   key.xlab = "Correlation",
+    #                   xlab = "Major cell class",
+    #                   ylab = "Predicted topics",
+    #                   key.title = NA,
+    #                   cexRow = 1,
+    #                   cexCol = 0.9,
+    #                   # lhei = c(1,3),
+    #                   margins = c(7,4))
+    # dev.off()
+    
+    # pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+    # pair up best matching cell class to a predicted topic
+    # print(corMtx)
+    pairs <- lsatPairs(corMtx)
+    # gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+    #                   Rowv = NA, # to order topics based on pairs and not dendrogram
+    #                   Colv = NA,
+    #                   density.info = "none",
+    #                   trace = "none",
+    #                   col = correlation_palette,
+    #                   breaks = correlation_breaks,
+    #                   key.xlab = "Correlation",
+    #                   xlab = "Major cell class",
+    #                   ylab = "Predicted topics",
+    #                   key.title = NA,
+    #                   cexRow = 1,
+    #                   cexCol = 0.9,
+    #                   # lhei = c(1,3),
+    #                   margins = c(7,4))
+    # dev.off()
+    corrs <- diag(corMtx[pairs$rowix, pairs$colsix])
+    median(corrs)
+    
+    # pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+        # width = 5, # The width of the plot in inches
+        # height = 3) # The height of the plot in inches
+    # par( mfrow = c(1,3) )
+    # boxplot(corrs,
+    #         medcol = "black", # medium line color
+    #         medlty = 1, # line type
+    #         medlwd = 1, # line width
+    #         boxfill = "white", # color fill of box
+    #         boxcol = "black", # outline color of box
+    #         boxlty = 1, # box line type
+    #         boxlwd = 1, # width of box line
+    #         whisklty = 1, # whisker type
+    #         whisklwd = 1,
+    #         staplelwd = 0, # the ends of the whiskers
+    #         outpch = 1, # type of outlies
+    #         outcex = 0,
+    #         main = "",
+    #         cex.main = 1,
+    #         xlab = "",
+    #         ylab = "Correlation") # size of outliers
+    # stripchart(corrs, vertical = TRUE,
+    #     method = "jitter", add = TRUE, pch = 20, col = 'black')
+    # dev.off()
+    
+  })
+  medians
+  
+})
+
+## Compute maximum length
+max.length <- max(sapply(m, length))
+## Add NA values to list elements
+m <- lapply(m, function(v) { as.numeric(c(rep(NA, max.length-length(v)), v))})
+## Rbind
+m <- do.call(rbind, m)
+
+colnames(m) <- names(mat)
+rownames(m) <- names(mat)
+
+mobLDAsBuilt_intra <- m
+
+```
+
+```{r}
+
+dat <- mobLDAsBuilt_intra
+diag(dat) <- NA
+
+ggplot(data = reshape2::melt(dat)) +
+  geom_tile(aes(x = Var2, y = Var1, fill=value)) +
+  # scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1), na.value = "white") +
+  scale_fill_gradientn(colors = c("yellow", "red"), na.value = "white") +
+  scale_y_continuous(breaks=seq(from=3, to=20, by=1), labels=seq(from=3, to=20, by=1)) +
+  scale_x_continuous(breaks=seq(from=3, to=20, by=1), labels=seq(from=3, to=20, by=1)) +
+  xlab("K") +
+  ylab("K") +
+  ggtitle("") +
+  theme(axis.text.x=element_text(angle=-90),
+        panel.grid = element_blank(),
+        axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        # axis.title.x=element_blank(),
+        # axis.title.y=element_blank(),
+        panel.background=element_blank()) +
+  coord_fixed()
+
+```
+
+```{r}
+
+gplots::heatmap.2(x = as.matrix(mobLDAsBuilt_intra),
+                  Rowv = NA,
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  # breaks = correlation_breaks,
+                  na.color = "black",
+                  key.xlab = "Correlation",
+                  xlab = "K",
+                  ylab = "K",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(3,7))
+
+```
+
+
+Looks like additional topics start identifying additional variability within "larger" topics assigned to regions. But the additional topics also don't "split equally" the major topics. They get assigned but at small proportions so its like they just fill in small amounts of noise. So it is like once you get a certain number of topics assigned, anny addition fluctuation makes small differences to the overall profile. But likely depends on the extent of variation being captured. At a certain point its just small amounts and adding more or less topics doesnt matter. The main topics stay more or less the same/stable.
+
+## inter
+
+Compare LDA models fitted with different datasets of the same tissue
+
+The pixels are different so can only compare via the gexp. But this is fine because topics are defined by their gene probabilities
+
+```{r}
+
+k <- "20"
+
+# for beta need to get shared genes
+# genes <- intersect(colnames(mobLDAsBuilt[[k]]$beta), colnames(mobLDAsBuilt_Rep2[[k]]$beta))
+
+corMtx <- getCorrMtx(m1 = mobLDAsBuilt[[k]]$beta[,],
+                      m2 = mobLDAsBuilt_Rep2[[k]]$beta[,],
+                      type = "b")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "Major cell class",
+                  ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "Major cell class",
+                  ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+corrs <- diag(corMtx[pairs$rowix, pairs$colsix])
+hist(corrs, breaks = 10)
+mean(corrs)
+sd(corrs)
+median(corrs)
+range(corrs)
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+    # width = 5, # The width of the plot in inches
+    # height = 3) # The height of the plot in inches
+par( mfrow = c(1,3) )
+boxplot(corrs,
+        medcol = "black", # medium line color
+        medlty = 1, # line type
+        medlwd = 1, # line width
+        boxfill = "white", # color fill of box
+        boxcol = "black", # outline color of box
+        boxlty = 1, # box line type
+        boxlwd = 1, # width of box line
+        whisklty = 1, # whisker type
+        whisklwd = 1,
+        staplelwd = 0, # the ends of the whiskers
+        outpch = 1, # type of outlies
+        outcex = 0,
+        main = "",
+        cex.main = 1,
+        xlab = "",
+        ylab = "Correlation") # size of outliers
+stripchart(corrs, vertical = TRUE,
+    method = "jitter", add = TRUE, pch = 20, col = 'black')
+# dev.off()
+
+```
+
+return median corr for each k? does correlating by gexp make sense? I think so given the topics are essentially defined as a probability distribution
+
+```{r}
+
+interBetaMedianCorrs <- lapply(names(mobLDAsBuilt), function(k){
+  # genes <- intersect(colnames(mobLDAsBuilt[[k]]$beta), colnames(mobLDAsBuilt_Rep2[[k]]$beta))
+  corMtx <- getCorrMtx(m1 = mobLDAsBuilt[[k]]$beta[,],
+                       m2 = mobLDAsBuilt_Rep2[[k]]$beta[,],
+                       type = "b")
+  pairs <- lsatPairs(corMtx)
+  corrs <- diag(corMtx[pairs$rowix, pairs$colsix])
+  median(corrs)
+})
+df <- data.frame(mobVsRep2 = unlist(interBetaMedianCorrs))
+
+interBetaMedianCorrs <- lapply(names(mobLDAsBuilt), function(k){
+  genes <- intersect(colnames(mobLDAsBuilt[[k]]$beta), colnames(mobLDAsBuilt_Rep5[[k]]$beta))
+  corMtx <- getCorrMtx(m1 = mobLDAsBuilt[[k]]$beta[,genes],
+                       m2 = mobLDAsBuilt_Rep5[[k]]$beta[,genes],
+                       type = "b")
+  pairs <- lsatPairs(corMtx)
+  corrs <- diag(corMtx[pairs$rowix, pairs$colsix])
+  median(corrs)
+})
+df$mobVsRep5 <- unlist(interBetaMedianCorrs)
+
+interBetaMedianCorrs <- lapply(names(mobLDAsBuilt), function(k){
+  genes <- intersect(colnames(mobLDAsBuilt[[k]]$beta), colnames(mobLDAsBuilt_Rep12[[k]]$beta))
+  corMtx <- getCorrMtx(m1 = mobLDAsBuilt[[k]]$beta[,genes],
+                       m2 = mobLDAsBuilt_Rep12[[k]]$beta[,genes],
+                       type = "b")
+  pairs <- lsatPairs(corMtx)
+  corrs <- diag(corMtx[pairs$rowix, pairs$colsix])
+  median(corrs)
+})
+df$mobVsRep12 <- unlist(interBetaMedianCorrs)
+
+rownames(df) <- names(mobLDAsBuilt)
+df
+
+```
+
+```{r}
+
+dd <- reshape2::melt(df)
+dd$K <- rep(seq(3,20), 3)
+
+ggplot(data = dd) +
+  geom_line(aes(x=K, y=value, colour=variable)) +
+  scale_colour_manual(values=c("red","green","blue")) +
+  ylab("Median Correlation across cell-types") +
+  xlab("K") +
+  ggtitle("Topic gexp correlation between datasets at different Ks")
+
+# ggplot() +
+#   geom_line(data = df, aes(x = seq(3,20), y = mobVsRep2), color = "blue") +
+#   geom_line(data = df, aes(x = seq(3,20), y = mobVsRep5), color = "red") +
+#   geom_line(data = df, aes(x = seq(3,20), y = mobVsRep12), color = "green") +
+#   legend()
+#   ylab("Correlation") +
+#   xlab("K")
+
+```
+
+How about RMSE? No - genes used for each dataset differ so taking difference between genes wont work here.
+
+Looks like overall the predicted cell types are similar regardless of the dataset used to fit the LDA model. Thus, the LDA models are robust. Importantly, different genes are used for each dataset (different set of over dispersed genes). And yet cell types are still similar (note that the correlations are using the shared genes between each model/dataset, but their values/probabilities are influenced by the total gene set). But I think this shows that the groupings of genes to define cell types is consistent likely due to the actual cell type gene expression patterns underlying the dataset/tissue and their consistency across the datasets. Very promising. 
+
+What's also cool is for small K, or just a few cell types, you can see above that these correspond to really distinct layers that are consistent across the datasets. So there must be a really strong and disinct grouping of genes for each tissue region. As K increases, then you start to tease apart other patterns with more nuanced gene expression variability. And thus the correlation between cell-types in each dataset can decrease.
+
+Another point is that in terms of fitting the LDAs, each dataset had a wide range of over dispersed genes. approx 160 to 385 used here for these 3. And the correlations are basically the same.
+
+(Note this is the median correlations, some cell-types between models had poor correlation, esp has K increases. I think this speaks to the fact that some of the cell-types are now picking up variation specific to each dataset)
+
+## cell-type proportions
+
+```{r}
+
+# data(mOB)
+# pos <- mOB$pos
+# cd <- mOB$counts
+# annot <- mOB$annot
+# ## remove pixels with too few genes
+# counts <- cleanCounts(cd)
+# ## feature select for genes
+# corpus <- restrictCorpus(counts, t1=0.05, t2 = 1)
+# Ks <- seq(2, 20, by = 1)
+# lda <- fitLDA(corpus, Ks = Ks, plot=TRUE, verbose=FALSE)
+
+ks <- seq(from = 2, to = 20, by = 1)
+ks <- c(ks, 28, 37, 38)
+## look at distribution of cell-type proportions
+out <- lapply(1:length(ks), function(i) {
+  apply(getBetaTheta(mobLDAs$models[[i]])$theta, 2, mean)
+})
+## number of topics present at fewer than 5% on average across pixels
+numrare <- unlist(lapply(out, function(x) sum(x < 0.05)))
+plot(ks, numrare, type="l")
+
+
+ks <- seq(from = 2, to = 20, by = 1)
+## look at distribution of cell-type proportions
+out <- lapply(1:length(ks), function(i) {
+  apply(getBetaTheta(mobLDAs$models[[i]])$theta, 2, mean)
+})
+## number of topics present at fewer than 5% on average across pixels
+numrare <- unlist(lapply(out, function(x) sum(x < 0.05)))
+ks[where.is.knee(numrare)]
+plot(ks, numrare, type="l")
+
+
+ks <- seq(from = 2, to = 20, by = 1)
+## look at distribution of cell-type proportions
+out <- lapply(1:length(ks), function(i) {
+  apply(getBetaTheta(mobLDAs_Rep2$models[[i]])$theta, 2, mean)
+})
+## number of topics present at fewer than 5% on average across pixels
+numrare <- unlist(lapply(out, function(x) sum(x < 0.05)))
+ks[where.is.knee(numrare)]
+plot(ks, numrare, type="l")
+
+
+ks <- seq(from = 2, to = 20, by = 1)
+## look at distribution of cell-type proportions
+out <- lapply(1:length(ks), function(i) {
+  apply(getBetaTheta(mobLDAs_Rep5$models[[i]])$theta, 2, mean)
+})
+## number of topics present at fewer than 5% on average across pixels
+numrare <- unlist(lapply(out, function(x) sum(x < 0.05)))
+ks[where.is.knee(numrare)]
+plot(ks, numrare, type="l")
+
+
+ks <- seq(from = 2, to = 20, by = 1)
+## look at distribution of cell-type proportions
+out <- lapply(1:length(ks), function(i) {
+  apply(getBetaTheta(mobLDAs_Rep12$models[[i]])$theta, 2, mean)
+})
+## number of topics present at fewer than 5% on average across pixels
+numrare <- unlist(lapply(out, function(x) sum(x < 0.05)))
+ks[where.is.knee(numrare)]
+plot(ks, numrare, type="l")
+
+```
+
+```{r}
+
+# data(mOB)
+# pos <- mOB$pos
+# cd <- mOB$counts
+# annot <- mOB$annot
+# ## remove pixels with too few genes
+# counts <- cleanCounts(cd)
+# ## feature select for genes
+# corpus <- restrictCorpus(counts, t1=0.05, t2 = 1)
+# Ks <- seq(2, 20, by = 1)
+# lda <- fitLDA(corpus, Ks = Ks, plot=TRUE, verbose=FALSE)
+
+ks <- seq(from = 2, to = 20, by = 1)
+## look at distribution of cell-type proportions
+out <- lapply(1:length(mobLDAs_Rep5$models), function(i) {
+  apply(getBetaTheta(mobLDAs_Rep5$models[[i]])$theta, 2, mean)
+})
+## number of topics present at fewer than 5% on average across pixels
+numrare <- unlist(lapply(out, function(x) sum(x < 0.05)))
+plot(ks, numrare, type="l")
+
+```
+
+# Distribution of gene counts
+
+```{r}
+
+hist(mobCorpus$corpus[,"Fmod"], breaks = 20)
+hist(mobCorpus$corpus[,"Tmsb10"], breaks = 20)
+hist(mobCorpus$corpus[,"Vamp2"], breaks = 20)
+hist(mobCorpus$corpus[,"Snap25"], breaks = 20)
+
+
+```
+
+```{r}
+
+sort(colMeans(mobCorpus$corpus))
+
+hist(colMeans(mobCorpus$corpus), breaks = 20)
+hist(matrixStats::colSds(mobCorpus$corpus), breaks = 20)
+hist(colSums(mobCorpus$corpus), breaks = 20)
+
+```
+
+# ----------------------------------
+
+```{r}
+
+ks <- seq(from = 2, to = 20, by = 1)
+
+```
+
+```{r}
+
+# pdf(file = paste0(fig_path, "Fig1_D-1_mob_lda_fit.pdf"))
+mobLDAs <- fitLDA(counts = mobCorpus$slm,
+                        Ks = ks,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+# dev.off()
+
+```
+
+# K = 15
+
+```{r}
+
+n <- "15"
+m <- mobLDAsBuilt[[n]]$theta
+p <- mobCorpus$pos
+
+vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=rainbow(ncol(m)),
+             groups = rep("0", dim(m)[1]),
+             group_cols = c("0" = "black"),
+             r = 0.4, # different size piecharts for mOB data sets
+             lwd = 0.1,
+             showLegend = TRUE,
+             plotTitle = n)
+# ggsave(filename = "Fig_2_mob-k15.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+
+```
+
+Visualize the individual topics and also the topic clusters separately
+
+```{r}
+
+n <- "15"
+m <- mobLDAsBuilt[[n]]$theta
+p <- mobCorpus$pos
+
+cc <- as.factor(rainbow(ncol(m)))
+names(cc) <- colnames(m)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc,
+                 sharedCol = TRUE,
+                 groups = rep("0", dim(m)[1]),
+                 group_cols = c("0" = "black"),
+                 r = 0.4,
+                 lwd = 0.1,
+                 showLegend = TRUE,
+                 plotTitle = n)
+
+```
+
+```{r}
+
+n <- "15"
+
+m <- mobLDAsBuilt[[n]]$theta
+p <-  mobCorpus$pos
+
+# cc <- as.factor(rainbow(ncol(m)))
+# cc <- as.factor(rep("black", 8))
+# names(cc) <- colnames(m)
+
+for (i in colnames(m)){
+  cc <- as.factor(rep("black", 1))
+  names(cc) <- i
+  vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc,
+                 sharedCol = TRUE,
+                 groups = mob_annot,
+                 group_cols = mobTxnClustCols,
+                 r = 0.4,
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+}
+
+```
+
+## cell-type gexp
+
+```{r}
+
+n <- "15"
+
+m <- mobLDAsBuilt[[n]]$beta
+
+sort(m[3,], decreasing = TRUE)[1:5] # gad
+# sort(m[5,], decreasing = TRUE)[1:5]
+sort(m[7,], decreasing = TRUE)[1:5] # nrgn
+
+```
+
+```{r}
+
+# input df for `vizGeneCounts`
+genes <- c("Hspa8", "Calm2", "Atp1b1", "Mbp", "Snap25", "Nrgn", "Gad1", "Pcp4")
+df <- t(mobCPM)[, genes]
+df <- merge(mobCorpus$pos, as.data.frame(df), by=0)
+rownames(df) <- df$Row.names
+
+```
+
+```{r}
+
+for (g in genes){
+  vizGeneCounts(df = df,
+                gene = g,
+                groups = NA,
+                group_cols = NA,
+                size = 7, stroke = 0.01,
+                plotTitle = g,
+                showLegend = TRUE)
+}
+
+# ggsave(filename = "Fig1_F-1_mob_k15_cpm_gexp_Ptgds.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+
+```
+
+# ----------------------------------
+
+# Compare models
+
+## SL fitting
+
+Note:
+SL takes processed counts
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/mob_processed_sparseMatrix.RData")
+# loads the `mob_se`; the processed counts seurat object.
+# SL needs processed counts. RCTD takes raw counts
+
+mob_meta <- read.csv2("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_metaData_seurat.csv", sep = ",")
+
+# wt_cells <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$"X"
+# mob_se_wt <- mob_se[,wt_cells]
+# meta.data.wt <-  mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]
+
+
+# mob_se_wt_obj <- CreateSeuratObject(counts = mob_se_wt, project = "mob_wt",
+#                                       meta.data = meta.data.wt)
+
+# a lot of metadata info not being added...? try doing manually:
+# mob_se_wt_obj[["ClusterName"]] <- meta.data.wt$ClusterName
+# mob_se_wt_obj[["percent.mito"]] <- meta.data.wt$percent.mito
+
+# Set the known clusters as the "active.indent"
+# Seurat::Idents(object = mob_se_wt_obj) <- mob_se_wt_obj@meta.data$ClusterName
+
+# get cluster markers
+# cluster_markers_mob_se_wt <- Seurat::FindAllMarkers(object = mob_se_wt_obj,
+#                                               assay = "RNA",
+#                                               slot = "data",
+#                                               verbose = TRUE,
+#                                               only.pos = TRUE)
+
+# down samples cell from each cluster and select genes marker and variable genes
+# se_sc_down_wt <- downsample_se_obj(se_obj = mob_se_wt_obj,
+#                                 clust_vr = "ClusterName",
+#                                 cluster_markers = cluster_markers_mob_se_wt,
+#                                 cl_n = 100, # size to sample from each cluster
+#                                 hvg = 3000) # number or NULL. choose additional highly variable genes on top of cluster genes
+
+# nmf_mod_mob_wt_countsClean_ls <- train_nmf(cluster_markers = cluster_markers_mob_se_wt,
+#                         se_sc = se_sc_down_wt,
+#                         mtrx_spatial = t(mobClean), # the original mob st data
+#                         clust_vr = "ClusterName",
+#                         ntop = NULL, # number unique markers per cluster, otherwise all of them
+#                         hvg = 3000, # number of highly variable genes in addition to the marker genes
+#                         transf = "uv",
+#                         method = "nsNMF")
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/spotlight_nmf_train_mob_wt_countsClean_ls.RData")
+# loads the `nmf_mod_mob_wt_countsClean_ls` object
+# nmf_mod_mob_wt_countsClean_ls[[1]]
+
+# 6336 genes; includes cluster genes + 1000 variable genes that are also in `mobClean` ST data
+
+sl_countsClean <- SPOTlightPredict(nmfRef = nmf_mod_mob_wt_countsClean_ls, stCounts = mobClean, min_cont = 0.0)
+# report all proportions.
+# can filter later by setting weights < thresh to 0, then updating proportions by dividing by new rowsum, and
+# if rowsums 0, then set NAs to 0 (this is what is done in SPOTlight code)
+
+# Mural2 not present at all in SL so drop
+sl_ctTheta <- sl_countsClean$thetaCt[,which(!colnames(sl_countsClean$thetaCt) %in% c("Mural2"))]
+
+```
+
+## RCTD fitting
+
+Note: RCTD takes raw counts
+
+```{r}
+
+# mob raw counts data
+# mob_se_raw <- read.table("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/GSE121891_mOB_scRNAseq/GSE121891_OB_6_runs.raw.dge.csv",
+#                          sep = ",", header = TRUE, row.names = 1)
+# mob_se_wt_raw <- as.sparse(mob_se_raw[,wt_cells])
+# mob_se_wt_raw_obj <- CreateSeuratObject(counts = mob_se_wt_raw, project = "mob scRNAseq raw")
+
+# mob_se_wt_raw_obj[["perc.mito"]] <- meta.data.wt$percent.mito
+# mob_se_wt_raw_obj[["nUMI"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$nUMI
+# mob_se_wt_raw_obj[["ClusterName"]] <- mob_meta[which(mob_meta$orig.ident %in% c("WT1", "WT2")),]$ClusterName
+
+# Seurat::Idents(object = mob_se_wt_raw_obj) <- mob_se_wt_raw_obj@meta.data$ClusterName
+
+# cluster_markers_mob_se_wt_raw <- Seurat::FindAllMarkers(object = mob_se_wt_raw_obj,
+#                                               assay = "RNA",
+#                                               slot = "data",
+#                                               verbose = TRUE,
+#                                               only.pos = TRUE)
+
+```
+
+make reference
+
+```{r}
+
+p <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/RCTD/mob_ref/"
+
+ref <- mob_se_wt_raw_obj
+
+meta_ref <- ref@meta.data[,c("ClusterName", "nUMI")]
+meta_ref$barcode <- rownames(meta_ref)
+colnames(meta_ref) <- c("cluster", "nUMI", "barcode")
+meta_ref <- meta_ref[,c("barcode", "cluster", "nUMI")]
+write.csv(x=meta_ref, row.names = FALSE, file=paste0(p, "meta_data.csv"))
+
+
+x <- as.data.frame(as.matrix(ref@assays$RNA@counts))
+cols <- colnames(x)
+x$Row.names <- rownames(x)
+x <- x[,c("Row.names", cols)]
+write.table(x=x, sep = ",",
+            col.names = colnames(x),
+            row.names = FALSE,
+            file=paste0(p, "dge.csv"))
+
+# write.table(x=ref@assays$RNA@counts,
+#             sep = ",",
+#             col.names = colnames(ref@assays$RNA@counts),
+#             file=paste0(p, "dge.csv"))
+
+write.csv(x = data.frame(Cluster = unique(ref@meta.data$ClusterName),
+                         Name = unique(ref@meta.data$ClusterName)),
+          row.names = FALSE,
+          file = paste0(p, "cell_type_dict.csv"))
+
+```
+
+```{r}
+
+# refdir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/RCTD/mob_ref/"
+# mob_scRNAseq_RCTD_reference <- dgeToSeurat(refdir)
+
+```
+
+`mobClean` data as ST data for fitting
+
+```{r}
+
+# p <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/RCTD/mob_countsClean/"
+# d <- mobClean
+# 
+# x <- as.data.frame(t(d))
+# cols <- colnames(x)
+# x$Row.names <- rownames(x)
+# x <- x[,c("Row.names", cols)]
+# write.table(x=x, sep = ",",
+#             col.names = colnames(x),
+#             row.names = FALSE,
+#             file=paste0(p, "MappedDGEForR.csv"))
+# 
+# beads <- mobCorpus$mob$pos
+# colnames(beads) <- c("xcoord", "ycoord")
+# beads$barcodes <- rownames(beads)
+# beads <- beads[,c("barcodes", "xcoord", "ycoord")]
+# write.table(x=beads,
+#             sep = ",",
+#             row.names = FALSE,
+#             file=paste0(p, "BeadLocationsForR.csv"))
+# 
+# write.csv(x=t(countsClean), file=paste0(p, "MappedDGEForR.csv"))
+# write.csv(x=mobCorpus$mob$pos, file=paste0(p, "BeadLocationsForR.csv"))
+
+```
+
+```{r}
+
+# datadir <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/RCTD/mob_countsClean/"
+# spatialRNA <- read.SpatialRNA(datadir)
+
+```
+
+fitting
+
+```{r}
+
+# RCTD_mob <- create.RCTD(spatialRNA,
+#                         mob_scRNAseq_RCTD_reference,
+#                         max_cores = 7, CELL_MIN_INSTANCE = 20)
+# 
+# RCTD_mob_fit <- run.RCTD(RCTD_mob, doublet_mode = TRUE)
+# 
+# RCTD_mob_results <- RCTD_mob_fit@results
+# # normalize the cell type proportions to sum to 1.
+# RCTD_mob_results_norm <-  sweep(RCTD_mob_results$weights, 1, rowSums(RCTD_mob_results$weights), '/')
+# 
+# summary(as.matrix(RCTD_mob_results_norm))
+
+```
+
+RCTD is 28 cts; SL is 37
+
+## mOB ref gexp
+
+```{r}
+
+mobWtCellClusters <- meta.data.wt$ClusterName
+names(mobWtCellClusters) <- meta.data.wt$X
+
+mobWtCellProxyBetaRaw <- model.matrix(~ 0 + as.factor(mobWtCellClusters))
+
+rownames(mobWtCellProxyBetaRaw) <- names(mobWtCellClusters)
+
+# fix names
+colnames(mobWtCellProxyBetaRaw) <- unlist(lapply(colnames(mobWtCellProxyBetaRaw), function(x) {
+  unlist(strsplit(x, ")"))[2]
+}))
+
+mobWtCellProxyBetaRaw <- t(as.matrix(mob_se_wt_raw) %*% mobWtCellProxyBetaRaw)
+
+mobWtCellProxyBetaRaw <- mobWtCellProxyBetaRaw/rowSums(mobWtCellProxyBetaRaw)
+
+dim(mobWtCellProxyBetaRaw)
+
+```
+
+## LDA
+
+```{r}
+
+mobLDAsBuilt[["28"]] <- buildLDAobject(LDAmodel = optimalModel(mobLDAs, opt = 28),
+                      deepSplit = 4,
+                      colorScheme = "rainbow")
+
+mobLDAsBuilt[["37"]] <- buildLDAobject(LDAmodel = optimalModel(mobLDAs, opt = 37),
+                      deepSplit = 4,
+                      colorScheme = "rainbow")
+
+mobLDAsBuilt[["38"]] <- buildLDAobject(LDAmodel = optimalModel(mobLDAs, opt = 38),
+                      deepSplit = 4,
+                      colorScheme = "rainbow")
+
+```
+
+```{r}
+
+m <- mobLDAsBuilt[["38"]]$theta
+p <- mobCorpus$pos
+
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=rainbow(ncol(m)),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = 38)
+print(plt)
+
+```
+
+# LDA vs ref gexp
+
+MERIGNUE differential genes for each cluster:
+```{r}
+
+# cells and their associated clusters
+mobWtCellClusters <- mob_se_wt_obj$ClusterName
+
+mobDifGenesRaw <- MERINGUE::getDifferentialGenes(cd = mob_se_wt_raw, cols = mobWtCellClusters)
+
+# NOTE: because each gene is assessed separately, it is ok that all the 18K genes are being used instead of limiting to the 93 just for this analysis
+                                            
+```
+
+```{r}
+
+m1 <- mobLDAsBuilt[["38"]]$beta
+m2 <- as.matrix(mobWtCellProxyBetaRaw)
+
+sharedGenes <- intersect(colnames(m1), colnames(m2))
+
+corMtx <- getCorrMtx(m1 = m1,
+                     m2 = m2,
+                     type = "b")
+pairs <- lsatPairs(corMtx)
+
+summary_df <- do.call(rbind, lapply(pairs$rowix, function(i){
+        # get paired ct
+        ct <- rownames(m2)[pairs$colsix[i]]
+        
+        # the corresponding diff genes table
+        ct_df <- mobDifGenesRaw[[ct]]
+        
+        # filter for sig diff genes for specific ct
+        # ct_df <- ct_df[ct_df$p.adj < 0.05,]
+        
+        # ct sig genes that are also in corpus
+        genes <- intersect(sharedGenes, rownames(ct_df))
+        
+        topic_betas <- m1[i,genes]
+        ct_df <- ct_df[genes,]
+        
+        # gexp values
+        ct_genes <- m2[ct,genes]
+        
+        # add extra columns to df for ggplot
+        ct_df$gexp <- ct_genes
+        ct_df$gexp_rank <- rank(ct_genes)
+        ct_df$beta <- topic_betas
+        ct_df$beta_rank <- rank(topic_betas) # 1 = lowest beta
+        ct_df$pair <- paste0(i, " vs ", ct)
+        
+        # take top 10 betas
+        # ct_df <- ct_df[ct_df$beta_rank > 83,]
+         
+        # x <- -log10(ct_df$p.adj)
+        # x <- log10(ct_df$gexp + 1)
+        x <- ct_df$gexp_rank
+        # y <- ct_df$beta
+        y <- ct_df$beta_rank
+        # y <- ct_df$beta
+         
+        prsn <- cor(x, y, method = "pearson")
+        sprn <- cor(x, y, method = "spearman")
+        p <- ggplot(data = ct_df) +
+                geom_point(aes(x = gexp_rank, y = beta_rank)) +
+                labs(title = paste("Beta pairs: Topic", i, "vs", ct, "; cor =", round(corMtx[i,ct],2), "\n",
+                                   "pearson =", round(prsn, 2), "spearman =", round(sprn, 2)))
+        print(p)
+        ct_df
+})) 
+
+ggplot(data = summary_df) +
+        geom_hex(aes(x = gexp_rank, y = beta_rank), bins=10) +
+        scale_fill_gradient(low = "white", high = "red") +
+        theme_classic()
+
+x <- summary_df$gexp_rank
+y <- summary_df$beta_rank
+cor(x, y, method = "pearson")
+cor(x, y, method = "spearman")
+
+```
+
+For clusters with few total cells, the gene counts for lowly expressed genes will be small and thus the same for a lot of genes. For example, for Mes2, see a lot of gene with 0, 1, 2, etc. So these will all have the same value in `mobWtCellProxyBetaRaw`. Thus will have the same rank. This is why you see vertical streaks for some cell types. For cell types with lots of cells, like N10, streaks dissappear because enough cells to create unique gene counts for the genes. 
+
+However, for all cell types, genes with higher expression tend to get unique values and unique ranks, so no streaks. And encouragingly, similarly high ranks whether it is beta or gexp. The only thing is that it is hard to get a fair correlation for each topic-ct pair because of this streaking.
+
+
+```{r}
+
+m1 <- mobLDAsBuilt[["15"]]$beta
+m2 <- as.matrix(mobWtCellProxyBetaRaw)
+
+sharedGenes <- intersect(colnames(m1), colnames(m2))
+
+corMtx <- getCorrMtx(m1 = m1,
+                     m2 = m2,
+                     type = "b")
+pairs <- lsatPairs(corMtx)
+
+summary_df <- do.call(rbind, lapply(pairs$rowix, function(i){
+        # get paired ct
+        ct <- rownames(m2)[pairs$colsix[i]]
+        
+        # the corresponding diff genes table
+        ct_df <- mobDifGenesRaw[[ct]]
+        
+        # filter for sig diff genes for specific ct
+        # ct_df <- ct_df[ct_df$p.adj < 0.05,]
+        
+        # ct sig genes that are also in corpus
+        genes <- intersect(sharedGenes, rownames(ct_df))
+        
+        topic_betas <- m1[i,genes]
+        ct_df <- ct_df[genes,]
+        
+        # gexp values
+        ct_genes <- m2[ct,genes]
+        
+        # add extra columns to df for ggplot
+        ct_df$gexp <- ct_genes
+        ct_df$gexp_rank <- rank(ct_genes)
+        ct_df$beta <- topic_betas
+        ct_df$beta_rank <- rank(topic_betas) # 1 = lowest beta
+        ct_df$pair <- paste0(i, " vs ", ct)
+        
+        # take top 10 betas
+        # ct_df <- ct_df[ct_df$beta_rank > 83,]
+         
+        # x <- -log10(ct_df$p.adj)
+        # x <- log10(ct_df$gexp + 1)
+        x <- ct_df$gexp_rank
+        # y <- ct_df$beta
+        y <- ct_df$beta_rank
+        # y <- ct_df$beta
+         
+        prsn <- cor(x, y, method = "pearson")
+        sprn <- cor(x, y, method = "spearman")
+        p <- ggplot(data = ct_df) +
+                geom_point(aes(x = gexp_rank, y = beta_rank)) +
+                labs(title = paste("Beta pairs: Topic", i, "vs", ct, "; cor =", round(corMtx[i,ct],2), "\n",
+                                   "pearson =", round(prsn, 2), "spearman =", round(sprn, 2)))
+        print(p)
+        ct_df
+})) 
+
+ggplot(data = summary_df) +
+        geom_hex(aes(x = gexp_rank, y = beta_rank), bins=10) +
+        scale_fill_gradient(low = "white", high = "red") +
+        theme_classic()
+
+x <- summary_df$gexp_rank
+y <- summary_df$beta_rank
+cor(x, y, method = "pearson")
+cor(x, y, method = "spearman")
+
+```
+
+# LDA vs SL
+
+note that pairing done based on pixel proportion correlation, but clustering in heatmap based on gexp similarity of cell-types
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = sl_ctTheta,
+                     m2 = mobLDAsBuilt[["37"]]$theta,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(2,4))
+# dev.off()
+
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+# new mtx where rows and cols in order in which they are paired
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+# get dendro clusters for the cts based on the gexp similarity
+mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
+beta <- mobWtCellProxyBetaRaw[rownames(corMtx_paired), mob_sig_marker_genes]
+# beta <- sl_countsClean$betaCt[colnames(corMtx_paired),]
+d_ <- as.dist(1-cor(t(beta)))
+hc_ <- stats::hclust(d_, method = "ward.D")
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-heatmap.pdf"))
+gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+                  Rowv = NA,
+                  Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "STdevonvolve",
+                  ylab = "SPOTlight",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(4,5))
+# dev.off()
+
+lda_vs_sl_theta <- diag(corMtx_paired)
+
+# hist(lda_vs_sl_theta, breaks = 10)
+summary(lda_vs_sl_theta)
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+    # width = 5, # The width of the plot in inches
+    # height = 3) # The height of the plot in inches
+par( mfrow = c(1,3) )
+boxplot(lda_vs_sl_theta,
+        medcol = "black", # medium line color
+        medlty = 1, # line type
+        medlwd = 1, # line width
+        boxfill = "white", # color fill of box
+        boxcol = "black", # outline color of box
+        boxlty = 1, # box line type
+        boxlwd = 1, # width of box line
+        whisklty = 1, # whisker type
+        whisklwd = 1,
+        staplelwd = 0, # the ends of the whiskers
+        outpch = 1, # type of outlies
+        outcex = 0,
+        main = "",
+        cex.main = 1,
+        xlab = "",
+        ylab = "Correlation") # size of outliers
+stripchart(lda_vs_sl_theta, vertical = TRUE,
+    method = "jitter", add = TRUE, pch = 20, col = 'black')
+# dev.off()
+
+```
+
+# RCTD vs SL
+
+note that pairing done based on pixel proportion correlation, but clustering in heatmap based on gexp similarity of cell-types
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = as.matrix(RCTD_mob_results_norm),
+                     m2 = sl_ctTheta,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "SL",
+                  ylab = "RCTD",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,5))
+# dev.off()
+
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+# new mtx where rows and cols in order in which they are paired
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+# get dendro clusters for cts based on the gexp similarity
+mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
+beta <- mobWtCellProxyBetaRaw[rownames(corMtx_paired), mob_sig_marker_genes]
+# beta <- sl_countsClean$betaCt[colnames(corMtx_paired),]
+d_ <- as.dist(1-cor(t(beta)))
+hc_ <- stats::hclust(d_, method = "ward.D")
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-heatmap.pdf"))
+gplots::heatmap.2(x = corMtx_paired[hc_$order,], # reorder rows based on dendro
+                  Rowv = NA,
+                  Colv = as.dendrogram(hc_), # columns rearranges same way as rows using dendro and thus pairing maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "SL",
+                  ylab = "RCTD",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,5))
+# dev.off()
+
+rctd_vs_sl_theta <- diag(corMtx_paired)
+
+# hist(rctd_vs_sl_theta, breaks = 10)
+summary(rctd_vs_sl_theta)
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+    # width = 5, # The width of the plot in inches
+    # height = 3) # The height of the plot in inches
+par( mfrow = c(1,3) )
+boxplot(rctd_vs_sl_theta,
+        medcol = "black", # medium line color
+        medlty = 1, # line type
+        medlwd = 1, # line width
+        boxfill = "white", # color fill of box
+        boxcol = "black", # outline color of box
+        boxlty = 1, # box line type
+        boxlwd = 1, # width of box line
+        whisklty = 1, # whisker type
+        whisklwd = 1,
+        staplelwd = 0, # the ends of the whiskers
+        outpch = 1, # type of outlies
+        outcex = 0,
+        main = "",
+        cex.main = 1,
+        xlab = "",
+        ylab = "Correlation") # size of outliers
+stripchart(rctd_vs_sl_theta, vertical = TRUE,
+    method = "jitter", add = TRUE, pch = 20, col = 'black')
+# dev.off()
+
+```
+
+# RCTD vs LDA
+
+note that pairing done based on pixel proportion correlation, but clustering in heatmap based on gexp similarity of cell-types
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = as.matrix(RCTD_mob_results_norm),
+                     m2 = mobLDAsBuilt[["28"]]$theta,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "STdeconvolve",
+                  ylab = "RCTD",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,5))
+# dev.off()
+
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+# new mtx where rows and cols in order in which they are paired
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+# get dendro clusters for the mob cts based on the gexp similarity
+mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
+beta <- mobWtCellProxyBetaRaw[rownames(corMtx_paired), mob_sig_marker_genes]
+# beta <- sl_countsClean$betaCt[colnames(corMtx_paired),]
+d_ <- as.dist(1-cor(t(beta)))
+hc_ <- stats::hclust(d_, method = "ward.D")
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-heatmap.pdf"))
+gplots::heatmap.2(x = corMtx_paired[hc_$order,], # order rows based on dendro
+                  Rowv = NA,
+                  Colv = as.dendrogram(hc_), # columns ordered same way as rows based on dendro and thus pairing maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "STdeconvolve",
+                  ylab = "RCTD",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(6,5))
+# dev.off()
+
+rctd_vs_lda_theta <- diag(corMtx_paired)
+
+# hist(rctd_vs_lda_theta, breaks = 10)
+summary(rctd_vs_lda_theta)
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+    # width = 5, # The width of the plot in inches
+    # height = 3) # The height of the plot in inches
+par( mfrow = c(1,3) )
+boxplot(rctd_vs_lda_theta,
+        medcol = "black", # medium line color
+        medlty = 1, # line type
+        medlwd = 1, # line width
+        boxfill = "white", # color fill of box
+        boxcol = "black", # outline color of box
+        boxlty = 1, # box line type
+        boxlwd = 1, # width of box line
+        whisklty = 1, # whisker type
+        whisklwd = 1,
+        staplelwd = 0, # the ends of the whiskers
+        outpch = 1, # type of outlies
+        outcex = 0,
+        main = "",
+        cex.main = 1,
+        xlab = "",
+        ylab = "Correlation") # size of outliers
+stripchart(rctd_vs_lda_theta, vertical = TRUE,
+    method = "jitter", add = TRUE, pch = 20, col = 'black')
+# dev.off()
+
+```
+
+# summarize
+
+```{r}
+
+cor_mob_summary <- list("STdeconvolve vs RCTD" = rctd_vs_lda_theta,
+                        "RCTD vs SL" = rctd_vs_sl_theta,
+                        "STdeconvolve vs SL" = lda_vs_sl_theta)
+
+# reshape2::melt(plyr::ldply(cor_mob_summary, rbind))
+
+# my_comparisons <- list( c("lda_vs_sl", "lda_vs_rctd"), c("lda_vs_rctd", "sl_vs_rctd"), c("lda_vs_sl", "sl_vs_rctd") )
+
+# `plyr::ldply` combines vectors in list of different lenghts into dataframe
+# then `reshape2::melt` into long form dataframe for ggplot
+
+ggplot(data = reshape2::melt(plyr::ldply(cor_mob_summary, rbind)), 
+       aes(x=.id, y=value, fill=.id)) +
+  geom_boxplot() + 
+  # stat_compare_means(comparisons = my_comparisons, method = "wilcox.test",
+  #                    label.y = c(1.02, 1.09, 1.19)) +
+  geom_point(position=position_jitterdodge()) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, vjust = 1., hjust=0.5)) +
+  labs(title = "Method Correlations between best matched predicted cell types",
+       x = "Method", y = "Correlation")
+# ggsave(filename = "Fig_2_mob-methods-corr-each-other.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+
+```
+
+Maybe SL and RCTD correlate with each other because using same scRNAseq ref? But some cell types correlate poorly. Which ones? Are they predicted to be at low proportions overall?
+
+## correlation vs proportions
+
+### rctd vs sl
+
+```{r}
+
+bottom <- order(rctd_vs_sl_theta, decreasing = FALSE)[1:5]
+
+corMtx <- getCorrMtx(m1 = as.matrix(RCTD_mob_results_norm), # rows
+                     m2 = sl_ctTheta, # columns
+                     type = "t")
+pairs <- lsatPairs(corMtx)
+
+rctd_order <- rownames(corMtx[pairs$rowix, pairs$colsix])
+rctd_means <- colMeans(as.matrix(RCTD_mob_results_norm))[rctd_order]
+rctd_medians <- apply(as.matrix(RCTD_mob_results_norm), 2, median)[rctd_order]
+
+sl_order <- colnames(corMtx[pairs$rowix, pairs$colsix])
+sl_means <- colMeans(sl_ctTheta)[sl_order]
+sl_medians <- apply(sl_ctTheta, 2, median)[sl_order]
+
+df <- data.frame("RCTD mean" = rctd_means,
+                 "SL mean" = sl_means,
+                 "RCTD median" = rctd_medians,
+                 "SL median" = sl_medians,
+                 "RCTD ct" = rctd_order,
+                 "SL ct" = sl_order,
+                 "correlation" = rctd_vs_sl_theta,
+                 "rank" = rank(rctd_vs_sl_theta),
+                 "names" = paste0(rctd_order, "-", sl_order))
+
+corMtx[pairs$rowix[bottom], pairs$colsix[bottom]]
+df
+
+ggplot(data = df) +
+  geom_point(aes(x = RCTD.mean, y = SL.mean, color = correlation)) +
+  scale_color_viridis(option = "A", direction = -1) +
+  theme_classic() +
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Correlation of predicted proportions of paired cell types",
+       x = "RCTD mean spot proportion", y = "SPOTlight mean spot proportion") +
+  coord_cartesian(clip = "off") +
+  geom_text_repel(data = df, mapping = aes(x = RCTD.mean, y = SL.mean, label = names), size = 2.5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.2, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  # nudge_x = 0.01, direction = "y", hjust = "left", 
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  xlim(0, 0.23) +
+  ylim(0, 0.23)
+# ggsave(filename = "Fig_S_mob-RCTD-SL-ct_corrs.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+
+```
+
+Recall that RCTD returned only 28 detected cts whereas SPOTlight returned predictions for all 38.
+
+### rctd vs lda
+
+```{r}
+
+bottom <- order(rctd_vs_lda_theta, decreasing = FALSE)[1:5]
+
+corMtx <- getCorrMtx(m1 = as.matrix(RCTD_mob_results_norm), # rows
+                     m2 = mobLDAsBuilt[["28"]]$theta, # columns
+                     type = "t")
+pairs <- lsatPairs(corMtx)
+
+rctd_order <- rownames(corMtx[pairs$rowix, pairs$colsix])
+rctd_means <- colMeans(as.matrix(RCTD_mob_results_norm))[rctd_order]
+rctd_medians <- apply(as.matrix(RCTD_mob_results_norm), 2, median)[rctd_order]
+
+lda_order <- colnames(corMtx[pairs$rowix, pairs$colsix])
+lda_means <- colMeans(mobLDAsBuilt[["28"]]$theta)[lda_order]
+lda_medians <- apply(mobLDAsBuilt[["28"]]$theta, 2, median)[lda_order]
+
+df <- data.frame("RCTD mean" = rctd_means,
+                 "STdeconvolve mean" = lda_means,
+                 "RCTD median" = rctd_medians,
+                 "STdeconvolve median" = lda_medians,
+                 "RCTD ct" = rctd_order,
+                 "STdeconvolve ct" = lda_order,
+                 "correlation" = rctd_vs_lda_theta,
+                 "rank" = rank(rctd_vs_lda_theta),
+                 "names" = paste0(lda_order, "-", rctd_order))
+
+corMtx[pairs$rowix[bottom], pairs$colsix[bottom]]
+df
+
+ggplot(data = df) +
+  geom_point(aes(x = RCTD.mean, y = STdeconvolve.mean, color = correlation)) +
+  scale_color_viridis(option = "A", direction = -1) +
+  theme_classic() +
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Correlation of predicted proportions of paired cell types",
+       x = "RCTD mean spot proportion", y = "STdeconvolve mean spot proportion") +
+  coord_cartesian(clip = "off") +
+  geom_text_repel(data = df, mapping = aes(x = RCTD.mean, y = STdeconvolve.mean, label = names), size = 2.5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.2, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  # nudge_x = 0.01, direction = "y", hjust = "left", 
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  xlim(0, 0.23) +
+  ylim(0, 0.23)
+# ggsave(filename = "Fig_S_mob-STdev-RCTD-ct_corrs.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+
+```
+
+### sl vs lda
+
+```{r}
+
+bottom <- order(lda_vs_sl_theta, decreasing = FALSE)[1:5]
+
+corMtx <- getCorrMtx(m1 = sl_ctTheta, # rows
+                     m2 = mobLDAsBuilt[["37"]]$theta, # columns
+                     type = "t")
+pairs <- lsatPairs(corMtx)
+
+sl_order <- rownames(corMtx[pairs$rowix, pairs$colsix])
+sl_means <- colMeans(sl_ctTheta)[sl_order]
+sl_medians <- apply(sl_ctTheta, 2, median)[sl_order]
+
+lda_order <- colnames(corMtx[pairs$rowix, pairs$colsix])
+lda_means <- colMeans(mobLDAsBuilt[["37"]]$theta)[lda_order]
+lda_medians <- apply(mobLDAsBuilt[["37"]]$theta, 2, median)[lda_order]
+
+df <- data.frame("SL mean" = sl_means,
+                 "STdeconvolve mean" = lda_means,
+                 "SL median" = sl_medians,
+                 "STdeconvolve median" = lda_medians,
+                 "SL ct" = sl_order,
+                 "STdeconvolve ct" = lda_order,
+                 "correlation" = lda_vs_sl_theta,
+                 "rank" = rank(lda_vs_sl_theta),
+                 "names" = paste0(lda_order, "-", sl_order))
+
+corMtx[pairs$rowix[bottom], pairs$colsix[bottom]]
+df
+
+ggplot(data = df) +
+  geom_point(aes(x = SL.mean, y = STdeconvolve.mean, color = correlation)) +
+  scale_color_viridis(option = "A", direction = -1) +
+  theme_classic() +
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Correlation of predicted proportions of paired cell types",
+       x = "SPOTlight mean spot proportion", y = "STdeconvolve mean spot proportion") +
+  coord_cartesian(clip = "off") +
+  geom_text_repel(data = df, mapping = aes(x = SL.mean, y = STdeconvolve.mean, label = names), size = 2.5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.2, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  # nudge_x = 0.01, direction = "y", hjust = "left", 
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  xlim(0, 0.12) +
+  ylim(0, 0.12)
+# ggsave(filename = "Fig_S_mob-STdev-SL-ct_corrs.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+
+```
+
+# ----------------------------------
+# adjustment and filt via prop
+
+set cell-types less than a certain proportion in pixels to 0. Then recompute proportions in pixels.
+
+Makes more sense than removing cell-types with a median less than a certain amount because many cell-types are present at high proportions in some spots but not all. In fact, the cell-types that are low in most pixels but high in a small number of pixels may actually be more likely to be cell types because would suggest specific organization in the spots.
+
+## RCTD
+
+```{r}
+
+summary(as.matrix(RCTD_mob_results_norm))
+
+ggplot(data = reshape2::melt(as.matrix(RCTD_mob_results_norm))) +
+  geom_boxplot(aes(x = reorder(Var2, -value, ), y = value)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+```{r}
+
+rctd_theta <- as.matrix(RCTD_mob_results_norm)
+rctd_theta[rctd_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+ambig <- 1 - rowSums(rctd_theta)
+rctd_theta2 <- cbind(rctd_theta, ambig)
+
+# readjust proportions
+rctd_theta <- rctd_theta/rowSums(rctd_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+rctd_theta[is.na(rctd_theta)] <- 0
+
+summary(rctd_theta)
+
+ggplot(data = reshape2::melt(rctd_theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("RCTD predicted cell-type proportions in pixels after filtering")
+
+
+# drop ant cts that are 0 for all pixels
+rctd_theta <- rctd_theta[,which(colSums(rctd_theta) > 0)]
+rctd_theta2 <- rctd_theta2[,which(colSums(rctd_theta2) > 0)]
+
+dim(rctd_theta)
+dim(rctd_theta2)
+
+```
+
+```{r}
+
+m <- as.matrix(RCTD_mob_results_norm)
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=rainbow(ncol(m)),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "RCTD")
+print(plt)
+
+m <- rctd_theta
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=rainbow(ncol(m)),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "RCTD filt")
+print(plt)
+
+
+m <- rctd_theta2
+p <- mobCorpus$pos
+cc <- c(rainbow(ncol(m)-1), "white")
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=cc,
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "RCTD filt")
+print(plt)
+
+```
+
+## SL
+
+```{r}
+
+summary(sl_ctTheta)
+
+ggplot(data = reshape2::melt(sl_ctTheta)) +
+  geom_boxplot(aes(x = reorder(Var2, -value, ), y = value)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+```{r}
+
+sl_theta <- sl_ctTheta
+sl_theta[sl_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+ambig <- 1 - rowSums(sl_theta)
+sl_theta2 <- cbind(sl_theta, ambig)
+
+# readjust proportions
+sl_theta <- sl_theta/rowSums(sl_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+sl_theta[is.na(sl_theta)] <- 0
+
+summary(sl_theta)
+
+ggplot(data = reshape2::melt(sl_theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("SPOTlight predicted cell-type proportions in pixels after filtering")
+
+
+# drop ant cts that are 0 for all pixels
+sl_theta <- sl_theta[,which(colSums(sl_theta) > 0)]
+sl_theta2 <- sl_theta2[,which(colSums(sl_theta2) > 0)]
+
+dim(sl_theta)
+dim(sl_theta2)
+
+```
+
+```{r}
+
+m <- sl_ctTheta
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=rainbow(ncol(m)),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "SL")
+print(plt)
+
+m <- sl_theta
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=rainbow(ncol(m)),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "SL filt")
+print(plt)
+
+m <- sl_theta2
+p <- mobCorpus$pos
+cc <- c(rainbow(ncol(m)-1), "white")
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=cc,
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "SL filt")
+print(plt)
+
+```
+
+## LDA
+
+```{r}
+
+summary(mobLDAsBuilt[["38"]]$theta)
+ggplot(data = reshape2::melt(mobLDAsBuilt[["38"]]$theta)) +
+  geom_boxplot(aes(x = reorder(Var2, -value), y = value)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+summary(mobLDAsBuilt[["37"]]$theta)
+ggplot(data = reshape2::melt(mobLDAsBuilt[["37"]]$theta)) +
+  geom_boxplot(aes(x = reorder(Var2, -value), y = value)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+summary(mobLDAsBuilt[["28"]]$theta)
+ggplot(data = reshape2::melt(mobLDAsBuilt[["28"]]$theta)) +
+  geom_boxplot(aes(x = reorder(Var2, -value), y = value)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+summary(mobLDAsBuilt[["15"]]$theta)
+ggplot(data = reshape2::melt(mobLDAsBuilt[["15"]]$theta)) +
+  geom_boxplot(aes(x = reorder(Var2, -value), y = value)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+```{r}
+
+for (ix in seq(3,20)){
+  i <- as.character(ix)
+  plt <- ggplot(data = reshape2::melt(mobLDAsBuilt[[i]]$theta)) +
+    geom_boxplot(aes(x = reorder(Var2, -value), y = value)) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    ggtitle(paste("K =", i, "All pixels"))
+  print(plt)
+}
+
+for (ix in seq(3,20)){
+  i <- as.character(ix)
+  plt <- ggplot(data = reshape2::melt(mobLDAsBuilt[[i]]$theta[mobProxyTheta$`Glomerular Layer` == 1,])) +
+    geom_boxplot(aes(x = reorder(Var2, -value), y = value)) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    ggtitle(paste("K =", i, "Glomerular Layer pixels"))
+  print(plt)
+}
+
+for (ix in seq(3,20)){
+  i <- as.character(ix)
+  plt <- ggplot(data = reshape2::melt(mobLDAsBuilt[[i]]$theta[mobProxyTheta$`Granule Cell Layer` == 1,])) +
+    geom_boxplot(aes(x = reorder(Var2, -value), y = value)) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    ggtitle(paste("K =", i, "Granule Cell Layer pixels"))
+  print(plt)
+}
+
+for (ix in seq(3,20)){
+  i <- as.character(ix)
+  plt <- ggplot(data = reshape2::melt(mobLDAsBuilt[[i]]$theta[mobProxyTheta$`Mitral Cell Layer` == 1,])) +
+    geom_boxplot(aes(x = reorder(Var2, -value), y = value)) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    ggtitle(paste("K =", i, "Mitral Cell Layer pixels"))
+  print(plt)
+}
+
+for (ix in seq(3,20)){
+  i <- as.character(ix)
+  plt <- ggplot(data = reshape2::melt(mobLDAsBuilt[[i]]$theta[mobProxyTheta$`Olfactory Nerve Layer` == 1,])) +
+    geom_boxplot(aes(x = reorder(Var2, -value), y = value)) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    ggtitle(paste("K =", i, "Olfactory Nerve Layer pixels"))
+  print(plt)
+}
+
+for (ix in seq(3,20)){
+  i <- as.character(ix)
+  plt <- ggplot(data = reshape2::melt(mobLDAsBuilt[[i]]$theta[mobProxyTheta$`Outer Plexiform Layer` == 1,])) +
+    geom_boxplot(aes(x = reorder(Var2, -value), y = value)) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    ggtitle(paste("K =", i, "Outer Plexiform Layer pixels"))
+  print(plt)
+}
+
+
+```
+
+
+```{r}
+
+lda_theta_38 <- mobLDAsBuilt[["38"]]$theta
+lda_theta_38[lda_theta_38 < 0.1] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+ambig <- 1 - rowSums(lda_theta_38)
+lda_theta2_38 <- cbind(lda_theta_38, ambig)
+
+# readjust proportions
+lda_theta_38 <- lda_theta_38/rowSums(lda_theta_38)
+# if NAs because all cts are 0 in a spot, replace with 0
+lda_theta_38[is.na(lda_theta_38)] <- 0
+
+summary(lda_theta_38)
+
+ggplot(data = reshape2::melt(lda_theta_38)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("STdeconvovle k=38 predicted cell-type proportions in pixels after filtering")
+
+# drop ant cts that are 0 for all pixels
+lda_theta_38 <- lda_theta_38[,which(colSums(lda_theta_38) > 0)]
+lda_theta2_38 <- lda_theta2_38[,which(colSums(lda_theta2_38) > 0)]
+
+
+
+lda_theta_37 <- mobLDAsBuilt[["37"]]$theta
+lda_theta_37[lda_theta_37 < 0.1] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+ambig <- 1 - rowSums(lda_theta_37)
+lda_theta2_37 <- cbind(lda_theta_37, ambig)
+
+# readjust proportions
+lda_theta_37 <- lda_theta_37/rowSums(lda_theta_37)
+# if NAs because all cts are 0 in a spot, replace with 0
+lda_theta_37[is.na(lda_theta_37)] <- 0
+
+summary(lda_theta_37)
+
+ggplot(data = reshape2::melt(lda_theta_37)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("STdeconvovle k=37 predicted cell-type proportions in pixels after filtering")
+
+# drop ant cts that are 0 for all pixels
+lda_theta_37 <- lda_theta_37[,which(colSums(lda_theta_37) > 0)]
+lda_theta2_37 <- lda_theta2_37[,which(colSums(lda_theta2_37) > 0)]
+
+
+
+lda_theta_28 <- mobLDAsBuilt[["28"]]$theta
+lda_theta_28[lda_theta_28 < 0.1] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+ambig <- 1 - rowSums(lda_theta_28)
+lda_theta2_28 <- cbind(lda_theta_28, ambig)
+
+# readjust proportions
+lda_theta_28 <- lda_theta_28/rowSums(lda_theta_28)
+# if NAs because all cts are 0 in a spot, replace with 0
+lda_theta_28[is.na(lda_theta_28)] <- 0
+
+summary(lda_theta_28)
+
+ggplot(data = reshape2::melt(lda_theta_28)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("STdeconvovle k=28 predicted cell-type proportions in pixels after filtering")
+
+# drop ant cts that are 0 for all pixels
+lda_theta_28 <- lda_theta_28[,which(colSums(lda_theta_28) > 0)]
+lda_theta2_28 <- lda_theta2_28[,which(colSums(lda_theta2_28) > 0)]
+
+
+
+lda_theta_15 <- mobLDAsBuilt[["15"]]$theta
+lda_theta_15[lda_theta_15 < 0.1] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+ambig <- 1 - rowSums(lda_theta_15)
+lda_theta2_15 <- cbind(lda_theta_15, ambig)
+
+# readjust proportions
+lda_theta_15 <- lda_theta_15/rowSums(lda_theta_15)
+# if NAs because all cts are 0 in a spot, replace with 0
+lda_theta_15[is.na(lda_theta_15)] <- 0
+
+summary(lda_theta_15)
+
+ggplot(data = reshape2::melt(lda_theta_15)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("STdeconvovle k=15 predicted cell-type proportions in pixels after filtering")
+
+# drop ant cts that are 0 for all pixels
+lda_theta_15 <- lda_theta_15[,which(colSums(lda_theta_15) > 0)]
+lda_theta2_15 <- lda_theta2_15[,which(colSums(lda_theta2_15) > 0)]
+
+```
+
+```{r}
+
+m <- mobLDAsBuilt[["37"]]$theta
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=rainbow(ncol(m)),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "LDA 38")
+print(plt)
+
+m <- lda_theta_38
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=rainbow(ncol(m)),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "LDA 38 filt")
+print(plt)
+
+
+m <- lda_theta2_38
+p <- mobCorpus$pos
+cc <- c(rainbow(ncol(m)-1), "white")
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=cc,
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "LDA 38 filt")
+print(plt)
+
+```
+
+```{r}
+
+m <- mobLDAsBuilt[["37"]]$theta
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=rainbow(ncol(m)),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "LDA 37")
+print(plt)
+
+m <- lda_theta_37
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=rainbow(ncol(m)),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "LDA 37 filt")
+print(plt)
+
+
+m <- lda_theta2_37
+p <- mobCorpus$pos
+cc <- c(rainbow(ncol(m)-1), "white")
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=cc,
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "LDA 37 filt")
+print(plt)
+
+```
+
+```{r}
+
+m <- mobLDAsBuilt[["28"]]$theta
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=rainbow(ncol(m)),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "LDA 28")
+print(plt)
+
+m <- lda_theta_28
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=rainbow(ncol(m)),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "LDA 28 filt")
+print(plt)
+
+
+m <- lda_theta2_28
+p <- mobCorpus$pos
+cc <- c(rainbow(ncol(m)-1), "white")
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=cc,
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "LDA 28 filt")
+print(plt)
+
+```
+
+```{r}
+
+m <- mobLDAsBuilt[["15"]]$theta
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=rainbow(ncol(m)),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "LDA 15")
+print(plt)
+
+m <- lda_theta_15
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=rainbow(ncol(m)),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "LDA 15 filt")
+print(plt)
+
+
+m <- lda_theta2_15
+p <- mobCorpus$pos
+cc <- c(rainbow(ncol(m)-1), "white")
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=cc,
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.1,
+                     showLegend = TRUE,
+                     plotTitle = "LDA 15 filt")
+print(plt)
+
+```
+
+Lets get the topic colors in shades that correspond somewhat to the txn cluster colors
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = as.matrix(mobProxyTheta),
+                     m2 = lda_theta_15,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,10))
+# dev.off()
+
+# ggplot(data = reshape2::melt(corMtx[rev(pairs$rowix), pairs$colsix])) +
+#   geom_tile(aes(x = Var2, y = Var1, fill=value)) +
+#   scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+#   scale_y_continuous(breaks=pairs$rowix, labels=pairs$rowix) +
+#   xlab("Ground truth cell-type") +
+#   ylab("Predicted cell-type") +
+#   ggtitle("Cell-type pixel gene expression correlation") +
+#   theme(axis.text.x=element_text(angle=-90),
+#         panel.grid = element_blank(),
+#         axis.line=element_blank(),
+#         # axis.text.x=element_blank(),
+#         # axis.text.y=element_blank(),
+#         axis.ticks=element_blank(),
+#         # axis.title.x=element_blank(),
+#         # axis.title.y=element_blank(),
+#         panel.background=element_blank()) +
+#   coord_fixed()
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
+                  Rowv = NA, # to order topics based on pairs and not dendrogram
+                  Colv = NA,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,4))
+# dev.off()
+
+```
+
+```{r}
+
+mobTxnClustCols <- c('Outer Plexiform Layer' = lighten('purple', factor = 0.4), # 9, 10
+                     'Mitral Cell Layer' = lighten('green', factor = 0.4), # 2, 15
+                     'Olfactory Nerve Layer' = lighten('blue', factor = 0.4), # 1, 8, 11
+                     'Glomerular Layer' = lighten('red', factor = 0.4), # 12, 13, 14
+                     'Granule Cell Layer' = lighten('yellow', factor = 0.4)) # 3, 4, 5, 6, 7
+
+purple_ramp <- colorRampPalette(c(lighten('purple', factor = 0.3), darken('purple', factor = 1.5)))
+outerPlex_colors <- purple_ramp(2)
+
+green_ramp <- colorRampPalette(c(lighten('green', factor = 0.3), darken('green', factor = 1.5)))
+mitralCell_colors <- green_ramp(2)
+
+blue_ramp <- colorRampPalette(c(lighten('blue', factor = 0.3), darken('blue', factor = 1.5)))
+olfNerve_colors <- blue_ramp(3)
+
+red_ramp <- colorRampPalette(c(lighten('red', factor = 0.3), darken('red', factor = 1.5)))
+glomerular_colors <- red_ramp(3)
+
+yellow_ramp <- colorRampPalette(c(lighten('yellow', factor = 0.3), darken('yellow', factor = 1.5)))
+granuleCell_colors <- yellow_ramp(5)
+
+lda_k15_topicCols <- c("9" = outerPlex_colors[1],
+                       "10" = outerPlex_colors[2],
+                       "2" = mitralCell_colors[1],
+                       "15" = mitralCell_colors[2],
+                       "1" = olfNerve_colors[1],
+                       "8" = olfNerve_colors[2],
+                       "11" = olfNerve_colors[3],
+                       "12" = glomerular_colors[1],
+                       "13" = glomerular_colors[2],
+                       "14" = glomerular_colors[3],
+                       "3" = granuleCell_colors[1],
+                       "4" = granuleCell_colors[2],
+                       "5" = granuleCell_colors[3],
+                       "6" = granuleCell_colors[4],
+                       "7" = granuleCell_colors[5])
+
+m <- lda_theta_15
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=as.vector(lda_k15_topicCols[as.character(seq(15))]),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.3,
+                     showLegend = TRUE,
+                     plotTitle = "LDA 15 filt")
+
+plt <- plt + guides(fill=guide_legend(ncol=2))
+
+print(plt)
+
+```
+
+txn clusters only
+
+```{r}
+
+m <- as.matrix(mobProxyTheta)
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=colnames(m),
+                     topicCols=as.vector(mobTxnClustCols[colnames(m)]),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.3,
+                     showLegend = TRUE,
+                     plotTitle = "Txn clusters")
+print(plt)
+
+```
+
+Each topic separately but in same shade of color as above
+
+```{r}
+
+n <- "15"
+m <- lda_theta_15
+p <- mobCorpus$pos
+
+cc <- as.factor(rainbow(ncol(m)))
+names(cc) <- colnames(m)
+
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = as.factor(lda_k15_topicCols),
+                 sharedCol = TRUE,
+                 groups = rep("0", dim(m)[1]),
+                 group_cols = c("0" = "black"),
+                 r = 0.4,
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = "LDA 15 filt")
+
+```
+
+Color 
+
+```{r}
+
+m <- as.matrix(mobProxyTheta)
+p <- mobCorpus$pos
+for(i in colnames(lda_theta_15)){
+  
+  # for each topic, subtract its proportion from the txn cluster.
+  # Adjust the 0's that went negative back to 0
+  m_ <- m - lda_theta_15[,i]
+  m_ <- cbind(m_, lda_theta_15[,i])
+  colnames(m_) <- c(colnames(m), i)
+  m_[m_ < 0] <- 0
+  
+  cc <- as.vector(mobTxnClustCols[colnames(m)])
+  cc <- c(cc, "black")
+  
+  plt <- vizAllTopics(theta = m_,
+                     pos = p,
+                     topicOrder=colnames(m_),
+                     topicCols=cc,
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.3,
+                     showLegend = TRUE,
+                     plotTitle = i)
+  print(plt)
+}
+
+```
+
+
+```{r}
+
+n <- "15"
+
+m <- lda_theta_15
+p <-  mobCorpus$pos
+
+# cc <- as.factor(rainbow(ncol(m)))
+# cc <- as.factor(rep("black", 8))
+# names(cc) <- colnames(m)
+
+for (i in colnames(m)){
+  cc <- as.factor(rep("black", 1))
+  names(cc) <- i
+  vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = cc,
+                 sharedCol = TRUE,
+                 groups = mob_annot,
+                 group_cols = mobTxnClustCols,
+                 r = 0.4,
+                 lwd = 0.3,
+                 showLegend = TRUE,
+                 plotTitle = NA)
+}
+
+```
+
+# LDA vs SL
+
+note that pairing done based on pixel proportion correlation, but clustering in heatmap based on gexp similarity of cell-types
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = lda_theta_15,
+                     m2 = sl_theta,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "SPOTlight filt",
+                  ylab = "STdevonvolve filt",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(2,4))
+# dev.off()
+
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+# new mtx where rows and cols in order in which they are paired
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+# get dendro clusters for the cts based on the gexp similarity
+mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
+beta <- mobWtCellProxyBetaRaw[colnames(corMtx_paired), mob_sig_marker_genes]
+# beta <- sl_countsClean$betaCt[colnames(corMtx_paired),]
+d_ <- as.dist(1-cor(t(beta)))
+hc_ <- stats::hclust(d_, method = "ward.D")
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-heatmap.pdf"))
+gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+                  Rowv = NA,
+                  Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "SPOTlight filt",
+                  ylab = "STdevonvolve filt",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(4,5))
+# dev.off()
+
+lda_vs_sl_theta_filt <- diag(corMtx_paired)
+
+# hist(lda_vs_sl_theta, breaks = 10)
+summary(lda_vs_sl_theta_filt)
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+    # width = 5, # The width of the plot in inches
+    # height = 3) # The height of the plot in inches
+par( mfrow = c(1,3) )
+boxplot(lda_vs_sl_theta_filt,
+        medcol = "black", # medium line color
+        medlty = 1, # line type
+        medlwd = 1, # line width
+        boxfill = "white", # color fill of box
+        boxcol = "black", # outline color of box
+        boxlty = 1, # box line type
+        boxlwd = 1, # width of box line
+        whisklty = 1, # whisker type
+        whisklwd = 1,
+        staplelwd = 0, # the ends of the whiskers
+        outpch = 1, # type of outlies
+        outcex = 0,
+        main = "",
+        cex.main = 1,
+        xlab = "",
+        ylab = "Correlation") # size of outliers
+stripchart(lda_vs_sl_theta_filt, vertical = TRUE,
+    method = "jitter", add = TRUE, pch = 20, col = 'black')
+# dev.off()
+
+```
+
+# RCTD vs SL
+
+note that pairing done based on pixel proportion correlation, but clustering in heatmap based on gexp similarity of cell-types
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = rctd_theta,
+                     m2 = sl_theta,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "RCTD filt",
+                  ylab = "SPOTlight filt",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(2,4))
+# dev.off()
+
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+# new mtx where rows and cols in order in which they are paired
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+# get dendro clusters for the cts based on the gexp similarity
+mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
+beta <- mobWtCellProxyBetaRaw[rownames(corMtx_paired), mob_sig_marker_genes]
+# beta <- sl_countsClean$betaCt[colnames(corMtx_paired),]
+d_ <- as.dist(1-cor(t(beta)))
+hc_ <- stats::hclust(d_, method = "ward.D")
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-heatmap.pdf"))
+gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+                  Rowv = NA,
+                  Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "RCTD filt",
+                  ylab = "SPOTlight filt",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(4,5))
+# dev.off()
+
+rctd_vs_sl_theta_filt <- diag(corMtx_paired)
+
+# hist(lda_vs_sl_theta, breaks = 10)
+summary(rctd_vs_sl_theta_filt)
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+    # width = 5, # The width of the plot in inches
+    # height = 3) # The height of the plot in inches
+par( mfrow = c(1,3) )
+boxplot(rctd_vs_sl_theta_filt,
+        medcol = "black", # medium line color
+        medlty = 1, # line type
+        medlwd = 1, # line width
+        boxfill = "white", # color fill of box
+        boxcol = "black", # outline color of box
+        boxlty = 1, # box line type
+        boxlwd = 1, # width of box line
+        whisklty = 1, # whisker type
+        whisklwd = 1,
+        staplelwd = 0, # the ends of the whiskers
+        outpch = 1, # type of outlies
+        outcex = 0,
+        main = "",
+        cex.main = 1,
+        xlab = "",
+        ylab = "Correlation") # size of outliers
+stripchart(rctd_vs_sl_theta_filt, vertical = TRUE,
+    method = "jitter", add = TRUE, pch = 20, col = 'black')
+# dev.off()
+
+```
+
+# RCTD vs LDA
+
+note that pairing done based on pixel proportion correlation, but clustering in heatmap based on gexp similarity of cell-types
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = lda_theta_15,
+                     m2 = rctd_theta,
+                     type = "t")
+
+# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "RCTD filt",
+                  ylab = "STdeconvolve filt",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(2,4))
+# dev.off()
+
+# pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+# new mtx where rows and cols in order in which they are paired
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+# get dendro clusters for the cts based on the gexp similarity
+mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
+beta <- mobWtCellProxyBetaRaw[colnames(corMtx_paired), mob_sig_marker_genes]
+# beta <- sl_countsClean$betaCt[colnames(corMtx_paired),]
+d_ <- as.dist(1-cor(t(beta)))
+hc_ <- stats::hclust(d_, method = "ward.D")
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-heatmap.pdf"))
+gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+                  Rowv = NA,
+                  Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "RCTD filt",
+                  ylab = "STdeconvolve filt",
+                  key.title = NA,
+                  cexRow = 0.6,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(4,5))
+# dev.off()
+
+rctd_vs_lda_theta_filt <- diag(corMtx_paired)
+
+# hist(lda_vs_sl_theta, breaks = 10)
+summary(rctd_vs_lda_theta)
+
+# pdf(file = paste0(fig_path, "Fig_S6_SL-mob-vs-cortex-corr-boxplot.pdf"),   # The directory you want to save the file in
+    # width = 5, # The width of the plot in inches
+    # height = 3) # The height of the plot in inches
+par( mfrow = c(1,3) )
+boxplot(rctd_vs_lda_theta,
+        medcol = "black", # medium line color
+        medlty = 1, # line type
+        medlwd = 1, # line width
+        boxfill = "white", # color fill of box
+        boxcol = "black", # outline color of box
+        boxlty = 1, # box line type
+        boxlwd = 1, # width of box line
+        whisklty = 1, # whisker type
+        whisklwd = 1,
+        staplelwd = 0, # the ends of the whiskers
+        outpch = 1, # type of outlies
+        outcex = 0,
+        main = "",
+        cex.main = 1,
+        xlab = "",
+        ylab = "Correlation") # size of outliers
+stripchart(rctd_vs_lda_theta, vertical = TRUE,
+    method = "jitter", add = TRUE, pch = 20, col = 'black')
+# dev.off()
+
+```
+
+# summarize
+
+```{r}
+
+cor_mob_summary <- list("STdeconvolve vs RCTD" = rctd_vs_lda_theta_filt,
+                        "RCTD vs SL" = rctd_vs_sl_theta_filt,
+                        "STdeconvolve vs SL" = lda_vs_sl_theta_filt)
+
+# reshape2::melt(plyr::ldply(cor_mob_summary, rbind))
+
+# my_comparisons <- list( c("lda_vs_sl", "lda_vs_rctd"), c("lda_vs_rctd", "sl_vs_rctd"), c("lda_vs_sl", "sl_vs_rctd") )
+
+# `plyr::ldply` combines vectors in list of different lenghts into dataframe
+# then `reshape2::melt` into long form dataframe for ggplot
+
+ggplot(data = reshape2::melt(plyr::ldply(cor_mob_summary, rbind)), 
+       aes(x=.id, y=value, fill=.id)) +
+  geom_boxplot() + 
+  # stat_compare_means(comparisons = my_comparisons, method = "wilcox.test",
+  #                    label.y = c(1.02, 1.09, 1.19)) +
+  geom_point(position=position_jitterdodge()) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, vjust = 1., hjust=0.5)) +
+  labs(title = "Method Correlations between best matched predicted cell types",
+       x = "Method", y = "Correlation")
+# ggsave(filename = "Fig_2_mob-methods-corr-each-other.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+
+```
+
+Maybe SL and RCTD correlate with each other because using same scRNAseq ref? But some cell types correlate poorly. Which ones? Are they predicted to be at low proportions overall?
+
+## correlation vs proportions
+
+### rctd vs sl
+
+```{r}
+
+bottom <- order(rctd_vs_sl_theta_filt, decreasing = FALSE)[1:5]
+
+corMtx <- getCorrMtx(m1 = rctd_theta,
+                     m2 = sl_theta,
+                     type = "t")
+pairs <- lsatPairs(corMtx)
+
+rctd_order <- rownames(corMtx[pairs$rowix, pairs$colsix])
+rctd_means <- colMeans(rctd_theta)[rctd_order]
+rctd_medians <- apply(rctd_theta, 2, median)[rctd_order]
+
+sl_order <- colnames(corMtx[pairs$rowix, pairs$colsix])
+sl_means <- colMeans(sl_theta)[sl_order]
+sl_medians <- apply(sl_theta, 2, median)[sl_order]
+
+df <- data.frame("RCTD mean" = rctd_means,
+                 "SL mean" = sl_means,
+                 "RCTD ct" = rctd_order,
+                 "SL ct" = sl_order,
+                 "correlation" = rctd_vs_sl_theta_filt,
+                 "rank" = rank(rctd_vs_sl_theta_filt),
+                 "names" = paste0(rctd_order, "-", sl_order))
+
+corMtx[pairs$rowix[bottom], pairs$colsix[bottom]]
+df
+
+ggplot(data = df) +
+  geom_point(aes(x = RCTD.mean, y = SL.mean, color = correlation)) +
+  scale_color_viridis(option = "A", direction = -1) +
+  theme_classic() +
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Correlation of predicted proportions of paired cell types",
+       x = "RCTD mean spot proportion", y = "SPOTlight mean spot proportion") +
+  coord_cartesian(clip = "off") +
+  geom_text_repel(data = df, mapping = aes(x = RCTD.mean, y = SL.mean, label = names), size = 2.5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.2, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  # nudge_x = 0.01, direction = "y", hjust = "left", 
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  xlim(0, 0.27) +
+  ylim(0, 0.27)
+# ggsave(filename = "Fig_S_mob-RCTD-SL-ct_corrs.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+
+```
+
+### rctd vs lda
+
+```{r}
+
+bottom <- order(rctd_vs_lda_theta_filt, decreasing = FALSE)[1:5]
+
+corMtx <- getCorrMtx(m1 = lda_theta_15, # rows
+                     m2 =rctd_theta, # columns
+                     type = "t")
+pairs <- lsatPairs(corMtx)
+
+rctd_order <- colnames(corMtx[pairs$rowix, pairs$colsix])
+rctd_means <- colMeans(rctd_theta)[rctd_order]
+rctd_medians <- apply(rctd_theta, 2, median)[rctd_order]
+
+lda_order <- rownames(corMtx[pairs$rowix, pairs$colsix])
+lda_means <- colMeans(lda_theta_15)[lda_order]
+lda_medians <- apply(lda_theta_15, 2, median)[lda_order]
+
+df <- data.frame("RCTD mean" = rctd_means,
+                 "STdeconvolve mean" = lda_means,
+                 "RCTD ct" = rctd_order,
+                 "STdeconvolve ct" = lda_order,
+                 "correlation" = rctd_vs_lda_theta_filt,
+                 "rank" = rank(rctd_vs_lda_theta_filt),
+                 "names" = paste0(lda_order, "-", rctd_order))
+
+corMtx[pairs$rowix[bottom], pairs$colsix[bottom]]
+df
+
+ggplot(data = df) +
+  geom_point(aes(x = RCTD.mean, y = STdeconvolve.mean, color = correlation)) +
+  scale_color_viridis(option = "A", direction = -1) +
+  theme_classic() +
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Correlation of predicted proportions of paired cell types",
+       x = "RCTD mean spot proportion", y = "STdeconvolve mean spot proportion") +
+  coord_cartesian(clip = "off") +
+  geom_text_repel(data = df, mapping = aes(x = RCTD.mean, y = STdeconvolve.mean, label = names), size = 2.5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.2, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  # nudge_x = 0.01, direction = "y", hjust = "left", 
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  xlim(0, 0.27) +
+  ylim(0, 0.27)
+# ggsave(filename = "Fig_S_mob-STdev-RCTD-ct_corrs.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+
+```
+
+### ls vs lda
+
+```{r}
+
+bottom <- order(lda_vs_sl_theta_filt, decreasing = FALSE)[1:5]
+
+corMtx <- getCorrMtx(m1 = lda_theta_15, # rows
+                     m2 = sl_theta, # columns
+                     type = "t")
+pairs <- lsatPairs(corMtx)
+
+sl_order <- colnames(corMtx[pairs$rowix, pairs$colsix])
+sl_means <- colMeans(sl_theta)[sl_order]
+sl_medians <- apply(sl_theta, 2, median)[sl_order]
+
+lda_order <- rownames(corMtx[pairs$rowix, pairs$colsix])
+lda_means <- colMeans(lda_theta_15)[lda_order]
+lda_medians <- apply(lda_theta_15, 2, median)[lda_order]
+
+df <- data.frame("SL mean" = sl_means,
+                 "STdeconvolve mean" = lda_means,
+                 "SL ct" = sl_order,
+                 "STdeconvolve ct" = lda_order,
+                 "correlation" = lda_vs_sl_theta_filt,
+                 "rank" = rank(lda_vs_sl_theta_filt),
+                 "names" = paste0(lda_order, "-", sl_order))
+
+corMtx[pairs$rowix[bottom], pairs$colsix[bottom]]
+df
+
+ggplot(data = df) +
+  geom_point(aes(x = SL.mean, y = STdeconvolve.mean, color = correlation)) +
+  scale_color_viridis(option = "A", direction = -1) +
+  theme_classic() +
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Correlation of predicted proportions of paired cell types",
+       x = "SPOTlight mean spot proportion", y = "STdeconvolve mean spot proportion") +
+  coord_cartesian(clip = "off") +
+  geom_text_repel(data = df, mapping = aes(x = SL.mean, y = STdeconvolve.mean, label = names), size = 2.5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.2, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  # nudge_x = 0.01, direction = "y", hjust = "left", 
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  xlim(0, 0.18) +
+  ylim(0, 0.18)
+# ggsave(filename = "Fig_S_mob-STdev-SL-ct_corrs.pdf",
+#        device = "pdf",
+#        path = fig_path,
+#        scale = 1.5,
+#        width = 5,
+#        height = 4,
+#        units = c("in"),
+#        dpi = 600)
+
+```
+
+
+# *** Plan ***
+Filter out cts from spots if < 5%, and remove cts that become 0 for all pixels. This reduced the 38 ct ref down to 22 for rctd and 26 for SL.
+
+Both rctd ans sl predict a subset as being relatively high proportion with the rest at low proportion. so also Filter 5%. 5% b/c if expect 20 cells in a spot (cite previous analysis? and also 100 microns fit about 20 cells for mouse?)
+
+Compared to the original LDA model (15 topics) (initially filtered).
+
+
+First, the 15 topics gexp strongly correlated with ct clusters in the ref.
+
+Comparing the predicted correlations, predicted cell-types corresponding to similar pixels strongly correlated. 
+
+The cell-type pairs that were poorly correlated were ones that were still predicted to be at low proportions, suggesting the models had difficulty deconvolving these cell types in general.
+
+Although RCTD and SPotlight were highly correlated, the distributions of cell type proportions in the pixels still different substantially. For esample, RCTD had N10 at high proportions and throughout the pixels whereas SPOTlight did this for Mural1.
+
+
+# ----------------------------------
+
+# Remove OECs
+
+```{r}
+
+m <- sl_theta[,c("OEC1","OEC2","OEC4", "N2")]
+p <- mobCorpus$pos
+
+other <- 1 - rowSums(m)
+m <- cbind(m, other)
+
+vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=c("#FF0000", "#FF0000", "#FF0000", "blue", "white"),
+             groups = rep("0", dim(m)[1]),
+             group_cols = c("0" = "black"),
+             r = 0.4, # different size piecharts for mOB data sets
+             lwd = 0.1,
+             showLegend = TRUE,
+             plotTitle = paste("SPOTlight"))
+
+```
+
+```{r}
+
+m <- rctd_theta[,c("OEC1","OEC2","OEC4")]
+p <- mobCorpus$pos
+
+other <- 1 - rowSums(m)
+m <- cbind(m, other)
+
+vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=c("#FF0000", "#FF0000", "#FF0000", "white"),
+             groups = rep("0", dim(m)[1]),
+             group_cols = c("0" = "black"),
+             r = 0.4, # different size piecharts for mOB data sets
+             lwd = 0.1,
+             showLegend = TRUE,
+             plotTitle = paste("RCTD"))
+
+```
+
+```{r}
+
+sl_noOEC_theta <- sl_countsClean_noOEC$thetaCt
+sl_noOEC_theta[sl_noOEC_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+ambig <- 1 - rowSums(sl_noOEC_theta)
+sl_noOEC_theta2 <- cbind(sl_noOEC_theta, ambig)
+
+# readjust proportions
+sl_noOEC_theta <- sl_noOEC_theta/rowSums(sl_noOEC_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+sl_noOEC_theta[is.na(sl_noOEC_theta)] <- 0
+
+summary(sl_noOEC_theta)
+
+ggplot(data = reshape2::melt(sl_noOEC_theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("SPOTlight noOECs predicted cell-type proportions in pixels after filtering")
+
+# drop ant cts that are 0 for all pixels
+sl_noOEC_theta <- sl_noOEC_theta[,which(colSums(sl_noOEC_theta) > 0)]
+sl_noOEC_theta2 <- sl_noOEC_theta2[,which(colSums(sl_noOEC_theta2) > 0)]
+
+dim(sl_noOEC_theta)
+
+```
+
+```{r}
+
+m <- sl_noOEC_theta[,"N2"]
+p <- mobCorpus$pos
+
+other <- 1 - m
+m <- cbind(m, other)
+colnames(m) <- c("N2", "other")
+
+vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=c("blue", "white"),
+             groups = rep("0", dim(m)[1]),
+             group_cols = c("0" = "black"),
+             r = 0.4, # different size piecharts for mOB data sets
+             lwd = 0.1,
+             showLegend = TRUE,
+             plotTitle = paste("SPOTlight After"))
+
+```
+
+```{r}
+
+rctd_noOEC_theta <- as.matrix(RCTD_mob_noOEC_results_norm)
+rctd_noOEC_theta[rctd_noOEC_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+ambig <- 1 - rowSums(rctd_noOEC_theta)
+rctd_noOEC_theta2 <- cbind(rctd_noOEC_theta, ambig)
+
+# readjust proportions
+rctd_noOEC_theta <- rctd_noOEC_theta/rowSums(rctd_noOEC_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+rctd_noOEC_theta[is.na(rctd_noOEC_theta)] <- 0
+
+summary(rctd_noOEC_theta)
+
+ggplot(data = reshape2::melt(rctd_noOEC_theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("RCTD no OECs predicted cell-type proportions in pixels after filtering")
+
+# drop ant cts that are 0 for all pixels
+rctd_noOEC_theta <- rctd_noOEC_theta[,which(colSums(rctd_noOEC_theta) > 0)]
+rctd_noOEC_theta2 <- rctd_noOEC_theta2[,which(colSums(rctd_noOEC_theta2) > 0)]
+
+dim(rctd_noOEC_theta)
+
+```
+
+```{r}
+
+m <- rctd_noOEC_theta[,"N2"]
+p <- mobCorpus$pos
+
+other <- 1 - m
+m <- cbind(m, other)
+colnames(m) <- c("N2", "other")
+
+vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=c("blue", "white"),
+             groups = rep("0", dim(m)[1]),
+             group_cols = c("0" = "black"),
+             r = 0.4, # different size piecharts for mOB data sets
+             lwd = 0.1,
+             showLegend = TRUE,
+             plotTitle = paste("RCTD After"))
+
+```
+
+## N2 gexp
+
+```{r}
+
+# differential expressed marker genes for N2 cluster
+
+n2_markers <- cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$cluster == "N2",]
+n2_markers[n2_markers$gene %in% rownames(mobClean),]
+
+```
+
+```{r}
+
+# input df for `vizGeneCounts`
+marker_genes <- c("Igfbpl1", "Prrg3", "Vcan")
+
+df <- t(mobCPM)[,marker_genes]
+df <- merge(mobCorpus$pos, as.data.frame(df), by=0)
+rownames(df) <- df$Row.names
+
+for (gene in marker_genes){
+  vizGeneCounts(df = df,
+              gene = gene,
+              # groups = as.character(mobProxyTheta$`Granule Cell Layer`),
+              # group_cols = c("0" = "white", "1" = "black"),
+              size = 7, stroke = 0.5,
+              plotTitle = gene,
+              showLegend = TRUE)
+  # ggsave(filename = paste0("N2_gexp_granule_", gene, ".pdf"),
+  #        device = "pdf",
+  #        path = fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+  
+  # vizGeneCounts(df = df,
+  #             gene = gene,
+  #             groups = as.character(mobProxyTheta$`Olfactory Nerve Layer`),
+  #             group_cols = c("0" = "white", "1" = "black"),
+  #             size = 7, stroke = 0.5,
+  #             plotTitle = gene,
+  #             showLegend = TRUE)
+  # ggsave(filename = paste0("N2_gexp_olf_nerve_", gene, ".pdf"),
+  #        device = "pdf",
+  #        path = fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+  
+}
+
+```
+
+# ----------------------------------
+
+# Cortex
+
+
+```{r}
+
+sl_cortex_theta <- sl_countsClean_cortexRef$thetaCt
+sl_cortex_theta[sl_cortex_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+ambig <- 1 - rowSums(sl_cortex_theta)
+sl_cortex_theta2 <- cbind(sl_cortex_theta, ambig)
+
+# readjust proportions
+sl_cortex_theta <- sl_cortex_theta/rowSums(sl_cortex_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+sl_cortex_theta[is.na(sl_cortex_theta)] <- 0
+
+summary(sl_cortex_theta)
+
+ggplot(data = reshape2::melt(sl_cortex_theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("SPOTlight cortex predicted cell-type proportions in pixels after filtering")
+
+# drop ant cts that are 0 for all pixels
+sl_cortex_theta <- sl_cortex_theta[,which(colSums(sl_cortex_theta) > 0)]
+sl_cortex_theta2 <- sl_cortex_theta2[,which(colSums(sl_cortex_theta2) > 0)]
+
+dim(sl_cortex_theta)
+
+```
+
+```{r}
+
+m <- sl_cortex_theta[,"VLMC"]
+p <- mobCorpus$pos
+
+other <- 1 - m
+m <- cbind(m, other)
+colnames(m) <- c("VLMC", "other")
+
+vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=c("#FF00FF", "white"),
+             groups = rep("0", dim(m)[1]),
+             group_cols = c("0" = "black"),
+             r = 0.4, # different size piecharts for mOB data sets
+             lwd = 0.3,
+             showLegend = TRUE,
+             plotTitle = paste("SPOTlight Cortex"))
+
+```
+
+
+
+```{r}
+
+rctd_cortex_theta <- as.matrix(RCTD_cortexRef_results_norm)
+rctd_cortex_theta[rctd_cortex_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+ambig <- 1 - rowSums(rctd_cortex_theta)
+rctd_cortex_theta2 <- cbind(rctd_cortex_theta, ambig)
+
+# readjust proportions
+rctd_cortex_theta <- rctd_cortex_theta/rowSums(rctd_cortex_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+rctd_cortex_theta[is.na(rctd_cortex_theta)] <- 0
+
+summary(rctd_cortex_theta)
+
+ggplot(data = reshape2::melt(rctd_cortex_theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("RCTD cortex predicted cell-type proportions in pixels after filtering")
+
+# drop ant cts that are 0 for all pixels
+rctd_cortex_theta <- rctd_cortex_theta[,which(colSums(rctd_cortex_theta) > 0)]
+rctd_cortex_theta2 <- rctd_cortex_theta2[,which(colSums(rctd_cortex_theta2) > 0)]
+
+dim(rctd_cortex_theta)
+
+```
+
+```{r}
+
+m <- rctd_cortex_theta[,"VLMC"]
+p <- mobCorpus$pos
+
+other <- 1 - m
+m <- cbind(m, other)
+colnames(m) <- c("VLMC", "other")
+
+vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=c("#FF00FF", "white"),
+             groups = rep("0", dim(m)[1]),
+             group_cols = c("0" = "black"),
+             r = 0.4, # different size piecharts for mOB data sets
+             lwd = 0.3,
+             showLegend = TRUE,
+             plotTitle = paste("RCTD Cortex"))
+
+```
+
+## VLMC gexp
+
+countsClean - 7365 genes
+mob$CPM
+
+SPOTlight - 7072 genes; intersection of countsClean genes and the genes in the ref
+
+cortex_sc - 34617 genes
+
+mOB$counts - 15928 genes
+
+cortex_cluster_markers from cortex_sc
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/sl_cortex_sc_and_markers.RData")
+# cortex_sc
+# cortex_cluster_markers
+
+```
+
+```{r}
+
+mOB$countsCPM <- MERINGUE::normalizeCounts(counts = mOB$counts, 
+                       log=FALSE,
+                       verbose=TRUE)
+
+```
+
+```{r}
+
+# differential expressed marker genes for VLMC
+
+vlmc_markers <- cortex_cluster_markers[cortex_cluster_markers$cluster == "VLMC",] # these are based on cortex_sc - 34617 genes
+
+# would be useful to use top diff genes from the cluster itself, that are also in the input matrix for SPOTlight and RCTD
+vlmc_markers[vlmc_markers$gene %in% rownames(mobCPM),]
+
+# but also use previously annotated marker genes, too
+
+
+```
+
+```{r}
+
+# input df for `vizGeneCounts`
+marker_genes <- c("Lum", "Pdgfra", "Dcn", "Slc13a4", "Ptgds", "Slc6a13")
+
+df <- t(mOB$countsCPM)[rownames(mobCorpus$pos),marker_genes] # have access to as many genes as you can just to be able to visualize genes that were in the input matrix for deconvolution but also previously reported marker genes that may not have made it in
+
+df <- merge(mobCorpus$pos, as.data.frame(df), by=0)
+rownames(df) <- df$Row.names
+
+for (gene in marker_genes){
+  vizGeneCounts(df = df,
+              gene = gene,
+              # groups = as.character(mobProxyTheta$`Granule Cell Layer`),
+              # group_cols = c("0" = "white", "1" = "black"),
+              size = 7, stroke = 0.5,
+              plotTitle = gene,
+              showLegend = TRUE)
+  # ggsave(filename = paste0("N2_gexp_granule_", gene, ".pdf"),
+  #        device = "pdf",
+  #        path = fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+  
+  # vizGeneCounts(df = df,
+  #             gene = gene,
+  #             # groups = as.character(mobProxyTheta$`Olfactory Nerve Layer`),
+  #             # group_cols = c("0" = "white", "1" = "black"),
+  #             size = 7, stroke = 0.5,
+  #             plotTitle = gene,
+  #             showLegend = TRUE)
+  # ggsave(filename = paste0("N2_gexp_olf_nerve_", gene, ".pdf"),
+  #        device = "pdf",
+  #        path = fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+  
+}
+
+```
+
+```{r}
+
+marker_genes <- c("Dcn", "Slc13a4")
+
+df <- t(mobCPM)[rownames(mobCorpus$pos),marker_genes]
+df <- merge(mobCorpus$pos, as.data.frame(df), by=0)
+rownames(df) <- df$Row.names
+
+for (gene in marker_genes){
+  vizGeneCounts(df = df,
+              gene = gene,
+              # groups = as.character(mobProxyTheta$`Granule Cell Layer`),
+              # group_cols = c("0" = "white", "1" = "black"),
+              size = 7, stroke = 0.5,
+              plotTitle = gene,
+              showLegend = TRUE)
+  # ggsave(filename = paste0("N2_gexp_granule_", gene, ".pdf"),
+  #        device = "pdf",
+  #        path = fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+  
+  # vizGeneCounts(df = df,
+  #             gene = gene,
+  #             # groups = as.character(mobProxyTheta$`Olfactory Nerve Layer`),
+  #             # group_cols = c("0" = "white", "1" = "black"),
+  #             size = 7, stroke = 0.5,
+  #             plotTitle = gene,
+  #             showLegend = TRUE)
+  # ggsave(filename = paste0("N2_gexp_olf_nerve_", gene, ".pdf"),
+  #        device = "pdf",
+  #        path = fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 600)
+  
+}
+
+```
+
+
+# ----------------------------------
+
+# Perplexity adjustments
+
+```{r}
+
+mobCorpus$corpus
+
+```
+
+
+```{r}
+
+fitLDA2 <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
+                   ncores = parallel::detectCores(logical = TRUE) - 1,
+                   plot = TRUE) {
+  
+  if (is.null(testSize)){
+    set.seed(seed)
+    testingPixels <- seq(nrow(counts))
+    fittingPixels <- seq(nrow(counts))
+  } else if ((0 < testSize) & (testSize < 1.0)){
+    cat("Splitting pixels into", testSize*100, "% and", 100-testSize*100, "% testing and fitting corpuses", "\n")
+    set.seed(seed)
+    testingPixels <- sample(nrow(counts), round(nrow(counts)*testSize))
+    fittingPixels <- seq(nrow(counts))[-testingPixels]
+  } else {
+    stop("`testSize` must be NULL or decimal between 0 and 1")
+  }
+  
+  ## counts must be pixels (rows) x genes (cols) matrix
+  corpusFit <- slam::as.simple_triplet_matrix((as.matrix(counts[fittingPixels,])))
+  corpusTest <- slam::as.simple_triplet_matrix((as.matrix(counts[testingPixels,])))
+  
+  # if (slam::is.simple_triplet_matrix(counts) == TRUE){
+  #   corpus <- counts
+  # } else {
+  #   corpus <- slam::as.simple_triplet_matrix(t(as.matrix(counts)))
+  # }
+  
+  controls <- list(seed = seed,
+                   verbose = 1, keep = 1, estimate.alpha = TRUE)
+  
+  start_time <- Sys.time()
+  fitted_models <- parallel::mclapply(Ks, function(k) {
+    topicmodels::LDA(corpusFit, k=k, control = controls)
+  },
+  mc.cores = ncores
+  )
+  names(fitted_models) <- Ks
+  total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+  print(sprintf("Time to fit LDA models was %smins", total_t))
+  
+  print("Computing perplexity for each fitted model...")
+  pScores <- unlist(lapply(fitted_models, function(model){
+    p <- topicmodels::perplexity(model, newdata = corpusTest)
+    return(p)
+  }))
+
+  ## Kneed algorithm
+  kOpt1 <- Ks[where.is.knee(pScores)]
+  ## Min
+  kOpt2 <- Ks[which(pScores == min(pScores))]
+  
+  ## check number of predicted cell-types at low proportions
+  out <- lapply(1:length(Ks), function(i) {
+    apply(getBetaTheta(fitted_models[[i]])$theta, 2, mean)
+    })
+  ## number of topics present at fewer than 5% on average across pixels
+  numrare <- unlist(lapply(out, function(x) sum(x < 0.05)))
+  kOpt3 <- Ks[where.is.knee(numrare)]
+
+  if(plot) {
+    plot(Ks, pScores, ylab = "perplexity", xlab = "K", main = "K vs perplexity")
+    abline(v = kOpt1, col='blue')
+    abline(v = kOpt2, col='red')
+    legend(x = "top",
+           legend = c("kneed", "min"), col = c("blue", "red"), lty = 1, lwd = 1)
+    
+    plot(Ks, numrare, ylab = "number of cell-types at < 5% mean proportion", xlab = "K", main = "K vs number of rare predicted cell-types")
+    abline(v = kOpt3, col='red')
+    legend(x = "top",
+           legend = c("kneed"), col = c("red"), lty = 1, lwd = 1)
+  }
+
+  return(list(models = fitted_models,
+              kOpt1 = kOpt1,
+              kOpt2 = kOpt2,
+              kOpt3 = kOpt3,
+              numRare = numrare,
+              perplexities = pScores,
+              fitCorpus = corpusFit,
+              testCorpus = corpusTest))
+}
+
+```
+
+```{r}
+
+# mobLDAs <- fitLDA(counts = mobCorpus$slm,
+#                         Ks = ks,
+#                         seed = 0,
+#                         ncores = 7,
+#                         plot = TRUE)
+
+fitLDA2(counts = mobCorpus$corpus,
+        seed = 0,
+        Ks = seq(2,20, by = 2),
+        testSize = 0.2,
+        ncores = 7,
+        plot = TRUE)
+
+fitLDA2(counts = mobCorpus$corpus,
+        seed = 0,
+        Ks = seq(2,20, by = 2),
+        testSize = NULL,
+        ncores = 7,
+        plot = TRUE)
+
+```
+
+
+```{r}
+
+df <- data.frame(matrix(rnorm(20), nrow=10))
+df
+
+df[sample(nrow(df), 3), ]
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
