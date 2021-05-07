@@ -2,35 +2,25 @@
 #'
 #' @export
 restrictCorpus <- function(counts,
-                           t1 = 0.05,
-                           t2 = 1,
+                           t = 0.9,
                            alpha = 0.05,
                            plot = FALSE,
                            verbose = TRUE) {
   ## overdispersed genes only
-  if(verbose) {
-    print(paste0('Restricting to overdispersed genes with alpha=', alpha, '...'))
-  }
   odGenes <- getOverdispersedGenes(counts,
                                    alpha = alpha,
                                    plot = plot,
                                    details = TRUE,
                                    verbose = verbose)
   countsFilt <- counts[odGenes$ods,]
-
-  ## remove genes that are present in less than X% of spots
-  vi <- rowSums(countsFilt > 0) <= ncol(countsFilt)*t1
+  
+  ## remove genes that are present in more than X% of pixels
+  vi <- rowSums(countsFilt > 0) >= ncol(countsFilt)*t
   if(verbose) {
-    print(paste0('Removing ', sum(vi), ' genes present in less than ', t1*100, '% of datasets...'))
-  }
-  countsFilt <- countsFilt[!vi,]
-  ## remove genes that are present in more than X% of spots
-  vi <- rowSums(countsFilt > 0) >= ncol(countsFilt)*t2
-  if(verbose) {
-    print(paste0('Removing ', sum(vi), ' genes present in more than ', t2*100, '% of datasets...'))
+    print(paste0('Removing genes present in more than ', t*100, '% of datasets...'))
   }
   countsFiltnoUnifGenes <- countsFilt[!vi,]
-
+  
   if(verbose) {
     print(paste0(nrow(countsFiltnoUnifGenes), ' genes remaining...'))
   }
@@ -39,13 +29,13 @@ restrictCorpus <- function(counts,
     hist(log10(Matrix::colSums(countsFiltnoUnifGenes)+1), breaks=20, main='Genes Per Dataset')
     hist(log10(Matrix::rowSums(countsFiltnoUnifGenes)+1), breaks=20, main='Datasets Per Gene')
   }
-
+  
   return(countsFiltnoUnifGenes)
 }
 
 
-#' Find the optimal number of topics K for topic modeling
-#'
+#' Find the optimal number of cell-types K for the LDA model
+#' 
 #' @description The input for topicmodels::LDA needs to be a
 #'     slam::as.simple_triplet_matrix (docs x words). Access a given model in
 #'     the returned list via: lda$models[[k]][1]. The models are objects from
@@ -53,112 +43,144 @@ restrictCorpus <- function(counts,
 #'     information.
 #'
 #' @param counts Gene expression counts with genes as rows or
-#'     slam::simple_triplet_matrix where spots were rows and genes were columns
+#'     slam::simple_triplet_matrix where pixels were rows and genes were columns
 #' @param Ks vector of K parameters to search
 #' @param seed Random seed
+#' @param testSize fraction of pixels to set aside for test corpus when computing perplexity (default: NULL)
+#'    Either NULL or decimal between 0 and 1.
 #' @param ncores Number of cores for parallelization
-#' @param plot Boolean for plotting
-#' @param verbose Verbosity level
+#' @plot Boolean for plotting
 #'
 #' @return A list that contains
 #' \itemize{
 #' \item models: each fitted LDA model for a given K
-#' \item kOpt1: the optimal K based on Kneed algorithm
-#' \item kOpt2: the optimal K based on minimum
+#' \item kneedOpt: the optimal K based on Kneed algorithm
+#' \item minOpt: the optimal K based on minimum
+#' \item KMax: Suggested upper bound on K. K in which number of returned cell-types
+#'     with mean proportion < 5% starts to increases steadily.
+#' \item numRare: number of cell-types with mean pixel proportion < 5% for each K
 #' \item perplexities: perplexity scores for each model
 #' \item corpus: the corpus that was used to fit each model
 #' }
 #'
 #' @export
-fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0,
+fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
                    ncores = parallel::detectCores(logical = TRUE) - 1,
-                   plot = TRUE, verbose=TRUE) {
-
-  if (slam::is.simple_triplet_matrix(counts) == TRUE){
-    corpus <- counts
+                   plot = TRUE) {
+  
+  if (is.null(testSize)){
+    set.seed(seed)
+    testingPixels <- seq(nrow(counts))
+    fittingPixels <- seq(nrow(counts))
+  } else if ((0 < testSize) & (testSize < 1.0)){
+    cat("Splitting pixels into", testSize*100, "% and", 100-testSize*100, "% testing and fitting corpuses", "\n")
+    set.seed(seed)
+    testingPixels <- sample(nrow(counts), round(nrow(counts)*testSize))
+    fittingPixels <- seq(nrow(counts))[-testingPixels]
   } else {
-    corpus <- slam::as.simple_triplet_matrix(t(as.matrix(counts)))
+    stop("`testSize` must be NULL or decimal between 0 and 1")
   }
-
+  
+  ## counts must be pixels (rows) x genes (cols) matrix
+  corpusFit <- slam::as.simple_triplet_matrix((as.matrix(counts[fittingPixels,])))
+  corpusTest <- slam::as.simple_triplet_matrix((as.matrix(counts[testingPixels,])))
+  
+  # if (slam::is.simple_triplet_matrix(counts) == TRUE){
+  #   corpus <- counts
+  # } else {
+  #   corpus <- slam::as.simple_triplet_matrix(t(as.matrix(counts)))
+  # }
+  
   controls <- list(seed = seed,
-                   verbose = verbose, keep = 1, estimate.alpha = TRUE)
-
-  #start_time <- Sys.time()
+                   verbose = 1, keep = 1, estimate.alpha = TRUE)
+  
+  start_time <- Sys.time()
   fitted_models <- parallel::mclapply(Ks, function(k) {
-    topicmodels::LDA(corpus, k=k, control = controls)
+    topicmodels::LDA(corpusFit, k=k, control = controls)
   },
   mc.cores = ncores
   )
   names(fitted_models) <- Ks
-  #total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
-  #if(verbose) {
-  #  print(sprintf("Time to train LDA models was %smins", total_t))
-  #}
-
-  if(verbose) {
-    print("Computing perplexity for each fitted model...")
-  }
-
+  total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+  print(sprintf("Time to fit LDA models was %smins", total_t))
+  
+  print("Computing perplexity for each fitted model...")
   pScores <- unlist(lapply(fitted_models, function(model){
-    p <- topicmodels::perplexity(model, corpus)
+    p <- topicmodels::perplexity(model, newdata = corpusTest)
     return(p)
   }))
-
+  
   ## Kneed algorithm
   kOpt1 <- Ks[where.is.knee(pScores)]
   ## Min
   kOpt2 <- Ks[which(pScores == min(pScores))]
-
+  
+  ## check number of predicted cell-types at low proportions
+  out <- lapply(1:length(Ks), function(i) {
+    apply(getBetaTheta(fitted_models[[i]])$theta, 2, mean)
+  })
+  ## number of cell-types present at fewer than 5% on average across pixels
+  numrare <- unlist(lapply(out, function(x) sum(x < 0.05)))
+  kOpt3 <- Ks[where.is.knee(numrare)]
+  
   if(plot) {
-    plot(Ks, pScores, ylab = "perplexity", xlab = "K")
+    plot(Ks, pScores, ylab = "perplexity", xlab = "K", main = "K vs perplexity")
     abline(v = kOpt1, col='blue')
     abline(v = kOpt2, col='red')
-    legend(x = "topright",
+    legend(x = "top",
            legend = c("kneed", "min"), col = c("blue", "red"), lty = 1, lwd = 1)
+    
+    plot(Ks, numrare, ylab = "number of cell-types at < 5% mean proportion", xlab = "K", main = "K vs number of rare predicted cell-types")
+    abline(v = kOpt3, col='red')
+    legend(x = "top",
+           legend = c("kneed"), col = c("red"), lty = 1, lwd = 1)
   }
-
+  
   return(list(models = fitted_models,
-              kOpt1 = as.character(kOpt1),
-              kOpt2 = as.character(kOpt2),
+              kneedOpt = kOpt1,
+              minOpt = kOpt2,
+              KMax = kOpt3,
+              numRare = numrare,
               perplexities = pScores,
-              fitCorpus = corpus))
+              fitCorpus = corpusFit,
+              testCorpus = corpusTest))
 }
 
 
-#' Pull out topic proportions across spots (theta) and
-#' topic gene probabilities (beta) matrices from fitted topic models from fitLDA
-#'
+#' Pull out cell-type proportions across pixels (theta) and
+#' cell-type gene probabilities (beta) matrices from fitted LDA models from fitLDA
+#' 
 #' @param lda an LDA model from `topicmodels`. From list of models returned by
 #'     fitLDA
 #'
 #' @return A list that contains
 #' \itemize{
-#' \item beta: topic (rows) by gene (columns) distribution matrix.
-#'     Each row is a probability distribution of a topic expressing each gene
+#' \item beta: cell-type (rows) by gene (columns) distribution matrix.
+#'     Each row is a probability distribution of a cell-type expressing each gene
 #'     in the corpus
-#' \item theta: spot (rows) by topics (columns) distribution matrix. Each row
-#'     is the topic composition for a given spot
-#' \item topicFreq: overall proportion of each topic in the entire corpus of
-#'     spots
+#' \item theta: pixel (rows) by cell-types (columns) distribution matrix. Each row
+#'     is the cell-type composition for a given pixel
+#' \item topicFreq: overall proportion of each cell-type in the entire corpus of
+#'     pixels
 #' }
 #'
 #' @export
 getBetaTheta <- function(lda) {
-
+  
   result <- topicmodels::posterior(lda)
   theta <- result$topics
   beta <- result$terms
   topicFreqsOverall <- colSums(theta) / length(lda@documents)
-
+  
   return(list(beta = beta,
               theta = theta,
               topicFreq = topicFreqsOverall))
 }
 
 
-#' Cluster topics together using dynamic tree cutting.
+#' Aggregate cell-types together using dynamic tree cutting.
 #'
-#' @param beta Beta matrix (topic-gene distribution matrix)
+#' @param beta Beta matrix (cell-type gene distribution matrix)
 #' @param distance Distance measure to be used (default: euclidean)
 #' @param clustering Clustering agglomeration method to be used (default: ward.D)
 #' @param dynamic Dynamic tree cutting method to be used (default: hybrid)
@@ -167,8 +189,8 @@ getBetaTheta <- function(lda) {
 #'
 #' @return A list that contains
 #' \itemize{
-#' \item order: vector of the dendrogram index order for the topics
-#' \item clusters: factor of the topics (names) and their assigned cluster (levels)
+#' \item order: vector of the dendrogram index order for the cell-types
+#' \item clusters: factor of the cell-types (names) and their assigned cluster (levels)
 #' \item dendro: dendrogram of the clusters
 #' }
 #'
@@ -179,7 +201,7 @@ clusterTopics <- function(beta,
                           dynamic = "hybrid",
                           deepSplit = 4,
                           plot = TRUE) {
-
+  
   if (deepSplit == 4) {
     maxCoreScatter = 0.95
     minGap = (1 - maxCoreScatter) * 3/4
@@ -196,89 +218,89 @@ clusterTopics <- function(beta,
     maxCoreScatter = 0.64
     minGap = (1 - maxCoreScatter) * 3/4
   }
-
+  
   #d_ <- dist(beta, method = distance)
   ## Jean: use correlation instead
   d_ <- as.dist(1-cor(t(beta)))
   hc_ <- stats::hclust(d_, method = clustering)
-
+  
   groups <- dynamicTreeCut::cutreeDynamic(hc_,
-                          method = dynamic,
-                          distM = as.matrix(d_),
-                          deepSplit = deepSplit,
-                          minClusterSize=0,
-                          maxCoreScatter = maxCoreScatter,
-                          minGap = minGap,
-                          maxAbsCoreScatter=NULL,
-                          minAbsGap=NULL)
-
+                                          method = dynamic,
+                                          distM = as.matrix(d_),
+                                          deepSplit = deepSplit,
+                                          minClusterSize=0,
+                                          maxCoreScatter = maxCoreScatter,
+                                          minGap = minGap,
+                                          maxAbsCoreScatter=NULL,
+                                          minAbsGap=NULL)
+  
   names(groups) <- hc_$labels
   groups <- factor(groups)
-
+  
   if (plot) {
     #plot(hc_)
     d2_ <- as.dist(1-cor(beta))
     rc_ <- hclust(d2_, method = clustering)
     heatmap(t(beta),
-         Colv=as.dendrogram(hc_),
-         Rowv=as.dendrogram(rc_),
-         ColSideColors = fac2col(groups),
-         col = correlation_palette,
-         xlab = "Topics",
-         ylab = "Genes",
-         main = "Predicted topics and clusters")
+            Colv=as.dendrogram(hc_),
+            Rowv=as.dendrogram(rc_),
+            ColSideColors = fac2col(groups),
+            col = correlation_palette,
+            xlab = "Cell-types",
+            ylab = "Genes",
+            main = "Predicted cell-types and clusters")
   }
-
+  
   return(list(clusters = groups,
               order = hc_$order,
               dendro = as.dendrogram(hc_)))
-
+  
 }
 
 
-#' Collapse topics in the same cluster into a single topic
-#'
-#' @description Note: for the beta matrix, each row is a topic, each column
-#'     is a gene. The topic row is a distribution of terms that sums to 1. So
-#'     combining topic row vectors, these should be adjusted such that the
+#' Aggregate cell-types in the same cluster into a single cell-type
+#' 
+#' @description Note: for the beta matrix, each row is a cell-type, each column
+#'     is a gene. The cell-type row is a distribution of terms that sums to 1. So
+#'     combining cell-type row vectors, these should be adjusted such that the
 #'     rowSum == 1. As in, take average of the terms after combining. However, the
-#'     theta matrix (after inversion) will have topic rows and each column is a
-#'     document. Because the topic can be represented at various proportions in
+#'     theta matrix (after inversion) will have cell-type rows and each column is a
+#'     document. Because the cell-type can be represented at various proportions in
 #'     each doc and these will not necessarily add to 1, should not take average.
-#'     Just sum topic row vectors together. This way, each document column still
-#'     adds to 1 when considering the proportion of each topic-cluster in the document.
-#'
-#' @param mtx either a beta (topic-gene distribution matrix) or a
-#'     theta (spot-topic distribution matrix)
-#' @param clusters factor of the topics (names) and their assigned cluster (levels)
+#'     Just sum cell-type row vectors together. This way, each document column still
+#'     adds to 1 when considering the proportion of each cell-type-cluster in the document.
+#' 
+#' @param mtx either a beta (cell-type gene distribution matrix) or a
+#'     theta (pixel-cell type distribution matrix)
+#' @param clusters factor of the cell-types (names) and their assigned cluster (levels)
 #' @param type either "t" or "b". Affects the adjustment to the combined
-#'     topic vectors. "b" divides summed topic vectors by number of combined topics.
-#'
-#' @return matrix where topics are now topic-clusters
-#'
+#'     cell-type vectors. "b" divides summed cell-type vectors by number of aggregated cell-types
+#' 
+#' @return matrix where cell-types are now cell-type-clusters
+#' 
 #' @export
 combineTopics <- function(mtx, clusters, type) {
-
+  
   if (!type %in% c("t", "b")){
     stop("`type` must be either 't' or 'b'")
   }
-
-  # if mtx is theta, transpose so topics are rows
+  
+  # if mtx is theta, transpose so cell-types are rows
   if (type == "t") {
     mtx <- t(mtx)
   }
-
+  
   combinedTopics <- do.call(rbind, lapply(levels(clusters), function(cluster) {
-
-    # get topics in a given cluster
+    
+    # get cell-types in a given cluster
     topics <- labels(clusters[which(clusters == cluster)])
-
+    
     print(cluster)
     print(length(topics))
-
-    # matrix slice for the topics in the cluster
+    
+    # matrix slice for the cell-types in the cluster
     mtx_slice <- mtx[topics,]
-
+    
     if (length(topics) == 1) {
       topicVector <- mtx_slice
     } else if (length(topics) > 1) {
@@ -290,13 +312,13 @@ combineTopics <- function(mtx, clusters, type) {
       }
     }
     topicVector
-
+    
   }))
   rownames(combinedTopics) <- levels(clusters)
   colnames(combinedTopics) <- colnames(mtx)
-  print("topics combined.")
-
-  # if theta, make topics the columns again
+  print("cell-types combined.")
+  
+  # if theta, make cell-types the columns again
   if (type == "t") {
     combinedTopics <- t(combinedTopics)
   }
@@ -305,15 +327,15 @@ combineTopics <- function(mtx, clusters, type) {
 
 
 #' Get the optimal LDA model
-#'
+#' 
 #' @param models list returned from fitLDA
 #' @param opt either "kneed" (kOpt1) or "min" (kOpt2), or designate a specific K
-#'
+#' 
 #' @return optimal LDA model fitted to the K based on `opt`
-#'
+#' 
 #' @export
 optimalModel <- function(models, opt) {
-
+  
   if (opt == "kneed"){
     m <- models$models[[which(sapply(models$models, slot, "k") == models$kOpt1)]]
   } else if (opt == "min"){
@@ -327,56 +349,56 @@ optimalModel <- function(models, opt) {
 }
 
 
-#' Wrapper to extract beta (topic-gene distribution matrix),
-#' theta (spot-topic distribution) for individual topic and combined topic-clusters
+#' Wrapper to extract beta (cell type-gene distribution matrix),
+#' theta (pixel cell-type distribution) for individual cell-types and aggregated cell-type-clusters
 #' for an LDA model in `fitLDA` output list.
-#'
+#' 
 #' @description Wrapper that combines the functions `getBetaTheta`, `clusterTopics`,
 #'     `combineTopics` and slots of the topicmodels::LDA object to return a list
 #'     that contains the most relevant components of a given LDA model for ease
 #'     of analysis and visualization.
-#'
+#' 
 #' @param LDAmodel LDA model from fitLDA
 #' @param deepSplit parameter for `clusterTopics` for dynamic tree splitting
-#'     when clustering topics (default: 4)
-#' @param colorScheme color scheme for generating colors assigned to topic
+#'     when aggregating cell-types (default: 4)
+#' @param colorScheme color scheme for generating colors assigned to cell-type
 #'     clusters for visualizing. Either "rainbow" or "ggplot" (default: "rainbow")
-#'
+#' 
 #' @return A list that contains
 #' \itemize{
-#' \item beta: topic (rows) by gene (columns) distribution matrix.
-#'     Each row is a probability distribution of a topic expressing each gene
+#' \item beta: cell-type (rows) by gene (columns) distribution matrix.
+#'     Each row is a probability distribution of a cell-type expressing each gene
 #'     in the corpus
-#' \item theta: spot (rows) by topics (columns) distribution matrix. Each row
-#'     is the topic composition for a given spot
-#' \item topicFreq: overall proportion of each topic in the entire corpus of
-#'     spots
-#' \item clusters: factor of the topics (names) and their assigned cluster (levels)
+#' \item theta: pixel (rows) by cell-type (columns) distribution matrix. Each row
+#'     is the cell-type composition for a given pixel
+#' \item topicFreq: overall proportion of each cell-type in the entire corpus of
+#'     pixels
+#' \item clusters: factor of the cell-types (names) and their assigned cluster (levels)
 #' \item dendro: dendrogram of the clusters. Returned from `stats::hclust()` in `clusterTopics`
-#' \item cols: factor of colors for each topic where colors correspond to their assigned cluster
-#' \item betaCombn: topic (rows) by gene (columns) distribution matrix for combined topic-clusters
-#' \item thetaCombn: spot (rows) by topic (columns) distribution matrix for combined topic-clusters
-#' \item clustCols: factor of colors for each topic-cluster
-#' \item k: number of topics K of the model
+#' \item cols: factor of colors for each cell-type where colors correspond to their assigned cluster
+#' \item betaCombn: cell-type (rows) by gene (columns) distribution matrix for combined cell-type-clusters
+#' \item thetaCombn: pixel (rows) by cell-type (columns) distribution matrix for aggregated cell-type-clusters
+#' \item clustCols: factor of colors for each cell-type-cluster
+#' \item k: number of cell-types K of the model
 #' }
 #'
 #' @export
 buildLDAobject <- function(LDAmodel,
                            deepSplit = 4,
                            colorScheme = "rainbow"){
-
+  
   # get beta and theta list object from the LDA model
   m <- getBetaTheta(LDAmodel)
-
-  # cluster topics
+  
+  # cluster cell-types
   clust <- clusterTopics(beta = m$beta,
                          deepSplit = deepSplit)
-
+  
   # add cluster information to the list
   m$clusters <- clust$clusters
   m$dendro <- clust$dendro
-
-  # colors for the topics. Essentially colored by the cluster they are in
+  
+  # colors for the cell-types. Essentially colored by the cluster they are in
   cols <- m$clusters
   if (colorScheme == "rainbow"){
     levels(cols) <- rainbow(length(levels(cols)))
@@ -385,12 +407,12 @@ buildLDAobject <- function(LDAmodel,
     levels(cols) <- gg_color_hue(length(levels(cols)))
   }
   m$cols <- cols
-
-  # construct beta and thetas for the topic clusters
+  
+  # construct beta and thetas for the cell-type-clusters
   m$betaCombn <- combineTopics(m$beta, clusters = m$clusters, type = "b")
   m$thetaCombn <- combineTopics(m$theta, clusters = m$clusters, type = "t")
-
-  # colors for the topic clusters
+  
+  # colors for the cell-type-clusters
   # separate factor for ease of use with vizTopicClusters and others
   # note that these color assignments are different than the
   # cluster color assignments in the levels of `cols`
@@ -398,25 +420,25 @@ buildLDAobject <- function(LDAmodel,
   names(clusterCols) <- colnames(m$thetaCombn)
   levels(clusterCols) <- levels(m$cols)
   m$clustCols <- clusterCols
-
+  
   m$k <- LDAmodel@k
-
+  
   return(m)
-
+  
 }
 
 
 #' Function to get Hungarian sort pairs via clue::lsat
-#'
-#' @description Finds best matches between topics that correlate between
+#' 
+#' @description Finds best matches between cell-types that correlate between
 #'     beta or theta matrices that have been compared via `getCorrMtx`.
 #'     Each row is paired with a column in the output matrix from `getCorrMtx`.
 #'     If there are less rows than columns, then some columns will not be
 #'     matched and not part of the output.
-#'
+#' 
 #' @param mtx output correlation matrix from `getCorrMtx`. Must not have more rows
 #'     than columns
-#'
+#' 
 #' @return A list that contains
 #' \itemize{
 #' \item pairs: output of clue::solve_LSAP. A vectorized object where for each
@@ -424,7 +446,7 @@ buildLDAobject <- function(LDAmodel,
 #' \item rowix: the indices of the rows. Essentially seq_along(pairing)
 #' \item colsix: the indices of each column paired to each row
 #' }
-#'
+#' 
 #' @export
 lsatPairs <- function(mtx){
   # must have equal or more rows than columns
@@ -434,7 +456,7 @@ lsatPairs <- function(mtx){
   # and the second is the paired column
   rowsix <- seq_along(pairing)
   colsix <- as.numeric(pairing)
-
+  
   return(list(pairs = pairing,
               rowix = rowsix,
               colsix = colsix))
