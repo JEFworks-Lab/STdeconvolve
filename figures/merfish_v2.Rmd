@@ -6056,7 +6056,7 @@ In general the trend is that at higher proportions each method has an easier tim
 
 # 20um Sim analysis
 
-
+# perplexity cell type proportion
 
 ```{r}
 
