@@ -6,7 +6,7 @@ library(STdeconvolve)
 ```
 
 Given a counts matrix from pixel-resolution spatial transcriptomics data
-where each spatially resolved measurement may represents mixtures from
+where each spatially resolved measurement may represent mixtures from
 potentially multiple cell-types, STdeconvolve infers the putative
 transcriptomic profiles of cell-types and their proportional
 representation within each multi-cellular spatially resolved pixel. Such
@@ -22,45 +22,65 @@ annot <- mOB$annot
 
 `STdeconvolve` first feature selects for genes most likely to be
 relevant for distinguishing between cell-types by looking for highly
-overdispersed genes across ST pixels. Pixels with too few genes or genes
-with too few reads can also be removed.
+over dispersed genes across ST pixels. Pixels with too few genes or
+genes with too few reads can also be removed.
 
 ``` r
 ## remove pixels with too few genes
-counts <- cleanCounts(cd)
+counts <- cleanCounts(counts = cd,
+                      min.lib.size = 100,
+                      min.reads = 1,
+                      min.detected = 1)
 ```
-
-    ## Converting to sparse matrix ...
-
-    ## Filtering matrix with 262 cells and 15928 genes ...
-
-    ## Resulting matrix has 260 cells and 14828 genes
 
 ![](getting_started_files/figure-markdown_github/getting_started_feature-1.png)
 
 ``` r
 ## feature select for genes
-corpus <- restrictCorpus(counts, t1=0.05, t2 = 1)
+corpus <- restrictCorpus(counts,
+                         removeAbove=1.0,
+                         removeBelow = 0.05,
+                         alpha = 0.05,
+                         plot = TRUE,
+                         verbose = TRUE)
 ```
 
     ## [1] "Restricting to overdispersed genes with alpha=0.05..."
     ## [1] "Calculating variance fit ..."
     ## [1] "Using gam with k=5..."
     ## [1] "345 overdispersed genes ... "
-    ## [1] "Removing 81 genes present in less than 5% of datasets..."
-    ## [1] "Removing 16 genes present in more than 100% of datasets..."
+
+![](getting_started_files/figure-markdown_github/getting_started_feature-2.png)
+
+    ## [1] "Removing 16 genes present in 100% or more of pixels..."
+    ## [1] "329 genes remaining..."
+    ## [1] "Removing 81 genes present in 5% or less of pixels..."
     ## [1] "248 genes remaining..."
 
-`STdeconvolve` then applies Latent Dirichlet Allocation (LDA), a
+![](getting_started_files/figure-markdown_github/getting_started_feature-3.png)
+
+`STdeconvolve` then applies Latent Dirichlet allocation (LDA), a
 generative statistical model commonly used in natural language
 processing, to discover `K` latent cell-types. `STdeconvolve` fits a
 range of LDA models to inform the choice of an optimal `K`.
 
 ``` r
-lda <- fitLDA(corpus, Ks = seq(2, 9, by = 1), plot=TRUE, verbose=FALSE)
+## Note: the input corpus needs to be an integer count matrix of pixels x genes
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1), plot=TRUE, verbose=TRUE)
 ```
 
-![](getting_started_files/figure-markdown_github/getting_started_opt-1.png)
+    ## [1] "Time to fit LDA models was 0.29mins"
+    ## [1] "Computing perplexity for each fitted model..."
+    ## final e step document 260
+    ## final e step document 260
+    ## final e step document 260
+    ## final e step document 260
+    ## final e step document 260
+    ## final e step document 260
+    ## final e step document 260
+    ## final e step document 260
+
+![](getting_started_files/figure-markdown_github/getting_started_opt-1.png)![](getting_started_files/figure-markdown_github/getting_started_opt-2.png)
 
 In this example, we will use the model with the lowest model perplexity.
 The resulting `theta` matrix can be interpreted as the proportion of
@@ -71,7 +91,10 @@ library size of 1. This `beta` matrix can be scaled by a depth factor
 (ex. 1000) for interpretability.
 
 ``` r
-results <- getBetaTheta(lda$models[[lda$kOpt2]])
+## select model with minimum perplexity
+optLDA <- optimalModel(models = ldas, opt = "min")
+## extract pixel cell-type proportions (theta) and cell-type gene expression profiles (beta)
+results <- getBetaTheta(optLDA)
 deconProp <- results$theta
 deconGexp <- results$beta*1000
 ```

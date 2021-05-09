@@ -31,13 +31,14 @@ pos <- mOB$pos
 cd <- mOB$counts
 annot <- mOB$annot
 ## remove pixels with too few genes
-counts <- cleanCounts(cd)
+counts <- cleanCounts(cd, min.lib.size = 100)
 ## feature select for genes
-corpus <- restrictCorpus(counts, t1=0.05, t2 = 1)
+corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
 ## choose optimal number of cell-types
-lda <- fitLDA(corpus, Ks = seq(2, 9, by = 1), plot=TRUE, verbose=FALSE)
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1))
 ## get best model results
-results <- getBetaTheta(lda$models[[lda$kOpt2]])
+optLDA <- optimalModel(models = ldas, opt = "min")
+results <- getBetaTheta(optLDA)
 deconProp <- results$theta
 deconGexp <- results$beta*1000
 ## visualize deconvolved cell-type proportions
@@ -51,3 +52,5 @@ vizAllTopics(deconProp, pos,
 
 ## Tutorials
 - [Getting Started with STdeconvolve](https://github.com/JEFworks/STdeconvolve/blob/package/docs/getting_started.md)
+- [Additional Features with STdeconvolve](https://github.com/JEFworks/STdeconvolve/blob/package/docs/additional_features.md)
+- [Generating Simulated Dataset with STdeconvolve](https://github.com/JEFworks/STdeconvolve/blob/package/docs/simulate_merfish_dataset.md)

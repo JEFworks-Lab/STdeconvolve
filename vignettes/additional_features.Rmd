@@ -1,0 +1,42 @@
+---
+title: "additional_features"
+author: "Brendan F. Miller"
+date: "5/9/2021"
+output:   
+  md_document:
+    variant: markdown_github
+    toc: true
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{Additional Features with STdeconvolve}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this tutorial, we will describe additional functionalities and advanced features of `STdeconvolve`. 
+
+# Preprocessing
+
+# Selecting Optimal K
+
+# Clustering Cell-types
+
+# Visualization
+
+## All Cell-types
+
+## Individual Cell-types
+
+## Highlighting Specific Cell-types
+
+## Highlighting Specific Pixels
+
+## Overlaying Pixels on H&E images
+
+# Annotation of Cell-types
+
+## GSEA

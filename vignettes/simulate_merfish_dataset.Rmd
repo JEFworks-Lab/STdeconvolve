@@ -1,0 +1,18 @@
+---
+title: "simulate_merfish_dataset"
+author: "Brendan F. Miller"
+date: "5/9/2021"
+output:   
+  md_document:
+    variant: markdown_github
+vignette: >
+  %\VignetteIndexEntry{Generating Simulated Dataset with STdeconvolve}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
