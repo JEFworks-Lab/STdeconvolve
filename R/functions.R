@@ -1,12 +1,29 @@
 #' Restrict to informative words (genes) for topic modeling
+#' 
+#' @description identifies over dispersed genes across pixels to use as informative words
+#'     (genes) in topic modeling. Also allows ability to restrict over dispersed genes
+#'     to those that occur in more than and/or less than selected fractions of pixels in corpus.
+#' 
+#' @param removeAbove remove over dispersed genes that are present in more than this fraction of pixels (default: 1.0)
+#' @param removeBelow remove over dispersed genes that are present in less than this fraction of pixels (default: 0.05)
+#' @param alpha alpha parameter for `getOverdispersedGenes`.
+#'     Higher = less stringent and more overdispersed genes returned (default: 0.05)
+#' @param plot return histogram plots of genes per pixel and pixels per genes
+#'     for over dispersed genes and after corpus restriction. (default: FALSE)
+#' @param verbose (default: TRUE)
 #'
 #' @export
 restrictCorpus <- function(counts,
-                           t = 0.9,
+                           removeAbove = 1.0,
+                           removeBelow = 0.05,
                            alpha = 0.05,
                            plot = FALSE,
                            verbose = TRUE) {
+  
   ## overdispersed genes only
+  if(verbose) {
+    print(paste0('Restricting to overdispersed genes with alpha=', alpha, '...'))
+  }
   odGenes <- getOverdispersedGenes(counts,
                                    alpha = alpha,
                                    plot = plot,
@@ -15,22 +32,31 @@ restrictCorpus <- function(counts,
   countsFilt <- counts[odGenes$ods,]
   
   ## remove genes that are present in more than X% of pixels
-  vi <- rowSums(countsFilt > 0) >= ncol(countsFilt)*t
+  vi <- rowSums(as.matrix(countsFilt) > 0) >= ncol(countsFilt)*removeAbove
   if(verbose) {
-    print(paste0('Removing genes present in more than ', t*100, '% of datasets...'))
+    print(paste0('Removing ', sum(vi), ' genes present in ', removeAbove*100, '% or more of pixels...'))
   }
-  countsFiltnoUnifGenes <- countsFilt[!vi,]
-  
+  countsFilt_ <- countsFilt[!vi,]
   if(verbose) {
-    print(paste0(nrow(countsFiltnoUnifGenes), ' genes remaining...'))
+    print(paste0(nrow(countsFilt_), ' genes remaining...'))
+  }
+  
+  ## remove genes that are present in less than X% of pixels
+  vi <- rowSums(as.matrix(countsFilt_) > 0) <= ncol(countsFilt_)*removeBelow
+  if(verbose) {
+    print(paste0('Removing ', sum(vi), ' genes present in ', removeBelow*100, '% or less of pixels...'))
+  }
+  countsFiltRestricted <- countsFilt_[!vi,]
+  if(verbose) {
+    print(paste0(nrow(countsFiltRestricted), ' genes remaining...'))
   }
   if (plot) {
     par(mfrow=c(1,2), mar=rep(5,4))
-    hist(log10(Matrix::colSums(countsFiltnoUnifGenes)+1), breaks=20, main='Genes Per Dataset')
-    hist(log10(Matrix::rowSums(countsFiltnoUnifGenes)+1), breaks=20, main='Datasets Per Gene')
+    hist(log10(Matrix::colSums(countsFiltRestricted)+1), breaks=20, main='Genes Per Pixel')
+    hist(log10(Matrix::rowSums(countsFiltRestricted)+1), breaks=20, main='Pixels Per Gene')
   }
   
-  return(countsFiltnoUnifGenes)
+  return(countsFiltRestricted)
 }
 
 
@@ -42,8 +68,7 @@ restrictCorpus <- function(counts,
 #'     the library `topicmodels`. The LDA models have slots with additional
 #'     information.
 #'
-#' @param counts Gene expression counts with genes as rows or
-#'     slam::simple_triplet_matrix where pixels were rows and genes were columns
+#' @param counts Gene expression counts with pixels as rows and genes as columns
 #' @param Ks vector of K parameters to search
 #' @param seed Random seed
 #' @param testSize fraction of pixels to set aside for test corpus when computing perplexity (default: NULL)
@@ -66,7 +91,9 @@ restrictCorpus <- function(counts,
 #' @export
 fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
                    ncores = parallel::detectCores(logical = TRUE) - 1,
-                   plot = TRUE) {
+                   plot = TRUE, verbose = TRUE) {
+  
+  counts <- as.matrix(counts)
   
   if (is.null(testSize)){
     set.seed(seed)
@@ -91,8 +118,14 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
   #   corpus <- slam::as.simple_triplet_matrix(t(as.matrix(counts)))
   # }
   
+  if (verbose == TRUE){
+    verbose <- 1
+  } else {
+    verbose <- 0
+  }
+  
   controls <- list(seed = seed,
-                   verbose = 1, keep = 1, estimate.alpha = TRUE)
+                   verbose = verbose, keep = 1, estimate.alpha = TRUE)
   
   start_time <- Sys.time()
   fitted_models <- parallel::mclapply(Ks, function(k) {
@@ -101,10 +134,16 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
   mc.cores = ncores
   )
   names(fitted_models) <- Ks
-  total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
-  print(sprintf("Time to fit LDA models was %smins", total_t))
   
-  print("Computing perplexity for each fitted model...")
+  if(verbose) {
+    total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+    print(sprintf("Time to fit LDA models was %smins", total_t))
+  }
+  
+  if(verbose) {
+    print("Computing perplexity for each fitted model...")
+  }
+  
   pScores <- unlist(lapply(fitted_models, function(model){
     p <- topicmodels::perplexity(model, newdata = corpusTest)
     return(p)
@@ -137,9 +176,9 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
   }
   
   return(list(models = fitted_models,
-              kneedOpt = kOpt1,
-              minOpt = kOpt2,
-              KMax = kOpt3,
+              kneedOptK = kOpt1,
+              minOptK = kOpt2,
+              ctPropOptK = kOpt3,
               numRare = numrare,
               perplexities = pScores,
               fitCorpus = corpusFit,
@@ -329,7 +368,10 @@ combineTopics <- function(mtx, clusters, type) {
 #' Get the optimal LDA model
 #' 
 #' @param models list returned from fitLDA
-#' @param opt either "kneed" (kOpt1) or "min" (kOpt2), or designate a specific K
+#' @param opt either "kneed" (kOpt1) or "min" (kOpt2), or designate a specific K.
+#'     "kneed" = K vs perplexity inflection point.
+#'     "min" = K corresponding to minimum perplexity
+#'     "proportion" = K vs number of cell-type with mean proportion < 5% inflection point
 #' 
 #' @return optimal LDA model fitted to the K based on `opt`
 #' 
@@ -337,9 +379,11 @@ combineTopics <- function(mtx, clusters, type) {
 optimalModel <- function(models, opt) {
   
   if (opt == "kneed"){
-    m <- models$models[[which(sapply(models$models, slot, "k") == models$kOpt1)]]
+    m <- models$models[[which(sapply(models$models, slot, "k") == models$kneedOptK)]]
   } else if (opt == "min"){
-    m <- models$models[[which(sapply(models$models, slot, "k") == models$kOpt2)]]
+    m <- models$models[[which(sapply(models$models, slot, "k") == models$minOptK)]]
+  } else if (opt == "proportion"){
+    m <- models$models[[which(sapply(models$models, slot, "k") == models$ctPropOptK)]]
   } else if (opt %in% sapply(models$models, slot, "k")){
     m <- models$models[[which(sapply(models$models, slot, "k") == opt)]]
   } else {

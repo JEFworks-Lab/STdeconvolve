@@ -2,7 +2,7 @@
 % Please edit documentation in R/functions.R
 \name{clusterTopics}
 \alias{clusterTopics}
-\title{Cluster topics together using dynamic tree cutting.}
+\title{Aggregate cell-types together using dynamic tree cutting.}
 \usage{
 clusterTopics(
   beta,
@@ -13,7 +13,7 @@ clusterTopics(
 )
 }
 \arguments{
-\item{beta}{Beta matrix (topic-gene distribution matrix)}
+\item{beta}{Beta matrix (cell-type gene distribution matrix)}
 
 \item{clustering}{Clustering agglomeration method to be used (default: ward.D)}
 
@@ -28,11 +28,11 @@ clusterTopics(
 \value{
 A list that contains
 \itemize{
-\item order: vector of the dendrogram index order for the topics
-\item clusters: factor of the topics (names) and their assigned cluster (levels)
+\item order: vector of the dendrogram index order for the cell-types
+\item clusters: factor of the cell-types (names) and their assigned cluster (levels)
 \item dendro: dendrogram of the clusters
 }
 }
 \description{
-Cluster topics together using dynamic tree cutting.
+Aggregate cell-types together using dynamic tree cutting.
 }

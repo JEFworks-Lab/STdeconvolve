@@ -21,7 +21,7 @@ In this tutorial, we will walk through some of the main functionalities of `STde
 library(STdeconvolve)
 ```
 
-Given a counts matrix from pixel-resolution spatial transcriptomics data where each spatially resolved measurement may represents mixtures from potentially multiple cell-types, STdeconvolve infers the putative transcriptomic profiles of cell-types and their proportional representation within each multi-cellular spatially resolved pixel. Such a pixel-resolution spatial transcriptomics dataset of the mouse olfactory bulb is built in and can be loaded. 
+Given a counts matrix from pixel-resolution spatial transcriptomics data where each spatially resolved measurement may represent mixtures from potentially multiple cell-types, STdeconvolve infers the putative transcriptomic profiles of cell-types and their proportional representation within each multi-cellular spatially resolved pixel. Such a pixel-resolution spatial transcriptomics dataset of the mouse olfactory bulb is built in and can be loaded. 
 
 ```{r, data}
 data(mOB)
@@ -30,25 +30,37 @@ cd <- mOB$counts
 annot <- mOB$annot
 ```
 
-`STdeconvolve` first feature selects for genes most likely to be relevant for distinguishing between cell-types by looking for highly overdispersed genes across ST pixels. Pixels with too few genes or genes with too few reads can also be removed. 
+`STdeconvolve` first feature selects for genes most likely to be relevant for distinguishing between cell-types by looking for highly over dispersed genes across ST pixels. Pixels with too few genes or genes with too few reads can also be removed. 
 
 ```{r, getting_started_feature, fig.width=6, fig.height=3}
 ## remove pixels with too few genes
-counts <- cleanCounts(cd)
+counts <- cleanCounts(counts = cd,
+                      min.lib.size = 100,
+                      min.reads = 1,
+                      min.detected = 1)
 ## feature select for genes
-corpus <- restrictCorpus(counts, t1=0.05, t2 = 1)
+corpus <- restrictCorpus(counts,
+                         removeAbove=1.0,
+                         removeBelow = 0.05,
+                         alpha = 0.05,
+                         plot = TRUE,
+                         verbose = TRUE)
 ```
 
-`STdeconvolve` then applies Latent Dirichlet Allocation (LDA), a generative statistical model commonly used in natural language processing, to discover `K` latent cell-types. `STdeconvolve` fits a range of LDA models to inform the choice of an optimal `K`.  
+`STdeconvolve` then applies Latent Dirichlet allocation (LDA), a generative statistical model commonly used in natural language processing, to discover `K` latent cell-types. `STdeconvolve` fits a range of LDA models to inform the choice of an optimal `K`.  
 
 ```{r, getting_started_opt, fig.width=6, fig.height=4}
-lda <- fitLDA(corpus, Ks = seq(2, 9, by = 1), plot=TRUE, verbose=FALSE)
+## Note: the input corpus needs to be an integer count matrix of pixels x genes
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1), plot=TRUE, verbose=TRUE)
 ```
 
 In this example, we will use the model with the lowest model perplexity. The resulting `theta` matrix can be interpreted as the proportion of each deconvolved cell-type across each spatially resolved pixel. The resulting `beta` matrix can be interpreted as the putative gene expression profile for each deconvolved cell-type normalized to a library size of 1. This `beta` matrix can be scaled by a depth factor (ex. 1000) for interpretability. 
 
 ```{r, getting_started_model}
-results <- getBetaTheta(lda$models[[lda$kOpt2]])
+## select model with minimum perplexity
+optLDA <- optimalModel(models = ldas, opt = "min")
+## extract pixel cell-type proportions (theta) and cell-type gene expression profiles (beta)
+results <- getBetaTheta(optLDA)
 deconProp <- results$theta
 deconGexp <- results$beta*1000
 ```

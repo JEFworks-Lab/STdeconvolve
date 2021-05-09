@@ -9,7 +9,10 @@ optimalModel(models, opt)
 \arguments{
 \item{models}{list returned from fitLDA}
 
-\item{opt}{either "kneed" (kOpt1) or "min" (kOpt2), or designate a specific K}
+\item{opt}{either "kneed" (kOpt1) or "min" (kOpt2), or designate a specific K.
+"kneed" = K vs perplexity inflection point.
+"min" = K corresponding to minimum perplexity
+"proportion" = K vs number of cell-type with mean proportion < 5\% inflection point}
 }
 \value{
 optimal LDA model fitted to the K based on \code{opt}

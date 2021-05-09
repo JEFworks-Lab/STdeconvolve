@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot.R
 \name{vizGeneCounts}
 \alias{vizGeneCounts}
-\title{Visualize gene counts in spots in space. Can also see group assignment of
+\title{Visualize gene counts in pixels in space. Can also see group assignment of
 spots.}
 \usage{
 vizGeneCounts(
@@ -13,10 +13,9 @@ vizGeneCounts(
   winsorize = 0,
   size = 7,
   stroke = 0.5,
-  a = 1,
+  alpha = 1,
   plotTitle = NA,
-  showLegend = TRUE,
-  overlay = NA
+  showLegend = TRUE
 )
 }
 \arguments{
@@ -39,14 +38,9 @@ rows in df. Ex: c("0", "1", "0", ...)}
 \item{stroke}{thickness of the geom_point lines to help in emphasizing groups
 (default: 2)}
 
-\item{a}{alpha value for the viridis color fill scale (default = 0)}
-
 \item{plotTitle}{option to add a title to the plot}
 
 \item{showLegend}{Boolean to show the plot legend}
-
-\item{overlay}{plot the scatterpies on top of a raster image of the H&E tissue
-(default: NA)}
 }
 \description{
 Note: visualized one gene at a time. Can set up a loop to plot

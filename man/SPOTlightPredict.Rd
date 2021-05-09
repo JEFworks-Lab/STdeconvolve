@@ -5,13 +5,15 @@
 \title{Wrapper around functions in \code{SPOTlight::spotlight_deconvolution()}
 that take place subsequently after training the NMF model.}
 \usage{
-SPOTlightPredict(nmfRef, stCounts)
+SPOTlightPredict(nmfRef, stCounts, min_cont = 0)
 }
 \arguments{
 \item{nmfRef}{the list returned from \code{SPOTlight::train_nmf()}. In \code{SPOTlight::spotlight_deconvolution()},
 this returned list actually has this nmf input list as its first element}
 
 \item{stCounts}{ST count matrix to deconvolve, genes x spots}
+
+\item{min_cont}{param of \code{mixture_deconvolution_nmf()}. remove topics less than this percent in a spot}
 }
 \value{
 a list that contains

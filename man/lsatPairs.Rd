@@ -20,7 +20,7 @@ position the first element is a row and the second is the paired column.
 }
 }
 \description{
-Finds best matches between topics that correlate between
+Finds best matches between cell-types that correlate between
 beta or theta matrices that have been compared via \code{getCorrMtx}.
 Each row is paired with a column in the output matrix from \code{getCorrMtx}.
 If there are less rows than columns, then some columns will not be

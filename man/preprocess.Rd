@@ -2,7 +2,7 @@
 % Please edit documentation in R/eval.R
 \name{preprocess}
 \alias{preprocess}
-\title{Pre-process ST count matrices to construct corpus for input into LDA}
+\title{Pre-process ST pixel gene count matrices to construct corpus for input into LDA}
 \usage{
 preprocess(
   dat,
@@ -11,24 +11,26 @@ preprocess(
   selected.genes = NA,
   nTopGenes = NA,
   genes.to.remove = NA,
-  perc.spots = NA,
-  min.reads = 100,
-  min.lib.size = 100,
+  removeAbove = NA,
+  removeBelow = NA,
+  min.reads = 1,
+  min.lib.size = 1,
   min.detected = 1,
   ODgenes = TRUE,
   nTopOD = NA,
   od.genes.alpha = 0.05,
-  gam.k = 5
+  gam.k = 5,
+  verbose = TRUE
 )
 }
 \arguments{
-\item{dat}{spot (row) x gene (columns) mtx with gene counts OR path to it}
+\item{dat}{pixel (row) x gene (columns) mtx with gene counts OR path to it}
 
-\item{alignFile}{path to 3x3 alignment file to adjust spot coordinates
+\item{alignFile}{path to 3x3 alignment file to adjust pixel coordinates
 (optional).
 Stahl 2016 datasets (default: NA)}
 
-\item{extractPos}{Boolean to extract spot positional coordinates from spot
+\item{extractPos}{Boolean to extract pixel positional coordinates from pixel name
 names
 (default: FALSE)}
 
@@ -41,49 +43,54 @@ names
 \item{genes.to.remove}{vector of gene names or patterns for matching to genes
 to remove (default: NA). ex: c("^mt-") or c("^MT", "^RPL", "^MRPL")}
 
-\item{perc.spots}{non-negative numeric <=1 to use as a percentage.
-Removes genes present in this fraction of spots (default: NA)}
+\item{removeAbove}{non-negative numeric <=1 to use as a percentage.
+Removes genes present in this fraction or more of pixels (default: NA)}
 
-\item{min.reads}{MERINGUE::cleanCounts param; minimum number of reads to keep
+\item{removeBelow}{non-negative numeric <=1 to use as a percentage.
+Removes genes present in this fraction or less of pixels (default: NA)}
+
+\item{min.reads}{\code{cleanCounts} param; minimum number of reads to keep
 a gene (default: 100)}
 
-\item{min.lib.size}{MERINGUE::cleanCounts param; minimum number of counts a
-spot needs to keep (default: 100)}
+\item{min.lib.size}{\code{cleanCounts} param; minimum number of counts a
+pixel needs to keep (default: 100)}
 
-\item{min.detected}{MERIGNUE::cleanCounts param; minimum number of spots a gene
+\item{min.detected}{\code{cleanCounts} param; minimum number of pixels a gene
 needs to have been detected in to keep (default: 1)}
 
-\item{ODgenes}{Boolean to use MERINGUE::getOverdispersedGenes for the corpus
+\item{ODgenes}{Boolean to use \code{getOverdispersedGenes} for the corpus
 genes (default: TRUE)}
 
-\item{nTopOD}{number of top OD genes to use. int (default: NA)}
+\item{nTopOD}{number of top over dispersed genes to use. int (default: NA)}
 
-\item{od.genes.alpha}{alpha parameter for MERINGUE::getOverdispersedGenes.
-Higher = less stringent and more OD genes returned (default: 0.05)}
+\item{od.genes.alpha}{alpha parameter for \code{getOverdispersedGenes}.
+Higher = less stringent and more over dispersed genes returned (default: 0.05)}
 
-\item{gam.k}{gam.k parameter for MERINGUE::getOverdispersedGenes. Dimension
+\item{gam.k}{gam.k parameter for \code{getOverdispersedGenes}. Dimension
 of the "basis" functions in the GAM used to fit, higher = "smoother"
 (default: 5)}
+
+\item{verbose}{control verbosity (default: TRUE)}
 }
 \value{
 A list that contains
 \itemize{
-\item corpus: (spots x genes) matrix of the counts of the selected genes
+\item corpus: (pixels x genes) matrix of the counts of the selected genes
 \item slm: slam::as.simple_triplet_matrix(corpus); required format for topicmodels::LDA input
-\item positions: matrix of x and y coordinates of spots. rownames = spots, colnames = "x", "y"
+\item positions: matrix of x and y coordinates of pixels rownames = pixels, colnames = "x", "y"
 }
 }
 \description{
-Takes spot (row) x gene (columns) mtx and filters out poor genes
-and spots. Then selects for genes to be included in corpus.
-If the spot IDs are made up of their positions in "XxY" these
-can be extracted as the spot position coordinates.\preformatted{         Order of filtering options:
-         1. MERINGUE::cleanCounts to remove poor spots and genes
+Takes pixel (row) x gene (columns) matrix and filters out poor genes
+and pixels. Then selects for genes to be included in final corpus for input into LDA.
+If the pixel IDs are made up of their positions in "XxY" these
+can be extracted as the pixel position coordinates (a characteristic of Stahl datasets).\preformatted{         Order of filtering options:
+         1. `cleanCounts` to remove poor pixels and genes
          2. Selection to use specific genes only
          3. Remove top expressed genes in matrix
          4. Remove specific genes based on grepl pattern matching
-         5. Remove genes that appear in more than a percentage of spots
-         6. Use the overdispersed genes computed from the remaining genes
+         5. Remove genes that appear in more/less than a percentage of pixels
+         6. Use the over dispersed genes computed from the remaining genes
             after filtering steps 1-5 (if selected)
 }
 }

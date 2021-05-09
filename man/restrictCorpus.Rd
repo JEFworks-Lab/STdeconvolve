@@ -6,13 +6,28 @@
 \usage{
 restrictCorpus(
   counts,
-  t1 = 0.05,
-  t2 = 1,
+  removeAbove = 1,
+  removeBelow = 0.05,
   alpha = 0.05,
   plot = FALSE,
   verbose = TRUE
 )
 }
+\arguments{
+\item{removeAbove}{remove over dispersed genes that are present in more than this fraction of pixels (default: 1.0)}
+
+\item{removeBelow}{remove over dispersed genes that are present in less than this fraction of pixels (default: 0.05)}
+
+\item{alpha}{alpha parameter for \code{getOverdispersedGenes}.
+Higher = less stringent and more overdispersed genes returned (default: 0.05)}
+
+\item{plot}{return histogram plots of genes per pixel and pixels per genes
+for over dispersed genes and after corpus restriction. (default: FALSE)}
+
+\item{verbose}{(default: TRUE)}
+}
 \description{
-Restrict to informative words (genes) for topic modeling
+identifies over dispersed genes across pixels to use as informative words
+(genes) in topic modeling. Also allows ability to restrict over dispersed genes
+to those that occur in more than and/or less than selected fractions of pixels in corpus.
 }

@@ -2,8 +2,8 @@
 % Please edit documentation in R/eval.R
 \name{getCorrMtx}
 \alias{getCorrMtx}
-\title{Find Pearson correlations between topics (cell types) with respect to their
-proportions across documents (spots), i.e. thetas, or gene probabilities,
+\title{Find Pearson's correlations between topics (cell-types) with respect to their
+proportions across documents (pixels), i.e. thetas, or gene probabilities,
 i.e. betas.}
 \usage{
 getCorrMtx(m1, m2, type, thresh = NULL)
@@ -13,16 +13,16 @@ getCorrMtx(m1, m2, type, thresh = NULL)
 
 \item{m2}{second matrix}
 
-\item{type}{must be either "t" (theta) or "b" (beta)}
+\item{type}{must be either "t" (theta; cell-type proportions across pixels) or "b" (beta; cell-type gene expression profiles)}
 
-\item{thresh}{if comparing betas, use to compare genes above this probability.
+\item{thresh}{if comparing betas, use to compare genes above this probability (e.g., expression level).
 NULL or 0 < numeric < 1.0 (default: NULL)}
 }
 \value{
-matrix of pearson correlations between topics m1 (rows) by topics m2 (cols)
+matrix of Pearson's correlations; m1 (rows) by m2 (cols)
 }
 \description{
-Find Pearson correlations between topics (cell types) with respect to their
-proportions across documents (spots), i.e. thetas, or gene probabilities,
+Find Pearson's correlations between topics (cell-types) with respect to their
+proportions across documents (pixels), i.e. thetas, or gene probabilities,
 i.e. betas.
 }

@@ -11,7 +11,7 @@ scale0_1(x)
 \item{x}{vector or matrix}
 }
 \value{
-vector or matrix with values adjusted to 0-1 scale
+vector or matrix with all values adjusted 0-1 scale relative to each other.
 }
 \description{
 Helper function to scale values to 0-1 range relative to each other. For use
