@@ -38,7 +38,7 @@ corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
 ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1))
 ## get best model results
 optLDA <- optimalModel(models = ldas, opt = "min")
-results <- getBetaTheta(optLDA)
+results <- getBetaTheta(optLDA, t(as.matrix(corpus)))
 deconProp <- results$theta
 deconGexp <- results$beta*1000
 ## visualize deconvolved cell-type proportions
@@ -53,4 +53,3 @@ vizAllTopics(deconProp, pos,
 ## Tutorials
 - [Getting Started with STdeconvolve](https://github.com/JEFworks/STdeconvolve/blob/package/docs/getting_started.md)
 - [Additional Features with STdeconvolve](https://github.com/JEFworks/STdeconvolve/blob/package/docs/additional_features.md)
-- [Generating Simulated Dataset with STdeconvolve](https://github.com/JEFworks/STdeconvolve/blob/package/docs/simulate_merfish_dataset.md)

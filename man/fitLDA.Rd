@@ -30,9 +30,9 @@ Either NULL or decimal between 0 and 1.}
 A list that contains
 \itemize{
 \item models: each fitted LDA model for a given K
-\item kneedOpt: the optimal K based on Kneed algorithm
-\item minOpt: the optimal K based on minimum
-\item KMax: Suggested upper bound on K. K in which number of returned cell-types
+\item kneedOptK: the optimal K based on Kneed algorithm
+\item minOptK: the optimal K based on minimum
+\item ctPropOptK: Suggested upper bound on K. K in which number of returned cell-types
 with mean proportion < 5\% starts to increases steadily.
 \item numRare: number of cell-types with mean pixel proportion < 5\% for each K
 \item perplexities: perplexity scores for each model

@@ -6,16 +6,34 @@
 theta (pixel cell-type distribution) for individual cell-types and aggregated cell-type-clusters
 for an LDA model in \code{fitLDA} output list.}
 \usage{
-buildLDAobject(LDAmodel, deepSplit = 4, colorScheme = "rainbow")
+buildLDAobject(
+  LDAmodel,
+  corpus,
+  clustering = "ward.D",
+  dynamic = "hybrid",
+  deepSplit = 4,
+  colorScheme = "rainbow",
+  plot = TRUE
+)
 }
 \arguments{
 \item{LDAmodel}{LDA model from fitLDA}
+
+\item{corpus}{Gene expression counts with pixels as rows and genes as columns
+for which to get predicted cell-type proportions and cell-type gene expression profiles.
+Typically same one that was used to fit the LDA model.}
+
+\item{clustering}{Clustering agglomeration method to be used (default: ward.D)}
+
+\item{dynamic}{Dynamic tree cutting method to be used (default: hybrid)}
 
 \item{deepSplit}{parameter for \code{clusterTopics} for dynamic tree splitting
 when aggregating cell-types (default: 4)}
 
 \item{colorScheme}{color scheme for generating colors assigned to cell-type
 clusters for visualizing. Either "rainbow" or "ggplot" (default: "rainbow")}
+
+\item{plot}{Boolean for plotting}
 }
 \value{
 A list that contains
@@ -25,8 +43,6 @@ Each row is a probability distribution of a cell-type expressing each gene
 in the corpus
 \item theta: pixel (rows) by cell-type (columns) distribution matrix. Each row
 is the cell-type composition for a given pixel
-\item topicFreq: overall proportion of each cell-type in the entire corpus of
-pixels
 \item clusters: factor of the cell-types (names) and their assigned cluster (levels)
 \item dendro: dendrogram of the clusters. Returned from \code{stats::hclust()} in \code{clusterTopics}
 \item cols: factor of colors for each cell-type where colors correspond to their assigned cluster

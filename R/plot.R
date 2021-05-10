@@ -108,7 +108,8 @@ vizAllTopics <- function(theta, pos,
   }
   
   if (showLegend == FALSE) {
-    p <- p + ggplot2::guides(fill=FALSE)
+    # p <- p + ggplot2::guides(fill=FALSE)
+    p <- p + ggplot2::theme(legend.position = "none")
   }
   
   if (is.na(plotTitle) == FALSE) {
@@ -278,7 +279,8 @@ vizTopicClusters <- function(theta, pos, clusters,
     }
     
     if (showLegend == FALSE) {
-      p <- p + ggplot2::guides(fill=FALSE)
+      # p <- p + ggplot2::guides(fill=FALSE)
+      p <- p + ggplot2::theme(legend.position = "none")
     }
     
     if (is.na(plotTitle) == FALSE) {
@@ -373,7 +375,8 @@ vizGeneCounts <- function(df, gene,
   # theme_classic()
   
   if (showLegend == FALSE) {
-    p <- p + ggplot2::guides(fill=FALSE)
+    # p <- p + ggplot2::guides(fill=FALSE)
+    p <- p + ggplot2::theme(legend.position = "none")
   }
   
   if (is.na(plotTitle) == FALSE) {

@@ -14,6 +14,8 @@ restrictCorpus(
 )
 }
 \arguments{
+\item{counts}{genes x pixels gene count matrix}
+
 \item{removeAbove}{remove over dispersed genes that are present in more than this fraction of pixels (default: 1.0)}
 
 \item{removeBelow}{remove over dispersed genes that are present in less than this fraction of pixels (default: 0.05)}

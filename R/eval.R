@@ -107,13 +107,14 @@ scale0_1 <- function(x) {
 #'              can be extracted as the pixel position coordinates (a characteristic of Stahl datasets).
 #'              
 #'              Order of filtering options:
-#'              1. `cleanCounts` to remove poor pixels and genes
-#'              2. Selection to use specific genes only
+#'              1. Selection to use specific genes only
+#'              2. `cleanCounts` to remove poor pixels and genes
 #'              3. Remove top expressed genes in matrix
 #'              4. Remove specific genes based on grepl pattern matching
 #'              5. Remove genes that appear in more/less than a percentage of pixels
 #'              6. Use the over dispersed genes computed from the remaining genes
 #'                 after filtering steps 1-5 (if selected)
+#'              7. Choice to use the top over dispersed genes based on -log10(p.adj)
 #'              
 #' @param dat pixel (row) x gene (columns) mtx with gene counts OR path to it
 #' @param alignFile path to 3x3 alignment file to adjust pixel coordinates

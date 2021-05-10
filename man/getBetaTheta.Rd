@@ -5,11 +5,15 @@
 \title{Pull out cell-type proportions across pixels (theta) and
 cell-type gene probabilities (beta) matrices from fitted LDA models from fitLDA}
 \usage{
-getBetaTheta(lda)
+getBetaTheta(lda, corpus)
 }
 \arguments{
 \item{lda}{an LDA model from \code{topicmodels}. From list of models returned by
 fitLDA}
+
+\item{corpus}{Gene expression counts with pixels as rows and genes as columns
+for which to get predicted cell-type proportions and cell-type gene expression profiles.
+Typically same one that was used to fit the LDA model.}
 }
 \value{
 A list that contains
@@ -19,8 +23,6 @@ Each row is a probability distribution of a cell-type expressing each gene
 in the corpus
 \item theta: pixel (rows) by cell-types (columns) distribution matrix. Each row
 is the cell-type composition for a given pixel
-\item topicFreq: overall proportion of each cell-type in the entire corpus of
-pixels
 }
 }
 \description{

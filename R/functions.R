@@ -4,6 +4,7 @@
 #'     (genes) in topic modeling. Also allows ability to restrict over dispersed genes
 #'     to those that occur in more than and/or less than selected fractions of pixels in corpus.
 #' 
+#' @param counts genes x pixels gene count matrix
 #' @param removeAbove remove over dispersed genes that are present in more than this fraction of pixels (default: 1.0)
 #' @param removeBelow remove over dispersed genes that are present in less than this fraction of pixels (default: 0.05)
 #' @param alpha alpha parameter for `getOverdispersedGenes`.
@@ -79,9 +80,9 @@ restrictCorpus <- function(counts,
 #' @return A list that contains
 #' \itemize{
 #' \item models: each fitted LDA model for a given K
-#' \item kneedOpt: the optimal K based on Kneed algorithm
-#' \item minOpt: the optimal K based on minimum
-#' \item KMax: Suggested upper bound on K. K in which number of returned cell-types
+#' \item kneedOptK: the optimal K based on Kneed algorithm
+#' \item minOptK: the optimal K based on minimum
+#' \item ctPropOptK: Suggested upper bound on K. K in which number of returned cell-types
 #'     with mean proportion < 5% starts to increases steadily.
 #' \item numRare: number of cell-types with mean pixel proportion < 5% for each K
 #' \item perplexities: perplexity scores for each model
@@ -109,6 +110,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
   }
   
   ## counts must be pixels (rows) x genes (cols) matrix
+  corpus <- slam::as.simple_triplet_matrix((as.matrix(counts)))
   corpusFit <- slam::as.simple_triplet_matrix((as.matrix(counts[fittingPixels,])))
   corpusTest <- slam::as.simple_triplet_matrix((as.matrix(counts[testingPixels,])))
   
@@ -156,23 +158,30 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
   
   ## check number of predicted cell-types at low proportions
   out <- lapply(1:length(Ks), function(i) {
-    apply(getBetaTheta(fitted_models[[i]])$theta, 2, mean)
+    apply(getBetaTheta(fitted_models[[i]], corpus = corpus)$theta, 2, mean)
   })
   ## number of cell-types present at fewer than 5% on average across pixels
   numrare <- unlist(lapply(out, function(x) sum(x < 0.05)))
   kOpt3 <- Ks[where.is.knee(numrare)]
   
   if(plot) {
-    plot(Ks, pScores, ylab = "perplexity", xlab = "K", main = "K vs perplexity")
+    plot(Ks, pScores,
+         ylab = "perplexity",
+         xlab = "K",
+         main = "K vs perplexity")
     abline(v = kOpt1, col='blue')
     abline(v = kOpt2, col='red')
     legend(x = "top",
            legend = c("kneed", "min"), col = c("blue", "red"), lty = 1, lwd = 1)
     
-    plot(Ks, numrare, ylab = "number of cell-types at < 5% mean proportion", xlab = "K", main = "K vs number of rare predicted cell-types")
-    abline(v = kOpt3, col='red')
-    legend(x = "top",
-           legend = c("kneed"), col = c("red"), lty = 1, lwd = 1)
+    plot(Ks, numrare,
+         ylab = paste0("number of cell-types", "\n","with < 5% mean proportion"),
+         xlab = "K",
+         main = "K vs number of rare predicted cell-types",
+         ylim = c(min=0, max=round((max(numrare)+1)*1.5)) )
+    # abline(v = kOpt3, col='red')
+    # legend(x = "top",
+    #        legend = c("kneed"), col = c("red"), lty = 1, lwd = 1)
   }
   
   return(list(models = fitted_models,
@@ -191,6 +200,9 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
 #' 
 #' @param lda an LDA model from `topicmodels`. From list of models returned by
 #'     fitLDA
+#' @param corpus Gene expression counts with pixels as rows and genes as columns
+#'     for which to get predicted cell-type proportions and cell-type gene expression profiles.
+#'     Typically same one that was used to fit the LDA model.
 #'
 #' @return A list that contains
 #' \itemize{
@@ -199,21 +211,18 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
 #'     in the corpus
 #' \item theta: pixel (rows) by cell-types (columns) distribution matrix. Each row
 #'     is the cell-type composition for a given pixel
-#' \item topicFreq: overall proportion of each cell-type in the entire corpus of
-#'     pixels
 #' }
 #'
 #' @export
-getBetaTheta <- function(lda) {
+getBetaTheta <- function(lda, corpus) {
   
-  result <- topicmodels::posterior(lda)
+  result <- topicmodels::posterior(lda, newdata = corpus)
   theta <- result$topics
   beta <- result$terms
-  topicFreqsOverall <- colSums(theta) / length(lda@documents)
+  # topicFreqsOverall <- colSums(theta) / length(lda@documents)
   
   return(list(beta = beta,
-              theta = theta,
-              topicFreq = topicFreqsOverall))
+              theta = theta))
 }
 
 
@@ -334,8 +343,8 @@ combineTopics <- function(mtx, clusters, type) {
     # get cell-types in a given cluster
     topics <- labels(clusters[which(clusters == cluster)])
     
-    print(cluster)
-    print(length(topics))
+    # print(cluster)
+    # print(length(topics))
     
     # matrix slice for the cell-types in the cluster
     mtx_slice <- mtx[topics,]
@@ -387,7 +396,7 @@ optimalModel <- function(models, opt) {
   } else if (opt %in% sapply(models$models, slot, "k")){
     m <- models$models[[which(sapply(models$models, slot, "k") == opt)]]
   } else {
-    stop("`opt` must be either 'kneed',  'min', or int of a fitted K")
+    stop("`opt` must be either 'kneed',  'min', 'proportion', or int of a fitted K")
   }
   return(m)
 }
@@ -403,10 +412,16 @@ optimalModel <- function(models, opt) {
 #'     of analysis and visualization.
 #' 
 #' @param LDAmodel LDA model from fitLDA
+#' @param corpus Gene expression counts with pixels as rows and genes as columns
+#'     for which to get predicted cell-type proportions and cell-type gene expression profiles.
+#'     Typically same one that was used to fit the LDA model.
+#' @param clustering Clustering agglomeration method to be used (default: ward.D)
+#' @param dynamic Dynamic tree cutting method to be used (default: hybrid)
 #' @param deepSplit parameter for `clusterTopics` for dynamic tree splitting
 #'     when aggregating cell-types (default: 4)
 #' @param colorScheme color scheme for generating colors assigned to cell-type
 #'     clusters for visualizing. Either "rainbow" or "ggplot" (default: "rainbow")
+#' @param plot Boolean for plotting
 #' 
 #' @return A list that contains
 #' \itemize{
@@ -415,8 +430,6 @@ optimalModel <- function(models, opt) {
 #'     in the corpus
 #' \item theta: pixel (rows) by cell-type (columns) distribution matrix. Each row
 #'     is the cell-type composition for a given pixel
-#' \item topicFreq: overall proportion of each cell-type in the entire corpus of
-#'     pixels
 #' \item clusters: factor of the cell-types (names) and their assigned cluster (levels)
 #' \item dendro: dendrogram of the clusters. Returned from `stats::hclust()` in `clusterTopics`
 #' \item cols: factor of colors for each cell-type where colors correspond to their assigned cluster
@@ -428,15 +441,22 @@ optimalModel <- function(models, opt) {
 #'
 #' @export
 buildLDAobject <- function(LDAmodel,
+                           corpus,
+                           clustering = "ward.D",
+                           dynamic = "hybrid",
                            deepSplit = 4,
-                           colorScheme = "rainbow"){
+                           colorScheme = "rainbow",
+                           plot = TRUE){
   
   # get beta and theta list object from the LDA model
-  m <- getBetaTheta(LDAmodel)
+  m <- getBetaTheta(LDAmodel, corpus = corpus)
   
   # cluster cell-types
   clust <- clusterTopics(beta = m$beta,
-                         deepSplit = deepSplit)
+                         clustering = clustering,
+                         dynamic = dynamic,
+                         deepSplit = deepSplit,
+                         plot = plot)
   
   # add cluster information to the list
   m$clusters <- clust$clusters

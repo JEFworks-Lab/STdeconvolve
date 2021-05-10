@@ -93,8 +93,8 @@ library size of 1. This `beta` matrix can be scaled by a depth factor
 ``` r
 ## select model with minimum perplexity
 optLDA <- optimalModel(models = ldas, opt = "min")
-## extract pixel cell-type proportions (theta) and cell-type gene expression profiles (beta)
-results <- getBetaTheta(optLDA)
+## extract pixel cell-type proportions (theta) and cell-type gene expression profiles (beta) for the given dataset
+results <- getBetaTheta(optLDA, corpus = t(as.matrix(corpus)))
 deconProp <- results$theta
 deconGexp <- results$beta*1000
 ```
@@ -135,7 +135,8 @@ ps <- lapply(markers, function(marker) {
               gene = marker,
               size = 2, stroke = 0.1,
               plotTitle = marker,
-              winsorize = 0.05)
+              winsorize = 0.05,
+              showLegend = FALSE)
 })
 gridExtra::grid.arrange(
   grobs = ps,
@@ -162,7 +163,8 @@ ps <- lapply(markers, function(marker) {
               gene = marker,
               size = 2, stroke = 0.1,
               plotTitle = marker,
-              winsorize = 0.05)
+              winsorize = 0.05,
+              showLegend = FALSE)
 })
 gridExtra::grid.arrange(
   grobs = ps,

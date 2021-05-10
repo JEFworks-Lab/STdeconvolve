@@ -85,12 +85,13 @@ Takes pixel (row) x gene (columns) matrix and filters out poor genes
 and pixels. Then selects for genes to be included in final corpus for input into LDA.
 If the pixel IDs are made up of their positions in "XxY" these
 can be extracted as the pixel position coordinates (a characteristic of Stahl datasets).\preformatted{         Order of filtering options:
-         1. `cleanCounts` to remove poor pixels and genes
-         2. Selection to use specific genes only
+         1. Selection to use specific genes only
+         2. `cleanCounts` to remove poor pixels and genes
          3. Remove top expressed genes in matrix
          4. Remove specific genes based on grepl pattern matching
          5. Remove genes that appear in more/less than a percentage of pixels
          6. Use the over dispersed genes computed from the remaining genes
             after filtering steps 1-5 (if selected)
+         7. Choice to use the top over dispersed genes based on -log10(p.adj)
 }
 }
