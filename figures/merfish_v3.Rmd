@@ -1,0 +1,91 @@
+---
+title: "Untitled"
+author: "Brendan F. Miller"
+date: "5/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/figures/merfish/"
+draft_fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_figures/"
+
+```
+
+```{r}
+
+# 59651 non-ambiguous cells in the 12 bregmas
+
+dim(spatial_position_and_class_FN7) # filtered annot table with cell-type and neuronal subtype, cell centroids, and bregam
+dim(bregmaCellsGexpFN7) # gexp of the individual cells from the filtered annot table for the 125 genes
+
+# cell type labels and average gene expression for the 125 genes
+length(Cell_class_major_FN7)
+dim(gtCtGenesFN7) # the a
+
+# cell type and neuronal subtype labels and average gene expression for the 125 genes
+length(Cell_class_with_neuronal_FN7)
+dim(gtCtNeuronalGenesFN7)
+
+# counts of cell-types in each of the 3072 simulated pixels (100um2)
+dim(FN7_cellTypeTable)
+
+# counts of cell-types and neuronal subtypes in each of the 3072 simulated pixels (100um2)
+dim(FN7_neuro_cellTypeTable)
+
+# the simulated pixels and ground truth for the 100um2 cell-types
+names(simFN7)
+simFN7$sim
+dim(simFN7$gtSpotTopics)
+dim(simFN7$gtCtGenes)
+dim(simFN7$annotDf)
+
+# the simulated pixels and ground truth for the 100um2 cell-types and neuronal subtypes
+names(simFN7_neuro)
+simFN7_neuro$sim
+dim(simFN7_neuro$gtSpotTopics)
+dim(simFN7_neuro$gtCtGenes)
+dim(simFN7_neuro$annotDf)
+
+
+# note: because the pixels are smaller, more cells included in the simulated dataset because less on the edges of the grid.
+
+# the simulated pixels and ground truth for the 10um2 cell-types
+names(simFN7_10um)
+simFN7_10um$sim
+dim(simFN7_10um$gtSpotTopics)
+dim(simFN7_10um$gtCtGenes)
+dim(simFN7_10um$annotDf)
+
+# the simulated pixels and ground truth for the 10um2 cell-types and neuronal subtypes
+names(simFN7_neuro_10um)
+simFN7_neuro_10um$sim
+dim(simFN7_neuro_10um$gtSpotTopics)
+dim(simFN7_neuro_10um$gtCtGenes)
+dim(simFN7_neuro_10um$annotDf)
+
+
+# the simulated pixels and ground truth for the 10um2 cell-types
+names(simFN7_20um)
+simFN7_20um$sim
+dim(simFN7_20um$gtSpotTopics)
+dim(simFN7_20um$gtCtGenes)
+dim(simFN7_20um$annotDf)
+
+# the simulated pixels and ground truth for the 10um2 cell-types and neuronal subtypes
+names(simFN7_neuro_20um)
+simFN7_neuro_20um$sim
+dim(simFN7_neuro_20um$gtSpotTopics)
+dim(simFN7_neuro_20um$gtCtGenes)
+dim(simFN7_neuro_20um$annotDf)
+
+# seurat reference for spotlight and rctd
+bregmaFN7FullSeur
+head(bregmaFN7FullSeur@meta.data)
+
+```
+

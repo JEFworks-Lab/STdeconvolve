@@ -1,0 +1,3123 @@
+---
+title: "mob_v3"
+author: "Brendan F. Miller"
+date: "5/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/figures/mob/"
+draft_fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_figures/"
+
+```
+
+# mOB dataset rep 8
+
+mOB dataset. Get the cleaned data set, CPM normalized, and build corpus using the cleaned dataset and over dispered genes.
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mOB.rda")
+
+mobClean <- cleanCounts(mOB$counts,
+                        min.lib.size = 100,
+                        max.lib.size = Inf,
+                        min.reads = 100,
+                        min.detected = 1,
+                        verbose = TRUE,
+                        plot=TRUE)
+
+mobCPM <- MERINGUE::normalizeCounts(counts = mobClean, 
+                       log=FALSE,
+                       verbose=TRUE)
+
+mobCorpus <- preprocess(t(mOB$counts),
+                       alignFile = NA,
+                       extractPos = FALSE,
+                       selected.genes = NA,
+                       nTopGenes = NA,
+                       genes.to.remove = NA,
+                       removeAbove = NA,
+                       removeBelow = NA,
+                       min.reads = 100,
+                       min.lib.size = 100,
+                       min.detected = 1,
+                       ODgenes = TRUE,
+                       nTopOD = NA,
+                       od.genes.alpha = 0.05,
+                       gam.k = 5,
+                       verbose = TRUE)
+mobCorpus$pos <- mOB$pos[rownames(mobCorpus$corpus), ]
+
+```
+
+## txn clustering
+
+```{r}
+
+set.seed(888)
+
+# Dimensionality reduction by PCA on log10 CPM expression values
+pcs.info <- prcomp(t(log10(as.matrix(mobCPM[colnames(mobCorpus$corpus),])+1)), center=TRUE)
+nPcs <- 5
+pcs <- pcs.info$x[,1:nPcs]
+
+# 2D embedding by tSNE
+emb <- Rtsne::Rtsne(pcs,
+             is_distance=FALSE,
+             perplexity=30,
+             num_threads=1,
+             verbose=FALSE)$Y
+rownames(emb) <- rownames(pcs)
+
+# Graph-based cluster detection
+k <- 30
+com <- MERINGUE::getClusters(pcs, k, weight=TRUE)
+
+# Manually annotate identified clusters with cell-types
+mob_annot <- as.character(com); names(mob_annot) <- names(com)
+mob_annot[com==5] <- 'Granule Cell Layer'
+mob_annot[com==2] <- 'Mitral Cell Layer'
+mob_annot[com==1] <- 'Outer Plexiform Layer'
+mob_annot[com==4] <- 'Glomerular Layer'
+mob_annot[com==3] <- 'Olfactory Nerve Layer'
+mob_annot <- as.factor(mob_annot)
+
+# Plot
+pdf(file = paste0(fig_path, "3_MOB_rep8_txn_clust_tsne.pdf"))
+par(mfrow=c(1,1), mar=rep(1,4))
+MERINGUE::plotEmbedding(emb, groups=mob_annot, alpha = 0.8, cex = 1.0,
+                        show.legend=TRUE, xlab=NA, ylab=NA,
+                        verbose=FALSE)
+dev.off()
+
+par(mfrow=c(1,1), mar=rep(1,4))
+MERINGUE::plotEmbedding(emb, groups=mob_annot, alpha = 0.8, cex = 1.0,
+                        show.legend=TRUE, xlab=NA, ylab=NA,
+                        verbose=FALSE)
+
+```
+
+## txn cluster colors
+
+```{r}
+
+# proxy theta for the txn clusters
+mobProxyTheta <- model.matrix(~ 0 + mob_annot)
+rownames(mobProxyTheta) <- names(mob_annot)
+
+# fix names
+colnames(mobProxyTheta) <- unlist(lapply(colnames(mobProxyTheta), function(x) {
+  unlist(strsplit(x, "mob_annot"))[2]
+}))
+
+mobProxyTheta <- as.data.frame.matrix(mobProxyTheta)
+
+mobTxnClustCols <- c('Outer Plexiform Layer' = 'purple',
+                     'Mitral Cell Layer' = "green",
+                     'Olfactory Nerve Layer' = "blue",
+                     'Glomerular Layer' = "red",
+                     'Granule Cell Layer' = "yellow")
+
+```
+
+## vix txn clusters on mob
+
+```{r}
+
+m <- as.matrix(mobProxyTheta)
+p <- mobCorpus$pos
+vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=colnames(m),
+                     topicCols=as.vector(mobTxnClustCols[colnames(m)]),
+                     groups = mob_annot,
+                     group_cols = mobTxnClustCols,
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.3,
+                     showLegend = TRUE,
+                     plotTitle = "Txn clusters")
+ggplot2::ggsave(filename = paste0("3_MOB_8_txn_grouped_pixels.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+## lda fitting
+
+```{r}
+
+ks <- seq(from = 2, to = 20, by = 1)
+
+```
+
+```{r}
+
+# mobLDAs <- fitLDA(counts = mobCorpus$corpus,
+#                         Ks = ks,
+#                         testSize = NULL,
+#                         perc.rare.thresh = 0.01,
+#                         seed = 0,
+#                         ncores = 7,
+#                         plot = TRUE)
+# 
+# mobLDAs <- fitLDA(counts = mobCorpus$corpus,
+#                         Ks = ks,
+#                         testSize = NULL,
+#                         perc.rare.thresh = 0.10,
+#                         seed = 0,
+#                         ncores = 7,
+#                         plot = TRUE)
+
+mobLDAs <- fitLDA(counts = mobCorpus$corpus,
+                        Ks = ks,
+                        testSize = NULL,
+                        perc.rare.thresh = 0.05,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+
+```
+
+## viz k vs perplexity
+
+```{r}
+
+dat <- data.frame(K = as.double(names(mobLDAs$perplexities)),
+                  rareCts = mobLDAs$numRare,
+                  perplexity = mobLDAs$perplexities,
+                  rareCtsAdj = scale0_1(mobLDAs$numRare),
+                  perplexAdj = scale0_1(mobLDAs$perplexities))
+
+prim_ax_labs <- seq(min(dat$rareCts), max(dat$rareCts))
+prim_ax_breaks <- scale0_1(prim_ax_labs)
+## if number rareCts stays constant, then only one break. scale0_1(prim_ax_labs) would be NaN so change to 0
+if(length(prim_ax_labs) == 1){
+  prim_ax_breaks <- 0
+  ## also the rareCtsAdj <- scale0_1(rareCts) would be NaN, so set to 0, so at same position as the tick,
+  ## and its label will still be set to the constant value of rareCts
+  dat$rareCtsAdj <- 0
+}
+if(max(dat$rareCts) < 1){
+  sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/1)
+} else {
+  sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/max(dat$rareCts))
+}
+sec_ax_breaks <- scale0_1(sec_ax_labs)
+
+ggplot2::ggplot(dat, aes(x=K)) +
+  ggplot2::geom_line(aes(y=rareCtsAdj), col="blue", lwd = 2) +
+  ggplot2::geom_line(aes(y=perplexAdj), col="red", lwd = 2) +
+  ggplot2::scale_y_continuous(name="# cell-types with mean proportion < 5%", breaks = prim_ax_breaks, labels = prim_ax_labs,
+                     sec.axis=sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
+  ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
+  ggplot2::ggtitle("Fitted model K's vs deconvolved cell-types and perplexity") +
+  ggplot2::theme_classic() +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(size=15, face=NULL),
+    panel.grid.minor = ggplot2::element_blank(),
+    panel.grid.major = ggplot2::element_line(color = "black", size = 0.1),
+    axis.title.y.left = ggplot2::element_text(color="blue", size = 13),
+    axis.text.y.left = ggplot2::element_text(color="blue", size = 13),
+    axis.title.y.right = ggplot2::element_text(color="red", size = 15, vjust = 1.5),
+    axis.text.y.right = ggplot2::element_text(color="red", size = 13),
+    axis.text.x = ggplot2::element_text(angle = 0, size = 13),
+    axis.title.x = ggplot2::element_text(size=13)
+  )
+ggplot2::ggsave(filename = paste0("3_MOB_rep8_lda_fitting_lineplot.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+## extract each model
+
+```{r}
+
+# first do the Stahl data because can get positional information from the spot IDs
+mobLDAsDeconv <- lapply(seq(3,20), function(l) {
+  lda <- buildLDAobject(LDAmodel = optimalModel(mobLDAs, opt = l),
+                        corpus = mobCorpus$corpus,
+                        deepSplit = 4,
+                        colorScheme = "rainbow")
+  lda
+})
+names(mobLDAsDeconv) <- as.character(seq(3,20))
+
+```
+
+# filter k=15 cell-types
+
+```{r}
+
+lda_k15_theta <- mobLDAsDeconv$`15`$theta
+lda_k15_theta[lda_k15_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+# ambig <- 1 - rowSums(lda_k8_theta)
+# lda_k8_theta2 <- cbind(lda_k8_theta, ambig)
+
+# readjust proportions
+lda_k15_theta <- lda_k15_theta/rowSums(lda_k15_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+lda_k15_theta[is.na(lda_k15_theta)] <- 0
+
+summary(lda_k15_theta)
+
+ggplot(data = reshape2::melt(lda_k15_theta), aes(x = reorder(Var2, -value), y = value)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(cex=0.1)
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+# drop any cts that are 0 for all pixels
+lda_k15_theta <- lda_k15_theta[,which(colSums(lda_k15_theta) > 0)]
+# lda_k8_theta2 <- lda_k8_theta2[,which(colSums(lda_k8_theta2) > 0)]
+
+```
+
+## correlation with txn clusters
+
+```{r, fig.height=4, fig.width=8}
+
+corMtx <- getCorrMtx(m1 = as.matrix(mobProxyTheta),
+                     m2 = lda_k15_theta,
+                     type = "t")
+
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,10))
+
+pdf(file = paste0(fig_path, "3_MOB_k15_vs_txn_corr_heatmap.pdf"), width = 8, height = 4)
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,10))
+dev.off()
+
+```
+
+## viz deconvolved cell-types
+
+```{r}
+
+mobTxnClustCols <- c('Outer Plexiform Layer' = lighten('purple', factor = 0.4), # 9, 10
+                     'Mitral Cell Layer' = lighten('green', factor = 0.4), # 2, 15
+                     'Olfactory Nerve Layer' = lighten('blue', factor = 0.4), # 1, 8, 11
+                     'Glomerular Layer' = lighten('red', factor = 0.4), # 12, 13, 14
+                     'Granule Cell Layer' = lighten('yellow', factor = 0.4)) # 3, 4, 5, 6, 7
+
+purple_ramp <- colorRampPalette(c(lighten('purple', factor = 0.3), darken('purple', factor = 1.5)))
+outerPlex_colors <- purple_ramp(2)
+
+green_ramp <- colorRampPalette(c(lighten('green', factor = 0.3), darken('green', factor = 1.5)))
+mitralCell_colors <- green_ramp(2)
+
+blue_ramp <- colorRampPalette(c(lighten('blue', factor = 0.3), darken('blue', factor = 1.5)))
+olfNerve_colors <- blue_ramp(3)
+
+red_ramp <- colorRampPalette(c(lighten('red', factor = 0.3), darken('red', factor = 1.5)))
+glomerular_colors <- red_ramp(3)
+
+yellow_ramp <- colorRampPalette(c(lighten('yellow', factor = 0.3), darken('yellow', factor = 1.5)))
+granuleCell_colors <- yellow_ramp(5)
+
+lda_k15_topicCols <- c("9" = outerPlex_colors[1],
+                       "10" = outerPlex_colors[2],
+                       "2" = mitralCell_colors[1],
+                       "15" = mitralCell_colors[2],
+                       "1" = olfNerve_colors[1],
+                       "8" = olfNerve_colors[2],
+                       "11" = olfNerve_colors[3],
+                       "12" = glomerular_colors[1],
+                       "13" = glomerular_colors[2],
+                       "14" = glomerular_colors[3],
+                       "3" = granuleCell_colors[1],
+                       "4" = granuleCell_colors[2],
+                       "5" = granuleCell_colors[3],
+                       "6" = granuleCell_colors[4],
+                       "7" = granuleCell_colors[5])
+
+m <- lda_k15_theta
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=as.vector(lda_k15_topicCols[as.character(seq(15))]),
+                     groups = mob_annot,
+                     group_cols = mobTxnClustCols,
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.3,
+                     showLegend = TRUE,
+                     plotTitle = "MOB rep 8, 15 deconvolved cell-types")
+
+plt <- plt + guides(fill=guide_legend(ncol=2))
+print(plt)
+ggplot2::ggsave(filename = paste0("3_MOB_k15_pixels.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+## viz cell-type 7
+
+```{r}
+
+m <- as.matrix(mobProxyTheta)
+p <- mobCorpus$pos
+i <- "7"
+
+m_ <- m - lda_k15_theta[,i]
+m_ <- cbind(m_, lda_k15_theta[,i])
+colnames(m_) <- c(colnames(m), i)
+m_[m_ < 0] <- 0
+
+cc <- as.vector(mobTxnClustCols[colnames(m)])
+cc <- c(cc, "black")
+
+vizAllTopics(theta = m_,
+                   pos = p,
+                   topicOrder=colnames(m_),
+                   topicCols=cc,
+                   groups = mob_annot,
+                   group_cols = mobTxnClustCols,
+                   r = 0.4, # different size piecharts for mOB data sets
+                   lwd = 0.3,
+                   showLegend = TRUE,
+                   plotTitle = i)
+ggplot2::ggsave(filename = paste0("3_MOB_k15_pixels_ct7_innerCore.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+# m <- as.matrix(mobProxyTheta)
+# p <- mobCorpus$pos
+# for(i in c("7")){
+#   
+#   # for each topic, subtract its proportion from the txn cluster.
+#   # Adjust the 0's that went negative back to 0
+#   m_ <- m - lda_k15_theta[,i]
+#   m_ <- cbind(m_, lda_k15_theta[,i])
+#   colnames(m_) <- c(colnames(m), i)
+#   m_[m_ < 0] <- 0
+#   
+#   cc <- as.vector(mobTxnClustCols[colnames(m)])
+#   cc <- c(cc, "black")
+#   
+#   plt <- vizAllTopics(theta = m_,
+#                      pos = p,
+#                      topicOrder=colnames(m_),
+#                      topicCols=cc,
+#                      groups = rep("0", dim(m)[1]),
+#                      group_cols = c("0" = "black"),
+#                      r = 0.4, # different size piecharts for mOB data sets
+#                      lwd = 0.3,
+#                      showLegend = TRUE,
+#                      plotTitle = i)
+#   print(plt)
+# }
+
+```
+
+## cell-type gexp cell-type 7
+
+```{r}
+
+n <- "15"
+celltype <- 7
+deconGexp <- mobLDAsDeconv[[n]]$beta*1000
+pos <- mobCorpus$pos
+counts <- mobClean
+
+vals <- sort(deconGexp[celltype,], decreasing = TRUE)
+vals[1:10]
+
+## ----------------------------------------------------
+## txn profile, normalized and scaled expression
+
+dat <- data.frame(values = as.vector(vals), genes = names(vals), order = seq(length(vals)))
+# Hide all of the text labels.
+dat$selectedLabels <- ""
+# Let's just label these items.
+ix_label <- seq(5)
+dat$selectedLabels[ix_label] <- dat$genes[ix_label]
+
+ggplot(data = dat) +
+  geom_col(aes(x = order, y = values)) +
+  labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
+       x = "Gene expression rank", y = "Normalized and scaled expression") +
+  # coord_cartesian(clip = "off") +
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = 10, direction = "y", hjust = "left",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 15),
+        axis.text.y = element_text(size=15),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_text(size=15),
+        axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        )
+ggplot2::ggsave(filename = paste0("3_MOB_k15_ct7_txnProfile_barplot.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+## ----------------------------------------------------
+## log2FC relative to other cell-types
+
+## highly expressed in cell-type of interest
+highgexp <- names(which(deconGexp[celltype,] > 5))
+## high log2(fold-change) compared to other deconvolved cell-types
+log2fc <- sort(log2(deconGexp[celltype,highgexp]/colMeans(deconGexp[-celltype,highgexp])), decreasing=TRUE)
+
+dat <- data.frame(values = as.vector(log2fc), genes = names(log2fc), order = seq(length(log2fc)))
+# Hide all of the text labels.
+dat$selectedLabels1 <- ""
+# Let's just label these top items.
+ix_label <- seq(5)
+dat$selectedLabels1[ix_label] <- dat$genes[ix_label]
+
+dat$selectedLabels2 <- ""
+# Let's label these bottom items
+ix_label <- tail(seq(length(log2fc)), 5)
+dat$selectedLabels2[ix_label] <- dat$genes[ix_label]
+
+ggplot(data = dat) +
+  geom_col(aes(x = order, y = values)) +
+  labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
+       x = "Gene expression rank", y = "log2FC Normalized and scaled expression") +
+  # coord_cartesian(clip = "off") +
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels1), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = 10, direction = "y", hjust = "left",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels2), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = -10, direction = "y", hjust = "right",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 15),
+        axis.text.y = element_text(size=15),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_text(size=15),
+        axis.title.y = element_text(size=12),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        )
+ggplot2::ggsave(filename = paste0("3_MOB_k15_ct7_txnProfile_log2FC_barplot.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+## ----------------------------------------------------
+## viz top markers
+
+markers <- names(log2fc)[1:4]
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid1 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid1
+ggplot2::ggsave(filename = paste0("3_MOB_k15_ct7_top4_log2fc_markers_gexp.png"),
+         device = "png",
+         plot = plts_grid1,
+         path = fig_path,
+         scale = 1.5,
+         width = 4,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+## ----------------------------------------------------
+## viz bottom markers
+
+markers <- tail(names(log2fc), 4)
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid2 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid2
+ggplot2::ggsave(filename = paste0("3_MOB_k15_ct7_bottom4_log2fc_markers_gexp.png"),
+         device = "png",
+         plot = plts_grid2,
+         path = fig_path,
+         scale = 1.5,
+         width = 4,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+# --------------------
+# filter k=12 cell-types
+
+```{r}
+
+lda_k12_theta <- mobLDAsDeconv$`12`$theta
+lda_k12_theta[lda_k12_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+# ambig <- 1 - rowSums(lda_k8_theta)
+# lda_k8_theta2 <- cbind(lda_k8_theta, ambig)
+
+# readjust proportions
+lda_k12_theta <- lda_k12_theta/rowSums(lda_k12_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+lda_k12_theta[is.na(lda_k12_theta)] <- 0
+
+summary(lda_k12_theta)
+
+ggplot(data = reshape2::melt(lda_k12_theta), aes(x = reorder(Var2, -value), y = value)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(cex=0.1)
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+# drop any cts that are 0 for all pixels
+lda_k12_theta <- lda_k12_theta[,which(colSums(lda_k12_theta) > 0)]
+# lda_k8_theta2 <- lda_k8_theta2[,which(colSums(lda_k8_theta2) > 0)]
+
+```
+
+## correlation with txn clusters
+
+```{r, fig.height=4, fig.width=8}
+
+corMtx <- getCorrMtx(m1 = as.matrix(mobProxyTheta),
+                     m2 = lda_k12_theta,
+                     type = "t")
+
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,10))
+
+pdf(file = paste0(fig_path, "3_MOB_k12_vs_txn_corr_heatmap.pdf"), width = 8, height = 4)
+gplots::heatmap.2(x = corMtx,
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  # xlab = "Major cell class",
+                  # ylab = "Predicted topics",
+                  key.title = NA,
+                  cexRow = 1,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(7,10))
+dev.off()
+
+```
+
+## viz deconvolved cell-types
+
+```{r}
+
+mobTxnClustCols <- c('Outer Plexiform Layer' = lighten('purple', factor = 0.4), # 9, 10
+                     'Mitral Cell Layer' = lighten('green', factor = 0.4), # 2, 15
+                     'Olfactory Nerve Layer' = lighten('blue', factor = 0.4), # 1, 8, 11
+                     'Glomerular Layer' = lighten('red', factor = 0.4), # 12, 13, 14
+                     'Granule Cell Layer' = lighten('yellow', factor = 0.4)) # 3, 4, 5, 6, 7
+
+purple_ramp <- colorRampPalette(c(lighten('purple', factor = 0.3), darken('purple', factor = 1.5)))
+outerPlex_colors <- purple_ramp(2)
+
+green_ramp <- colorRampPalette(c(lighten('green', factor = 0.3), darken('green', factor = 1.5)))
+mitralCell_colors <- green_ramp(1)
+
+blue_ramp <- colorRampPalette(c(lighten('blue', factor = 0.3), darken('blue', factor = 1.5)))
+olfNerve_colors <- blue_ramp(1)
+
+red_ramp <- colorRampPalette(c(lighten('red', factor = 0.3), darken('red', factor = 1.5)))
+glomerular_colors <- red_ramp(3)
+
+yellow_ramp <- colorRampPalette(c(lighten('yellow', factor = 0.3), darken('yellow', factor = 1.5)))
+granuleCell_colors <- yellow_ramp(5)
+
+lda_k12_topicCols <- c("9" = outerPlex_colors[1],
+                       "10" = outerPlex_colors[2],
+                       "2" = mitralCell_colors[1],
+                       # "15" = mitralCell_colors[2],
+                       "8" = olfNerve_colors[1],
+                       # "8" = olfNerve_colors[2],
+                       # "11" = olfNerve_colors[3],
+                       "6" = glomerular_colors[1],
+                       "1" = glomerular_colors[2],
+                       "11" = glomerular_colors[3],
+                       "3" = granuleCell_colors[1],
+                       "4" = granuleCell_colors[2],
+                       "5" = granuleCell_colors[3],
+                       "12" = granuleCell_colors[4],
+                       "7" = granuleCell_colors[5])
+
+m <- lda_k12_theta
+p <- mobCorpus$pos
+plt <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=as.vector(lda_k12_topicCols[as.character(seq(15))]),
+                     groups = mob_annot,
+                     group_cols = mobTxnClustCols,
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.3,
+                     showLegend = TRUE,
+                     plotTitle = "MOB rep 8, 12 deconvolved cell-types")
+
+plt <- plt + guides(fill=guide_legend(ncol=2))
+print(plt)
+ggplot2::ggsave(filename = paste0("3_MOB_k12_pixels.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+## viz cell-type 7
+
+```{r}
+
+for(i in c(3,4,5,7,11,12)){
+  m <- as.matrix(mobProxyTheta)
+  p <- mobCorpus$pos
+  
+  m_ <- m - lda_k12_theta[,i]
+  m_ <- cbind(m_, lda_k12_theta[,i])
+  colnames(m_) <- c(colnames(m), i)
+  m_[m_ < 0] <- 0
+  
+  cc <- as.vector(mobTxnClustCols[colnames(m)])
+  cc <- c(cc, "black")
+  
+  plt <- vizAllTopics(theta = m_,
+                     pos = p,
+                     topicOrder=colnames(m_),
+                     topicCols=cc,
+                     groups = mob_annot,
+                     group_cols = mobTxnClustCols,
+                     r = 0.4, # different size piecharts for mOB data sets
+                     lwd = 0.3,
+                     showLegend = TRUE,
+                     plotTitle = i)
+  print(plt)
+  # ggplot2::ggsave(filename = paste0("3_MOB_k12_pixels_ct11_innerCore.png"),
+  #          device = "png",
+  #          path = fig_path,
+  #          scale = 1.5,
+  #          width = 5,
+  #          height = 3,
+  #          units = c("in"),
+  #          dpi = 300)
+}
+
+# m <- as.matrix(mobProxyTheta)
+# p <- mobCorpus$pos
+# i <- "7"
+# 
+# m_ <- m - lda_k12_theta[,i]
+# m_ <- cbind(m_, lda_k12_theta[,i])
+# colnames(m_) <- c(colnames(m), i)
+# m_[m_ < 0] <- 0
+# 
+# cc <- as.vector(mobTxnClustCols[colnames(m)])
+# cc <- c(cc, "black")
+# 
+# vizAllTopics(theta = m_,
+#                    pos = p,
+#                    topicOrder=colnames(m_),
+#                    topicCols=cc,
+#                    groups = mob_annot,
+#                    group_cols = mobTxnClustCols,
+#                    r = 0.4, # different size piecharts for mOB data sets
+#                    lwd = 0.3,
+#                    showLegend = TRUE,
+#                    plotTitle = i)
+# ggplot2::ggsave(filename = paste0("3_MOB_k12_pixels_ct7_innerCore.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
+
+```
+
+## cell-type gexp cell-type 7
+
+```{r}
+
+n <- "12"
+celltype <- 7
+deconGexp <- mobLDAsDeconv[[n]]$beta*1000
+pos <- mobCorpus$pos
+# counts <- mobCPM
+counts <- mobClean
+
+vals <- sort(deconGexp[celltype,], decreasing = TRUE)
+vals[1:10]
+
+## ----------------------------------------------------
+## txn profile, normalized and scaled expression
+
+dat <- data.frame(values = as.vector(vals), genes = names(vals), order = seq(length(vals)))
+# Hide all of the text labels.
+dat$selectedLabels <- ""
+# Let's just label these items.
+ix_label <- seq(5)
+dat$selectedLabels[ix_label] <- dat$genes[ix_label]
+
+ggplot(data = dat) +
+  geom_col(aes(x = order, y = values)) +
+  labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
+       x = "Gene expression rank", y = "Normalized and scaled expression") +
+  # coord_cartesian(clip = "off") +
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = 10, direction = "y", hjust = "left",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 15),
+        axis.text.y = element_text(size=15),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_text(size=15),
+        axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        )
+ggplot2::ggsave(filename = paste0("3_MOB_k12_ct7_txnProfile_barplot.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+## ----------------------------------------------------
+## log2FC relative to other cell-types
+
+## highly expressed in cell-type of interest
+highgexp <- names(which(deconGexp[celltype,] > 5))
+## high log2(fold-change) compared to other deconvolved cell-types
+log2fc <- sort(log2(deconGexp[celltype,highgexp]/colMeans(deconGexp[-celltype,highgexp])), decreasing=TRUE)
+
+dat <- data.frame(values = as.vector(log2fc), genes = names(log2fc), order = seq(length(log2fc)))
+# Hide all of the text labels.
+dat$selectedLabels1 <- ""
+# Let's just label these top items.
+ix_label <- seq(5)
+dat$selectedLabels1[ix_label] <- dat$genes[ix_label]
+
+dat$selectedLabels2 <- ""
+# Let's label these bottom items
+ix_label <- tail(seq(length(log2fc)), 5)
+dat$selectedLabels2[ix_label] <- dat$genes[ix_label]
+
+ggplot(data = dat) +
+  geom_col(aes(x = order, y = values)) +
+  labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
+       x = "Gene expression rank", y = "log2FC Normalized and scaled expression") +
+  # coord_cartesian(clip = "off") +
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels1), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = 10, direction = "y", hjust = "left",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels2), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = -10, direction = "y", hjust = "right",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 15),
+        axis.text.y = element_text(size=15),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_text(size=15),
+        axis.title.y = element_text(size=12),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        )
+ggplot2::ggsave(filename = paste0("3_MOB_k12_ct7_txnProfile_log2FC_barplot.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+## ----------------------------------------------------
+## viz top markers
+
+markers <- names(log2fc)[1:4]
+markers <- c(markers, "Mbp")
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid1 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2, 3),
+                        c(4, 5, 6))
+)
+plts_grid1
+ggplot2::ggsave(filename = paste0("3_MOB_k12_ct7_top4_log2fc_markers_gexp_counts.png"),
+         device = "png",
+         plot = plts_grid1,
+         path = fig_path,
+         scale = 1.5,
+         width = 4.5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+## ----------------------------------------------------
+## viz bottom markers
+
+markers <- tail(names(log2fc), 4)
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid2 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid2
+ggplot2::ggsave(filename = paste0("3_MOB_k12_ct7_bottom4_log2fc_markers_gexp_counts.png"),
+         device = "png",
+         plot = plts_grid2,
+         path = fig_path,
+         scale = 1.5,
+         width = 4,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+## cell-type gexp cell-type 11
+
+```{r}
+
+n <- "12"
+celltype <- 11
+deconGexp <- mobLDAsDeconv[[n]]$beta*1000
+pos <- mobCorpus$pos
+counts <- mobCPM
+
+vals <- sort(deconGexp[celltype,], decreasing = TRUE)
+vals[1:10]
+
+## ----------------------------------------------------
+## txn profile, normalized and scaled expression
+
+dat <- data.frame(values = as.vector(vals), genes = names(vals), order = seq(length(vals)))
+# Hide all of the text labels.
+dat$selectedLabels <- ""
+# Let's just label these items.
+ix_label <- seq(5)
+dat$selectedLabels[ix_label] <- dat$genes[ix_label]
+
+ggplot(data = dat) +
+  geom_col(aes(x = order, y = values)) +
+  labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
+       x = "Gene expression rank", y = "Normalized and scaled expression") +
+  # coord_cartesian(clip = "off") +
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = 10, direction = "y", hjust = "left",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 15),
+        axis.text.y = element_text(size=15),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_text(size=15),
+        axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        )
+# ggplot2::ggsave(filename = paste0("3_MOB_k12_ct11_txnProfile_barplot.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
+
+## ----------------------------------------------------
+## log2FC relative to other cell-types
+
+## highly expressed in cell-type of interest
+highgexp <- names(which(deconGexp[celltype,] > 5))
+## high log2(fold-change) compared to other deconvolved cell-types
+log2fc <- sort(log2(deconGexp[celltype,highgexp]/colMeans(deconGexp[-celltype,highgexp])), decreasing=TRUE)
+
+dat <- data.frame(values = as.vector(log2fc), genes = names(log2fc), order = seq(length(log2fc)))
+# Hide all of the text labels.
+dat$selectedLabels1 <- ""
+# Let's just label these top items.
+ix_label <- seq(5)
+dat$selectedLabels1[ix_label] <- dat$genes[ix_label]
+
+dat$selectedLabels2 <- ""
+# Let's label these bottom items
+ix_label <- tail(seq(length(log2fc)), 5)
+dat$selectedLabels2[ix_label] <- dat$genes[ix_label]
+
+ggplot(data = dat) +
+  geom_col(aes(x = order, y = values)) +
+  labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
+       x = "Gene expression rank", y = "log2FC Normalized and scaled expression") +
+  # coord_cartesian(clip = "off") +
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels1), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = 10, direction = "y", hjust = "left",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels2), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = -10, direction = "y", hjust = "right",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 15),
+        axis.text.y = element_text(size=15),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_text(size=15),
+        axis.title.y = element_text(size=12),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        )
+# ggplot2::ggsave(filename = paste0("3_MOB_k11_ct7_txnProfile_log2FC_barplot.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
+
+## ----------------------------------------------------
+## viz top markers
+
+markers <- names(log2fc)[1:4]
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid1 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid1
+# ggplot2::ggsave(filename = paste0("3_MOB_k12_ct11_top4_log2fc_markers_gexp_cpm.png"),
+#          device = "png",
+#          plot = plts_grid1,
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 4,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
+
+## ----------------------------------------------------
+## viz bottom markers
+
+markers <- tail(names(log2fc), 4)
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid2 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid2
+# ggplot2::ggsave(filename = paste0("3_MOB_k12_ct11_bottom4_log2fc_markers_gexp_cpm.png"),
+#          device = "png",
+#          plot = plts_grid2,
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 4,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
+
+```
+
+# =====================
+# Compare to other methods
+
+```{r}
+
+# all of the trained models for mob:
+save(mob_k15, # LDA model of the mob data with k=15 and 93 common OD genes across the 12 MOB samples
+     mob_k38, # LDA model ofthe mob data with k=38 and 93 common OD genes across the 12 MOB samples
+     mobCorpus, # corpus of all the mob datasets and also has the spot positions
+     mobProxyTheta, # table of mob 260 spots and which of the 5 txn clusters it was assigned
+     countsClean, # 260 x 7365 genes of mob corpus after removing bad spots and genes, same as mobClean
+     nmf_mod_mob_wt_countsClean_ls, # SL fitted model trained with log-norm `mob_se_wt_obj` and `countsClean` ST data
+     sl_countsClean, # above model after cleanup. 6338 genes kept that were in ST data and the scRNAseq. 38 cts but Mural2 is 0
+     RCTD_mob_results_norm, # RCTD model trained with `mob_se_wt_raw_obj` and deconvolved wrt `countsClean` ST. 28 cts
+     nmf_mod_mob_wt_countsClean_noOECs_ls, # SL trained with log-norm `mob_se_wt_obj` and `countsClean` ST data but no OEC so 6317 genes and 33 cts
+     sl_countsClean_noOEC, # above model after cleanup.
+     RCTD_mob_noOEC_results_norm, # RCTD # RCTD model trained with `mob_se_wt_raw_obj` and deconvolved `countsClean` ST. but 33 cts now
+     sl_cortexRef_countsClean_ls, # SL on cortex SCT data and on `countsClean`. 7072 shared genes with ST and 23 cts
+     sl_countsClean_cortexRef, # above model after cleanup. but L5.IT is 0
+     RCTD_cortexRef_results_norm, # RCTD on raw counts of cortex scRNAseq and `countsClean`. 23 cts
+     file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mob_fitted_models.RData")
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_data/mob_fitted_models.RData")
+
+
+# sl_ctTheta <- sl_countsClean$thetaCt[,which(!colnames(sl_countsClean$thetaCt) %in% c("Mural2"))]
+# sl_countsClean$thetaCt but no Mural2 because 0 in all spots
+
+# for assessing beta values
+save(mob_se_wt, # processed data matrix for 17709 wt cells and 18560 genes (filtered genes during the processing)
+     mob_se_wt_obj, # seurat object of the processed data and meta data
+     mob_se_wt_raw, # raw counts of the 17709 wt cells and 18560 genes
+     mob_se_wt_raw_obj_sct, # seurat object of raw data, and also my own SCT processing (but turned out different than the supplied data)
+     cluster_markers_mob_se_wt, # Seurat::FindAllMarkers for the processed wt cells and 38 clusters
+     cluster_markers_mob_se_wt_raw, # Seurat::FindAllMarkers for the raw counts wt cells and 38 clusters
+     mobWtCellProxyBeta, # averaged relative counts for the 38 clusters for 18560 genes by averaging the processed log-norm data
+     mobWtCellProxyBetaRaw, # averaged relative counts for the 38 clusters for 18560 genes by averaging the raw counts
+     mob_k15, # LDA model of the mob data with k=15 and 93 common OD genes across the 12 MOB samples
+     sl_countsClean, # SL model trained on `mob_se_wt_obj` and `countsClean` ST data of the `mOB` data (260 spots and 6336 shared genes)
+     sl_ctTheta, # thetaCt of the above model, but Mural2 removed because 0 in all spots
+     W_countsClean, # betaTopics of the sl_countsClean; the W matrix of the NMF fitted model
+     file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mob_data_to_assess_beta.RData")
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_data/mob_data_to_assess_beta.RData")
+
+cortexProxyBetaRaw <- readRDS("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_data/cortexProxyBetaRaw.Rds")
+# 23 29093 average raw gene counts from the cortex_sc seurat object. The 23 subclasses
+
+```
+
+# RCTD
+
+```{r}
+
+summary(as.matrix(RCTD_mob_results_norm))
+
+ggplot(data = reshape2::melt(as.matrix(RCTD_mob_results_norm))) +
+  geom_boxplot(aes(x = reorder(Var2, -value, ), y = value)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+dim(as.matrix(RCTD_mob_results_norm))
+
+```
+
+## filtering
+
+```{r}
+
+rctd_theta <- as.matrix(RCTD_mob_results_norm)
+rctd_theta[rctd_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+# ambig <- 1 - rowSums(rctd_theta)
+# rctd_theta2 <- cbind(rctd_theta, ambig)
+
+# readjust proportions
+rctd_theta <- rctd_theta/rowSums(rctd_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+rctd_theta[is.na(rctd_theta)] <- 0
+
+summary(rctd_theta)
+
+ggplot(data = reshape2::melt(rctd_theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("RCTD deconvolved cell-type proportions in pixels after filtering")
+
+
+# drop ant cts that are 0 for all pixels
+rctd_theta <- rctd_theta[,which(colSums(rctd_theta) > 0)]
+# rctd_theta2 <- rctd_theta2[,which(colSums(rctd_theta2) > 0)]
+
+dim(rctd_theta)
+# dim(rctd_theta2)
+
+```
+
+# SL
+
+```{r}
+
+summary(sl_ctTheta)
+
+ggplot(data = reshape2::melt(sl_ctTheta)) +
+  geom_boxplot(aes(x = reorder(Var2, -value, ), y = value)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+dim(sl_ctTheta)
+
+```
+
+## filtering
+
+```{r}
+
+sl_theta <- sl_ctTheta
+sl_theta[sl_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+# ambig <- 1 - rowSums(sl_theta)
+# sl_theta2 <- cbind(sl_theta, ambig)
+
+# readjust proportions
+sl_theta <- sl_theta/rowSums(sl_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+sl_theta[is.na(sl_theta)] <- 0
+
+summary(sl_theta)
+
+ggplot(data = reshape2::melt(sl_theta)) +
+  geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+  scale_y_continuous(breaks = seq(0,1,0.05)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  ggtitle("SPOTlight deconvolved cell-type proportions in pixels after filtering")
+
+
+# drop ant cts that are 0 for all pixels
+sl_theta <- sl_theta[,which(colSums(sl_theta) > 0)]
+# sl_theta2 <- sl_theta2[,which(colSums(sl_theta2) > 0)]
+
+dim(sl_theta)
+# dim(sl_theta2)
+
+```
+
+# -------------------------------------
+
+# LDA vs SL
+
+note that pairing done based on pixel proportion correlation, but clustering in heatmap based on gexp similarity of cell-types
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = lda_k12_theta, #  rows, nrows must be less or equal to ncols for pairing
+                     m2 = sl_theta, # cols
+                     type = "t")
+## pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+## new mtx where rows and cols in order in which they are paired
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+## cluster the cell-types based on the average gexp from the reference (this is really just for viz purposes)
+## use the significant genes for each cluster
+mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
+beta <- mobWtCellProxyBetaRaw[colnames(corMtx_paired), mob_sig_marker_genes]
+## cluster cell-types based on ave gene exp of selected genes
+d_ <- as.dist(1-cor(t(beta)))
+hc_ <- stats::hclust(d_, method = "ward.D")
+
+gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+                  Rowv = NA,
+                  Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "SPOTlight deconvolved cell-types",
+                  ylab = "STdevonvolve deconvolved cell-types",
+                  key.title = NA,
+                  cexRow = 0.9,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(5,10))
+pdf(file = paste0(fig_path, "3_MOB_k12_vs_SL_paired_corr_heatmap.pdf"), width = 6, height = 4)
+gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+                  Rowv = NA,
+                  Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "SPOTlight deconvolved cell-types",
+                  ylab = "STdevonvolve deconvolved cell-types",
+                  key.title = NA,
+                  cexRow = 0.9,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(5,10))
+dev.off()
+
+## get the correlations across the diagonal
+lda_vs_sl_theta_filt <- diag(corMtx_paired)
+
+```
+
+# RCTD vs SL
+
+note that pairing done based on pixel proportion correlation, but clustering in heatmap based on gexp similarity of cell-types
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = rctd_theta,
+                     m2 = sl_theta,
+                     type = "t")
+## pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+## new mtx where rows and cols in order in which they are paired
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+## cluster the cell-types based on the average gexp from the reference (this is really just for viz purposes)
+## use the significant genes for each cluster
+mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
+beta <- mobWtCellProxyBetaRaw[colnames(corMtx_paired), mob_sig_marker_genes]
+## cluster cell-types based on ave gene exp of selected genes
+d_ <- as.dist(1-cor(t(beta)))
+hc_ <- stats::hclust(d_, method = "ward.D")
+
+gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+                  Rowv = NA,
+                  Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "SPOTlight deconvolved cell-types",
+                  ylab = "RCTD deconvolved cell-types",
+                  key.title = NA,
+                  cexRow = 0.7,
+                  cexCol = 0.7,
+                  # lhei = c(1,3),
+                  margins = c(5,10))
+pdf(file = paste0(fig_path, "3_MOB_rctd_vs_SL_paired_corr_heatmap.pdf"), width = 6, height = 4)
+gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+                  Rowv = NA,
+                  Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "SPOTlight deconvolved cell-types",
+                  ylab = "RCTD deconvolved cell-types",
+                  key.title = NA,
+                  cexRow = 0.7,
+                  cexCol = 0.7,
+                  # lhei = c(1,3),
+                  margins = c(5,10))
+dev.off()
+
+## get the correlations across the diagonal
+rctd_vs_sl_theta_filt <- diag(corMtx_paired)
+
+```
+
+# RCTD vs LDA
+
+note that pairing done based on pixel proportion correlation, but clustering in heatmap based on gexp similarity of cell-types
+
+```{r}
+
+corMtx <- getCorrMtx(m1 = lda_k12_theta, #  rows, nrows must be less or equal to ncols for pairing
+                     m2 = rctd_theta, # cols
+                     type = "t")
+## pair up best matching cell class to a predicted topic
+pairs <- lsatPairs(corMtx)
+## new mtx where rows and cols in order in which they are paired
+corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+
+## cluster the cell-types based on the average gexp from the reference (this is really just for viz purposes)
+## use the significant genes for each cluster
+mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
+beta <- mobWtCellProxyBetaRaw[colnames(corMtx_paired), mob_sig_marker_genes]
+## cluster cell-types based on ave gene exp of selected genes
+d_ <- as.dist(1-cor(t(beta)))
+hc_ <- stats::hclust(d_, method = "ward.D")
+
+gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+                  Rowv = NA,
+                  Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "RCTD deconvolved cell-types",
+                  ylab = "STdevonvolve deconvolved cell-types",
+                  key.title = NA,
+                  cexRow = 0.9,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(5,10))
+pdf(file = paste0(fig_path, "3_MOB_k12_vs_rctd_paired_corr_heatmap.pdf"), width = 6, height = 4)
+gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+                  Rowv = NA,
+                  Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "RCTD deconvolved cell-types",
+                  ylab = "STdevonvolve deconvolved cell-types",
+                  key.title = NA,
+                  cexRow = 0.9,
+                  cexCol = 0.9,
+                  # lhei = c(1,3),
+                  margins = c(5,10))
+dev.off()
+
+## get the correlations across the diagonal
+rctd_vs_lda_theta_filt <- diag(corMtx_paired)
+
+```
+
+# summarize
+
+```{r}
+
+cor_mob_summary <- list("STdeconvolve vs RCTD" = rctd_vs_lda_theta_filt,
+                        "RCTD vs SL" = rctd_vs_sl_theta_filt,
+                        "STdeconvolve vs SL" = lda_vs_sl_theta_filt)
+
+ggplot(data = reshape2::melt(plyr::ldply(cor_mob_summary, rbind)), 
+       aes(x=.id, y=value, fill=.id)) +
+  # geom_boxplot(outlier.shape=NA) +
+  # geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) +
+  ggplot2::geom_violin(trim=TRUE, fill="gray") +
+  ggplot2::geom_boxplot(width=0.1, outlier.shape=NA, fill="white") +
+  labs(title = "Correlations between deconvolved cell-type pixel proportions",
+       x = "Method", y = "Pearson's correlation") +
+  theme_classic() +
+  ylim(c(-1,1)) +
+  theme(axis.text.x = element_text(angle = 0, size = 12),
+        axis.text.y = element_text(size=12),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size=15),
+        # axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        legend.position = "none")
+ggplot2::ggsave(filename = paste0("3_correlations_between_methods_boxplots.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3.5,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+## correlation vs proportions
+
+### rctd vs sl
+
+```{r}
+
+bottom <- order(rctd_vs_sl_theta_filt, decreasing = FALSE)[1:5]
+
+corMtx <- getCorrMtx(m1 = rctd_theta,
+                     m2 = sl_theta,
+                     type = "t")
+pairs <- lsatPairs(corMtx)
+
+rctd_order <- rownames(corMtx[pairs$rowix, pairs$colsix])
+rctd_means <- colMeans(rctd_theta)[rctd_order]
+rctd_medians <- apply(rctd_theta, 2, median)[rctd_order]
+rctd_sd <- apply(rctd_theta, 2, sd)[rctd_order]
+
+sl_order <- colnames(corMtx[pairs$rowix, pairs$colsix])
+sl_means <- colMeans(sl_theta)[sl_order]
+sl_medians <- apply(sl_theta, 2, median)[sl_order]
+sl_sd <- apply(sl_theta, 2, sd)[sl_order]
+
+df <- data.frame("RCTD mean" = rctd_means,
+                 "SL mean" = sl_means,
+                 "RCTD std" = rctd_sd,
+                 "SL std" = sl_sd,
+                 "RCTD ct" = rctd_order,
+                 "SL ct" = sl_order,
+                 "correlation" = rctd_vs_sl_theta_filt,
+                 "rank" = rank(rctd_vs_sl_theta_filt),
+                 "names" = paste0(rctd_order, "-", sl_order))
+
+corMtx[pairs$rowix[bottom], pairs$colsix[bottom]]
+df
+
+ggplot(data = df) +
+  geom_point(aes(x = RCTD.mean, y = SL.mean, color = correlation)) +
+  scale_color_viridis(option = "A", direction = -1) +
+  theme_classic() +
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Correlation of predicted proportions of paired cell types",
+       x = "RCTD mean pixel proportion", y = "SPOTlight pixel spot proportion") +
+  coord_cartesian(clip = "off") +
+  ggrepel::geom_text_repel(data = df, mapping = aes(x = RCTD.mean, y = SL.mean, label = names), size = 2.5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.2, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  # nudge_x = 0.01, direction = "y", hjust = "left", 
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  xlim(0, 0.27) +
+  ylim(0, 0.27)
+ggsave(filename = "3_SL_vs_rctd_ct_proportion_scatter.png",
+       device = "png",
+       path = fig_path,
+       scale = 1.5,
+       width = 5,
+       height = 4,
+       units = c("in"),
+       dpi = 300)
+
+```
+
+### rctd vs lda
+
+```{r}
+
+bottom <- order(rctd_vs_lda_theta_filt, decreasing = FALSE)[1:5]
+
+corMtx <- getCorrMtx(m1 = lda_k12_theta, # rows
+                     m2 =rctd_theta, # columns
+                     type = "t")
+pairs <- lsatPairs(corMtx)
+
+rctd_order <- colnames(corMtx[pairs$rowix, pairs$colsix])
+rctd_means <- colMeans(rctd_theta)[rctd_order]
+rctd_medians <- apply(rctd_theta, 2, median)[rctd_order]
+
+lda_order <- rownames(corMtx[pairs$rowix, pairs$colsix])
+lda_means <- colMeans(lda_k12_theta)[lda_order]
+lda_medians <- apply(lda_k12_theta, 2, median)[lda_order]
+
+df <- data.frame("RCTD mean" = rctd_means,
+                 "STdeconvolve mean" = lda_means,
+                 "RCTD ct" = rctd_order,
+                 "STdeconvolve ct" = lda_order,
+                 "correlation" = rctd_vs_lda_theta_filt,
+                 "rank" = rank(rctd_vs_lda_theta_filt),
+                 "names" = paste0(lda_order, "-", rctd_order))
+
+corMtx[pairs$rowix[bottom], pairs$colsix[bottom]]
+df
+
+ggplot(data = df) +
+  geom_point(aes(x = RCTD.mean, y = STdeconvolve.mean, color = correlation)) +
+  scale_color_viridis(option = "A", direction = -1) +
+  theme_classic() +
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Correlation of predicted proportions of paired cell types",
+       x = "RCTD mean pixel proportion", y = "STdeconvolve pixel spot proportion") +
+  coord_cartesian(clip = "off") +
+  ggrepel::geom_text_repel(data = df, mapping = aes(x = RCTD.mean, y = STdeconvolve.mean, label = names), size = 2.5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.2, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  # nudge_x = 0.01, direction = "y", hjust = "left", 
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  xlim(0, 0.27) +
+  ylim(0, 0.27)
+ggsave(filename = "3_stdeconvolve_vs_rctd_ct_proportion_scatter.png",
+       device = "png",
+       path = fig_path,
+       scale = 1.5,
+       width = 5,
+       height = 4,
+       units = c("in"),
+       dpi = 300)
+
+```
+
+### sl vs lda
+
+```{r}
+
+bottom <- order(lda_vs_sl_theta_filt, decreasing = FALSE)[1:5]
+
+corMtx <- getCorrMtx(m1 = lda_k12_theta, # rows
+                     m2 = sl_theta, # columns
+                     type = "t")
+pairs <- lsatPairs(corMtx)
+
+sl_order <- colnames(corMtx[pairs$rowix, pairs$colsix])
+sl_means <- colMeans(sl_theta)[sl_order]
+sl_medians <- apply(sl_theta, 2, median)[sl_order]
+
+lda_order <- rownames(corMtx[pairs$rowix, pairs$colsix])
+lda_means <- colMeans(lda_k12_theta)[lda_order]
+lda_medians <- apply(lda_k12_theta, 2, median)[lda_order]
+
+df <- data.frame("SL mean" = sl_means,
+                 "STdeconvolve mean" = lda_means,
+                 "SL ct" = sl_order,
+                 "STdeconvolve ct" = lda_order,
+                 "correlation" = lda_vs_sl_theta_filt,
+                 "rank" = rank(lda_vs_sl_theta_filt),
+                 "names" = paste0(lda_order, "-", sl_order))
+
+corMtx[pairs$rowix[bottom], pairs$colsix[bottom]]
+df
+
+ggplot(data = df) +
+  geom_point(aes(x = SL.mean, y = STdeconvolve.mean, color = correlation)) +
+  scale_color_viridis(option = "A", direction = -1) +
+  theme_classic() +
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title = "Correlation of predicted proportions of paired cell types",
+       x = "SPOTlight mean pixel proportion", y = "STdeconvolve mean pixel proportion") +
+  coord_cartesian(clip = "off") +
+  ggrepel::geom_text_repel(data = df, mapping = aes(x = SL.mean, y = STdeconvolve.mean, label = names), size = 2.5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.2, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  # nudge_x = 0.01, direction = "y", hjust = "left", 
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  xlim(0, 0.18) +
+  ylim(0, 0.18)
+ggsave(filename = "3_stdeconvolve_vs_SL_ct_proportion_scatter.png",
+       device = "png",
+       path = fig_path,
+       scale = 1.5,
+       width = 5,
+       height = 4,
+       units = c("in"),
+       dpi = 300)
+
+```
+
+# ----------------------------------
+
+# Remove OECs
+
+## no oec filter SL
+
+```{r}
+
+sl_noOEC_theta <- sl_countsClean_noOEC$thetaCt
+sl_noOEC_theta[sl_noOEC_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+# ambig <- 1 - rowSums(sl_noOEC_theta)
+# sl_noOEC_theta2 <- cbind(sl_noOEC_theta, ambig)
+
+# readjust proportions
+sl_noOEC_theta <- sl_noOEC_theta/rowSums(sl_noOEC_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+sl_noOEC_theta[is.na(sl_noOEC_theta)] <- 0
+
+summary(sl_noOEC_theta)
+
+# ggplot(data = reshape2::melt(sl_noOEC_theta)) +
+#   geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+#   scale_y_continuous(breaks = seq(0,1,0.05)) +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+#         # panel.grid = element_blank(),
+#         # axis.line=element_blank(),
+#         # axis.text.x=element_blank(),
+#         # axis.text.y=element_blank(),
+#         # axis.ticks=element_blank(),
+#         axis.title.x=element_blank(),
+#         axis.title.y=element_blank(),
+#         panel.background=element_blank()
+#         ) +
+#   ggtitle("SPOTlight noOECs predicted cell-type proportions in pixels after filtering")
+
+# drop ant cts that are 0 for all pixels
+sl_noOEC_theta <- sl_noOEC_theta[,which(colSums(sl_noOEC_theta) > 0)]
+# sl_noOEC_theta2 <- sl_noOEC_theta2[,which(colSums(sl_noOEC_theta2) > 0)]
+
+dim(sl_noOEC_theta)
+
+```
+
+## no oec filter rctd
+
+```{r}
+
+rctd_noOEC_theta <- as.matrix(RCTD_mob_noOEC_results_norm)
+rctd_noOEC_theta[rctd_noOEC_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+# ambig <- 1 - rowSums(rctd_noOEC_theta)
+# rctd_noOEC_theta2 <- cbind(rctd_noOEC_theta, ambig)
+
+# readjust proportions
+rctd_noOEC_theta <- rctd_noOEC_theta/rowSums(rctd_noOEC_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+rctd_noOEC_theta[is.na(rctd_noOEC_theta)] <- 0
+
+summary(rctd_noOEC_theta)
+
+# ggplot(data = reshape2::melt(rctd_noOEC_theta)) +
+#   geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+#   scale_y_continuous(breaks = seq(0,1,0.05)) +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+#         # panel.grid = element_blank(),
+#         # axis.line=element_blank(),
+#         # axis.text.x=element_blank(),
+#         # axis.text.y=element_blank(),
+#         # axis.ticks=element_blank(),
+#         axis.title.x=element_blank(),
+#         axis.title.y=element_blank(),
+#         panel.background=element_blank()
+#         ) +
+#   ggtitle("RCTD no OECs predicted cell-type proportions in pixels after filtering")
+
+# drop ant cts that are 0 for all pixels
+rctd_noOEC_theta <- rctd_noOEC_theta[,which(colSums(rctd_noOEC_theta) > 0)]
+# rctd_noOEC_theta2 <- rctd_noOEC_theta2[,which(colSums(rctd_noOEC_theta2) > 0)]
+
+dim(rctd_noOEC_theta)
+
+```
+
+## pixel proportion change
+
+```{r}
+
+shared_cts_sl <- intersect(colnames(sl_theta), colnames(sl_noOEC_theta))
+shared_cts_rctd <- intersect(colnames(rctd_theta), colnames(rctd_noOEC_theta))
+shared_cts <- intersect(colnames(shared_cts_sl), colnames(shared_cts_rctd))
+
+original_sl <- data.frame(sl_theta[, ], group = "SPOTlight\noriginal", color = "red")
+noOecs_sl <- data.frame(sl_noOEC_theta[, ], group = "SPOTlight\nmissing OECs", color = "blue")
+
+original_rctd <- data.frame(rctd_theta[, ], group = "RCTD\noriginal", color = "red")
+noOecs_rctd <- data.frame(rctd_noOEC_theta[, ], group = "RCTD\nmissing OECs", color = "blue")
+
+# dat <- rbind(original_sl, noOecs_sl, original_rctd, noOecs_rctd)
+dat <- dplyr::bind_rows(original_sl, noOecs_sl, original_rctd, noOecs_rctd)
+dat <- reshape2::melt(dat)
+dat <- dat[dat$variable == "N2",]
+dat[is.na(dat)] <- 0
+# reshape2::melt(dat)
+
+## edit group order on plot
+dat$group <- factor(dat$group, levels = c('SPOTlight\noriginal', 'RCTD\noriginal', 'SPOTlight\nmissing OECs' ,'RCTD\nmissing OECs'))
+
+ggplot(data = dat, aes(x = reorder(group, group), y = value, color = color)) +
+  # geom_point(aes(x = group, y = value), cex = 0.5) +
+  # geom_point(position=position_jitterdodge(0.1), cex=0.5, aes(color=`color`)) +
+  # ggplot2::geom_violin(trim=TRUE, fill="gray") +
+  # ggplot2::geom_boxplot(width=0.1, outlier.shape=NA, fill="white") +
+  geom_jitter(aes(x = group, y = value, color = "black"), position=position_jitter(0.1), cex=0.5) +
+  scale_color_grey() +
+  labs(title = "Deconvolved N2 cell-type cluster by method",
+       x = "Method and reference",
+       y = "pixel proportions") +
+  theme_classic() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 0, size = 11),
+        axis.text.y = element_text(size=12),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size=12),
+        plot.title = element_text(size=15, face=NULL),
+        legend.position = "none")
+ggsave(filename = "3_N2_pixel_proportions_sl_rctd_noOEC_scatter.png",
+       device = "png",
+       path = fig_path,
+       scale = 1.5,
+       width = 3.5,
+       height = 3,
+       units = c("in"),
+       dpi = 300)
+
+```
+
+## viz on mob
+
+```{r}
+
+m <- sl_theta[,c("OEC1","OEC2","OEC4", "N2")]
+p <- mobCorpus$pos
+other <- 1 - rowSums(m)
+m <- cbind(m, other)
+
+p1 <- vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=c("#FF0000", "#FF0000", "#FF0000", "blue", "white"),
+             groups = rep("0", dim(m)[1]),
+             group_cols = c("0" = "black"),
+             r = 0.4, # different size piecharts for mOB data sets
+             lwd = 0.05,
+             showLegend = FALSE,
+             plotTitle = paste("SPOTlight original"))
+
+m <- rctd_theta[,c("OEC1","OEC2","OEC4")]
+p <- mobCorpus$pos
+other <- 1 - rowSums(m)
+m <- cbind(m, other)
+
+p2 <- vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=c("#FF0000", "#FF0000", "#FF0000", "white"),
+             groups = rep("0", dim(m)[1]),
+             group_cols = c("0" = "black"),
+             r = 0.4, # different size piecharts for mOB data sets
+             lwd = 0.05,
+             showLegend = FALSE,
+             plotTitle = paste("RCTD original"))
+
+m <- sl_noOEC_theta[,"N2"]
+p <- mobCorpus$pos
+other <- 1 - m
+m <- cbind(m, other)
+colnames(m) <- c("N2", "other")
+
+p3 <- vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=c("blue", "white"),
+             groups = rep("0", dim(m)[1]),
+             group_cols = c("0" = "black"),
+             r = 0.4, # different size piecharts for mOB data sets
+             lwd = 0.05,
+             showLegend = FALSE,
+             plotTitle = paste("SPOTlight missing OECs"))
+
+m <- rctd_noOEC_theta[,"N2"]
+p <- mobCorpus$pos
+other <- 1 - m
+m <- cbind(m, other)
+colnames(m) <- c("N2", "other")
+
+p4 <- vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=c("blue", "white"),
+             groups = rep("0", dim(m)[1]),
+             group_cols = c("0" = "black"),
+             r = 0.4, # different size piecharts for mOB data sets
+             lwd = 0.05,
+             showLegend = FALSE,
+             plotTitle = paste("RCTD missing OECs"))
+
+
+
+plts_grid <- gridExtra::grid.arrange(
+  grobs = list(ggplotGrob(p1), ggplotGrob(p2),ggplotGrob(p3),ggplotGrob(p4)),
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid
+ggplot2::ggsave(filename = paste0("3_MOB_sl_rctd_noOECs_N2_pixels.png"),
+         device = "png",
+         plot = plts_grid,
+         path = fig_path,
+         scale = 1.5,
+         width = 4,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+## N2 gexp
+
+```{r}
+
+## differential expressed marker genes for N2 cluster
+n2_markers <- cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$cluster == "N2",]
+## the genes that are in `mobClean` ST dataset (7365 genes, which were used by both SPOTlight and RCTD during deconvolution)
+n2_markers <- n2_markers[n2_markers$gene %in% rownames(mobClean),]
+## sorted by adjusted p val
+markers <- dplyr::arrange(n2_markers, p_val_adj)$gene[1:4] # look at top 4
+
+pos <- mobCorpus$pos
+counts <- mobCPM ## CPM normalized counts
+
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid1 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid1
+ggplot2::ggsave(filename = paste0("3_N2_top_marker_genes_cpm.png"),
+         device = "png",
+         plot = plts_grid1,
+         path = fig_path,
+         scale = 1.5,
+         width = 4,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+# ----------------------------------
+
+# Cortex
+
+## filtering SL
+
+```{r}
+
+sl_cortex_theta <- sl_countsClean_cortexRef$thetaCt
+sl_cortex_theta[sl_cortex_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+# ambig <- 1 - rowSums(sl_cortex_theta)
+# sl_cortex_theta2 <- cbind(sl_cortex_theta, ambig)
+
+# readjust proportions
+sl_cortex_theta <- sl_cortex_theta/rowSums(sl_cortex_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+sl_cortex_theta[is.na(sl_cortex_theta)] <- 0
+
+summary(sl_cortex_theta)
+
+# ggplot(data = reshape2::melt(sl_cortex_theta)) +
+#   geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+#   scale_y_continuous(breaks = seq(0,1,0.05)) +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+#         # panel.grid = element_blank(),
+#         # axis.line=element_blank(),
+#         # axis.text.x=element_blank(),
+#         # axis.text.y=element_blank(),
+#         # axis.ticks=element_blank(),
+#         axis.title.x=element_blank(),
+#         axis.title.y=element_blank(),
+#         panel.background=element_blank()
+#         ) +
+#   ggtitle("SPOTlight cortex predicted cell-type proportions in pixels after filtering")
+
+# drop ant cts that are 0 for all pixels
+sl_cortex_theta <- sl_cortex_theta[,which(colSums(sl_cortex_theta) > 0)]
+# sl_cortex_theta2 <- sl_cortex_theta2[,which(colSums(sl_cortex_theta2) > 0)]
+
+dim(sl_cortex_theta)
+
+```
+
+## filtering rctd
+
+```{r}
+
+rctd_cortex_theta <- as.matrix(RCTD_cortexRef_results_norm)
+rctd_cortex_theta[rctd_cortex_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+# ambig <- 1 - rowSums(rctd_cortex_theta)
+# rctd_cortex_theta2 <- cbind(rctd_cortex_theta, ambig)
+
+# readjust proportions
+rctd_cortex_theta <- rctd_cortex_theta/rowSums(rctd_cortex_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+rctd_cortex_theta[is.na(rctd_cortex_theta)] <- 0
+
+summary(rctd_cortex_theta)
+
+# ggplot(data = reshape2::melt(rctd_cortex_theta)) +
+#   geom_jitter(aes(x = reorder(Var2, -value), y = value), position=position_jitter(0.1), cex=0.1) +
+#   scale_y_continuous(breaks = seq(0,1,0.05)) +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+#         # panel.grid = element_blank(),
+#         # axis.line=element_blank(),
+#         # axis.text.x=element_blank(),
+#         # axis.text.y=element_blank(),
+#         # axis.ticks=element_blank(),
+#         axis.title.x=element_blank(),
+#         axis.title.y=element_blank(),
+#         panel.background=element_blank()
+#         ) +
+#   ggtitle("RCTD cortex predicted cell-type proportions in pixels after filtering")
+
+# drop ant cts that are 0 for all pixels
+rctd_cortex_theta <- rctd_cortex_theta[,which(colSums(rctd_cortex_theta) > 0)]
+# rctd_cortex_theta2 <- rctd_cortex_theta2[,which(colSums(rctd_cortex_theta2) > 0)]
+
+dim(rctd_cortex_theta)
+
+```
+
+## viz on mob
+
+```{r}
+
+m <- sl_cortex_theta[,"VLMC"]
+p <- mobCorpus$pos
+other <- 1 - m
+m <- cbind(m, other)
+colnames(m) <- c("VLMC", "other")
+
+p1 <- vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=c("#FF00FF", "white"),
+             groups = rep("0", dim(m)[1]),
+             group_cols = c("0" = "black"),
+             r = 0.4, # different size piecharts for mOB data sets
+             lwd = 0.05,
+             showLegend = FALSE,
+             plotTitle = paste("SPOTlight cortex reference"))
+
+
+m <- rctd_cortex_theta[,"VLMC"]
+p <- mobCorpus$pos
+other <- 1 - m
+m <- cbind(m, other)
+colnames(m) <- c("VLMC", "other")
+
+p2 <- vizAllTopics(theta = m,
+             pos = p,
+             topicOrder=seq(ncol(m)),
+             topicCols=c("#FF00FF", "white"),
+             groups = rep("0", dim(m)[1]),
+             group_cols = c("0" = "black"),
+             r = 0.4, # different size piecharts for mOB data sets
+             lwd = 0.05,
+             showLegend = FALSE,
+             plotTitle = paste("RCTD cortex reference"))
+
+plts_grid <- gridExtra::grid.arrange(
+  grobs = list(ggplotGrob(p1), ggplotGrob(p2)),
+  layout_matrix = rbind(c(1, 2))
+)
+plts_grid
+ggplot2::ggsave(filename = paste0("3_MOB_sl_rctd_cortex_VLMC_pixels.png"),
+         device = "png",
+         plot = plts_grid,
+         path = fig_path,
+         scale = 1.5,
+         width = 4.4,
+         height = 2,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+## VLMC gexp
+
+countsClean - 7365 genes
+mob$CPM
+
+SPOTlight - 7072 genes; intersection of countsClean genes and the genes in the ref
+
+cortex_sc - 34617 genes
+
+mOB$counts - 15928 genes
+
+cortex_cluster_markers from cortex_sc
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/sl_cortex_sc_and_markers.RData")
+# cortex_sc
+# cortex_cluster_markers
+
+```
+
+```{r}
+
+## CPM norm of all genes before cleaning
+mOB$countsCPM <- MERINGUE::normalizeCounts(counts = mOB$counts, 
+                       log=FALSE,
+                       verbose=TRUE)
+
+```
+
+```{r}
+
+# differential expressed marker genes for VLMC
+# vlmc_markers <- cortex_cluster_markers[cortex_cluster_markers$cluster == "VLMC",] # these are based on cortex_sc - 34617 genes
+# 
+# # would be useful to use top diff genes from the cluster itself, that are also in the input matrix for SPOTlight and RCTD
+# vlmc_markers[vlmc_markers$gene %in% rownames(mobCPM),]
+
+# but also use previously annotated marker genes, too
+
+
+## differential expressed marker genes for N2 cluster
+vlmc_markers <- cortex_cluster_markers[cortex_cluster_markers$cluster == "VLMC",]
+## the genes that are in `mobClean` ST dataset (7365 genes, which were used by both SPOTlight and RCTD during deconvolution)
+vlmc_markers <- vlmc_markers[vlmc_markers$gene %in% rownames(mobClean),]
+## sorted by adjusted p val
+markers <- dplyr::arrange(vlmc_markers, p_val_adj)$gene[1:4] # look at top 4
+
+markers <- c(markers, c("Pdgfra", "Lum")) ## note that Lum is not in the mobClean/cleanCounts used for training, but all the other genes are
+
+pos <- mobCorpus$pos
+counts <- mOB$countsCPM ## CPM normalized counts
+
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid1 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2, 5),
+                        c(3, 4, 6))
+)
+plts_grid1
+ggplot2::ggsave(filename = paste0("3_VLMC_top_marker_genes_cpm.png"),
+         device = "png",
+         plot = plts_grid1,
+         path = fig_path,
+         scale = 1.5,
+         width = 6,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+
+```
+
+# ----------------------------------
+
+Did STdeconvolve also identify a topic enriched with OEC genes present in the olfactory nerve layer? Likewise, did STdeconvolve not identify a topic with gene expression similar to N2 cells?
+
+## cell-type gexp cell-type 8
+
+```{r}
+
+n <- "12"
+celltype <- 8
+deconGexp <- mobLDAsDeconv[[n]]$beta*1000
+pos <- mobCorpus$pos
+counts <- mobClean
+
+vals <- sort(deconGexp[celltype,], decreasing = TRUE)
+vals[1:20]
+
+## ----------------------------------------------------
+## txn profile, normalized and scaled expression
+
+dat <- data.frame(values = as.vector(vals), genes = names(vals), order = seq(length(vals)))
+# Hide all of the text labels.
+dat$selectedLabels <- ""
+# Let's just label these items.
+ix_label <- seq(5)
+dat$selectedLabels[ix_label] <- dat$genes[ix_label]
+
+ggplot(data = dat) +
+  geom_col(aes(x = order, y = values)) +
+  labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
+       x = "Gene expression rank", y = "Normalized and scaled expression") +
+  # coord_cartesian(clip = "off") +
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = 10, direction = "y", hjust = "left",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 15),
+        axis.text.y = element_text(size=15),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_text(size=15),
+        axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        )
+ggplot2::ggsave(filename = paste0("3_MOB_k12_ct8_txnProfile_barplot.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+## ----------------------------------------------------
+## log2FC relative to other cell-types
+
+## highly expressed in cell-type of interest
+highgexp <- names(which(deconGexp[celltype,] > 5))
+## high log2(fold-change) compared to other deconvolved cell-types
+log2fc <- sort(log2(deconGexp[celltype,highgexp]/colMeans(deconGexp[-celltype,highgexp])), decreasing=TRUE)
+log2fc
+dat <- data.frame(values = as.vector(log2fc), genes = names(log2fc), order = seq(length(log2fc)))
+# Hide all of the text labels.
+dat$selectedLabels1 <- ""
+# Let's just label these top items.
+ix_label <- seq(5)
+dat$selectedLabels1[ix_label] <- dat$genes[ix_label]
+
+dat$selectedLabels2 <- ""
+# Let's label these bottom items
+ix_label <- tail(seq(length(log2fc)), 5)
+dat$selectedLabels2[ix_label] <- dat$genes[ix_label]
+
+ggplot(data = dat) +
+  geom_col(aes(x = order, y = values)) +
+  labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
+       x = "Gene expression rank", y = "log2FC Normalized and scaled expression") +
+  # coord_cartesian(clip = "off") +
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels1), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = 10, direction = "y", hjust = "left",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels2), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = -10, direction = "y", hjust = "right",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 15),
+        axis.text.y = element_text(size=15),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_text(size=15),
+        axis.title.y = element_text(size=12),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        )
+ggplot2::ggsave(filename = paste0("3_MOB_k12_ct8_txnProfile_log2FC_barplot.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+## ----------------------------------------------------
+## viz top markers
+
+markers <- names(log2fc)[1:4]
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid1 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid1
+ggplot2::ggsave(filename = paste0("3_MOB_k12_ct8_top4_log2fc_markers_gexp_counts.png"),
+         device = "png",
+         plot = plts_grid1,
+         path = fig_path,
+         scale = 1.5,
+         width = 4,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+## ----------------------------------------------------
+## viz bottom markers
+
+markers <- tail(names(log2fc), 4)
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid2 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid2
+ggplot2::ggsave(filename = paste0("3_MOB_k12_ct8_bottom4_log2fc_markers_gexp_counts.png"),
+         device = "png",
+         plot = plts_grid2,
+         path = fig_path,
+         scale = 1.5,
+         width = 4,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+## OEC1 genes
+
+### marker gexp
+
+```{r}
+
+## differential expressed marker genes for N2 cluster
+oec1_markers <- cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$cluster == "OEC1",]
+## the genes that are in `mobClean` ST dataset (7365 genes, which were used by both SPOTlight and RCTD during deconvolution)
+oec1_markers <- oec1_markers[oec1_markers$gene %in% rownames(mobClean),]
+## sorted by adjusted p val
+markers <- dplyr::arrange(oec1_markers, p_val_adj)$gene[1:4] # look at top 4
+
+pos <- mobCorpus$pos
+counts <- mobCPM ## CPM normalized counts
+
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid1 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid1
+ggplot2::ggsave(filename = paste0("3_OEC1_top_marker_genes_cpm.png"),
+         device = "png",
+         plot = plts_grid1,
+         path = fig_path,
+         scale = 1.5,
+         width = 4,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+### marker gexp in corpus
+
+```{r}
+
+## differential expressed marker genes for N2 cluster
+oec1_markers <- cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$cluster == "OEC1",]
+## the genes that are in `mobClean` ST dataset (7365 genes, which were used by both SPOTlight and RCTD during deconvolution)
+oec1_markers <- oec1_markers[oec1_markers$gene %in% colnames(mobCorpus$corpus),]
+## sorted by adjusted p val
+markers <- dplyr::arrange(oec1_markers, p_val_adj)$gene[1:4] # look at top 4
+
+pos <- mobCorpus$pos
+counts <- mobCPM ## CPM normalized counts
+
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid1 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid1
+ggplot2::ggsave(filename = paste0("3_OEC1_top_marker_genes_in_corpus_cpm.png"),
+         device = "png",
+         plot = plts_grid1,
+         path = fig_path,
+         scale = 1.5,
+         width = 4,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+### corpus markers gsea
+
+```{r}
+
+markers <- dplyr::arrange(oec1_markers, p_val_adj)$gene
+n <- "12"
+deconGexp <- mobLDAsDeconv[[n]]$beta*1000
+
+for (i in seq(12)){
+  vals <- sort(deconGexp[i,], decreasing = TRUE)
+  gsea(values=vals, geneset=markers, plot=TRUE, rank=TRUE, main = paste0("Cell-type ", i, " enrichment with OEC1 cluster genes"))
+}
+
+```
+
+## OEC2 genes
+
+### marker gexp
+
+```{r}
+
+## differential expressed marker genes for N2 cluster
+oec2_markers <- cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$cluster == "OEC2",]
+## the genes that are in `mobClean` ST dataset (7365 genes, which were used by both SPOTlight and RCTD during deconvolution)
+oec2_markers <- oec2_markers[oec2_markers$gene %in% rownames(mobClean),]
+## sorted by adjusted p val
+markers <- dplyr::arrange(oec2_markers, p_val_adj)$gene[1:4] # look at top 4
+
+pos <- mobCorpus$pos
+counts <- mobCPM ## CPM normalized counts
+
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid1 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid1
+ggplot2::ggsave(filename = paste0("3_OEC2_top_marker_genes_cpm.png"),
+         device = "png",
+         plot = plts_grid1,
+         path = fig_path,
+         scale = 1.5,
+         width = 4,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+### marker gexp in corpus
+
+```{r}
+
+## differential expressed marker genes for N2 cluster
+oec2_markers <- cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$cluster == "OEC2",]
+## the genes that are in `mobClean` ST dataset (7365 genes, which were used by both SPOTlight and RCTD during deconvolution)
+oec2_markers <- oec2_markers[oec2_markers$gene %in% colnames(mobCorpus$corpus),]
+## sorted by adjusted p val
+markers <- dplyr::arrange(oec2_markers, p_val_adj)$gene[1:4] # look at top 4
+
+pos <- mobCorpus$pos
+counts <- mobCPM ## CPM normalized counts
+
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid1 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid1
+ggplot2::ggsave(filename = paste0("3_OEC2_top_marker_genes_in_corpus_cpm.png"),
+         device = "png",
+         plot = plts_grid1,
+         path = fig_path,
+         scale = 1.5,
+         width = 4,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+### corpus markers gsea
+
+```{r}
+
+markers <- dplyr::arrange(oec1_markers, p_val_adj)$gene
+n <- "12"
+deconGexp <- mobLDAsDeconv[[n]]$beta*1000
+
+for (i in seq(12)){
+  vals <- sort(deconGexp[i,], decreasing = TRUE)
+  gsea(values=vals, geneset=markers, plot=TRUE, rank=TRUE, main = paste0("Cell-type ", i, " enrichment with OEC2 cluster genes"))
+}
+
+```
+
+## OEC4 genes
+
+### in mobCPM
+
+```{r}
+
+## differential expressed marker genes for N2 cluster
+oec4_markers <- cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$cluster == "OEC4",]
+## the genes that are in `mobClean` ST dataset (7365 genes, which were used by both SPOTlight and RCTD during deconvolution)
+oec4_markers <- oec4_markers[oec4_markers$gene %in% rownames(mobClean),]
+## sorted by adjusted p val
+markers <- dplyr::arrange(oec4_markers, p_val_adj)$gene[1:4] # look at top 4
+
+pos <- mobCorpus$pos
+counts <- mobCPM ## CPM normalized counts
+
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid1 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid1
+# ggplot2::ggsave(filename = paste0("3_N2_top_marker_genes_cpm.png"),
+#          device = "png",
+#          plot = plts_grid1,
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 4,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
+
+```
+
+### in corpus
+
+```{r}
+
+## differential expressed marker genes for N2 cluster
+oec4_markers <- cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$cluster == "OEC4",]
+## the genes that are in `mobClean` ST dataset (7365 genes, which were used by both SPOTlight and RCTD during deconvolution)
+oec4_markers <- oec4_markers[oec4_markers$gene %in% colnames(mobCorpus$corpus),]
+## sorted by adjusted p val
+markers <- dplyr::arrange(oec4_markers, p_val_adj)$gene[1:4] # look at top 4
+
+pos <- mobCorpus$pos
+counts <- mobCPM ## CPM normalized counts
+
+## visualize
+df <- merge(as.data.frame(pos), 
+            as.data.frame(t(as.matrix(counts[markers,]))), 
+            by = 0)
+ps <- lapply(markers, function(marker) {
+  plt <- vizGeneCounts(df = df,
+              gene = marker,
+              size = 2.5, stroke = 0.1,
+              plotTitle = marker,
+              winsorize = 0.05,
+              showLegend = FALSE)
+  ggplotGrob(plt)
+})
+plts_grid1 <- gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2),
+                        c(3, 4))
+)
+plts_grid1
+# ggplot2::ggsave(filename = paste0("3_N2_top_marker_genes_cpm.png"),
+#          device = "png",
+#          plot = plts_grid1,
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 4,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
+
+```
+
+## N2 genes enriched in cts?
+
+```{r}
+
+## differential expressed marker genes for N2 cluster
+n2_markers <- cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$cluster == "N2",]
+## the genes that are in `mobClean` ST dataset (7365 genes, which were used by both SPOTlight and RCTD during deconvolution)
+n2_markers <- n2_markers[n2_markers$gene %in% colnames(mobCorpus$corpus),]
+## sorted by adjusted p val
+markers <- dplyr::arrange(n2_markers, p_val_adj)
+markers
+
+
+
+
+```
+
+```{r}
+
+n <- "12"
+deconGexp <- mobLDAsDeconv[[n]]$beta*1000
+
+for (i in seq(12)){
+  vals <- sort(deconGexp[i,], decreasing = TRUE)
+  gsea(values=vals, geneset=markers$gene, plot=TRUE, rank=TRUE, main = paste0("Cell-type ", i, " enrichment with N2 cluster genes"))
+}
+
+```
+
+# -----------------------------------
+
+# intra and inter comparison
+
+# other mOB datasets
+
+```{r}
+
+# list of either the mob data sets or paths to the data for inputs into `preprocess`
+
+mobRepPaths <- list()
+
+# paths to Stahl data:
+p <- "/Users/brendan/Desktop/PostDoc/data/ImputeTranscriptomeFromHE/2016_Stahl/SpotGeneCountMatrices/"
+stahlMobDatPaths <- list.files(path = p, pattern = "*MOB_count_matrix-1.tsv", full.names = FALSE)
+# add to the list
+i <- 1
+while(i < length(stahlMobDatPaths) + 1){
+  mobRepPaths[[i]] <- paste0(p, stahlMobDatPaths[i])
+  i <- i + 1
+}
+
+names(mobRepPaths) <- unlist(strsplit(stahlMobDatPaths, "_MOB_count_matrix-1.tsv"))
+
+```
+
+```{r}
+
+mobCorpusReps <- lapply(mobRepPaths, function(p) {
+  dat <- preprocess(p,
+                   alignFile = NA,
+                   extractPos = TRUE,
+                   selected.genes = NA,
+                   nTopGenes = NA,
+                   genes.to.remove = NA,
+                   removeAbove = NA,
+                   removeBelow = NA,
+                   min.reads = 100,
+                   min.lib.size = 100,
+                   min.detected = 1,
+                   ODgenes = TRUE,
+                   nTopOD = NA,
+                   od.genes.alpha = 0.05,
+                   gam.k = 5) # ODgenes ignored; so is this
+  dat
+})
+
+names(mobCorpusReps) <- unlist(strsplit(stahlMobDatPaths, "_MOB_count_matrix-1.tsv"))
+
+```
+
+Check out rep12 and rep5 because both less genes than pixels and by reasonable amount. Next worth checking out reps with more genes than pixels
+
+```{r}
+
+ks <- seq(from = 2, to = 20, by = 1)
+# ks <- c(ks, 37, 38, seq(from = 25, to = 75, by = 10))
+
+```
+
+## Rep 5
+
+```{r}
+mobCorpusReps$Rep5$slm
+```
+
+```{r}
+
+mobLDAsRep5 <- fitLDA(counts = mobCorpusReps$Rep5$corpus,
+                        Ks = ks,
+                        testSize = NULL,
+                        perc.rare.thresh = 0.05,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+
+```
+
+```{r}
+
+# first do the Stahl data because can get positional information from the spot IDs
+mobLDAsRep5Deconv <- lapply(seq(3,20), function(l) {
+  lda <- buildLDAobject(LDAmodel = optimalModel(mobLDAsRep5, opt = l),
+                        corpus = mobCorpusReps$Rep5$corpus,
+                        deepSplit = 4,
+                        colorScheme = "rainbow")
+  lda
+})
+
+names(mobLDAsRep5Deconv) <- as.character(seq(3,20))
+
+```
+
+## Rep 12
+
+```{r}
+mobCorpusReps$Rep12$slm
+```
+
+```{r}
+
+# pdf(file = paste0(fig_path, "Fig1_D-1_mob_lda_fit.pdf"))
+mobLDAsRep12 <- fitLDA(counts = mobCorpusReps$Rep12$corpus,
+                        Ks = ks,
+                        testSize = NULL,
+                        perc.rare.thresh = 0.05,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+# dev.off()
+
+```
+
+select some different models for comparison
+
+```{r}
+
+# first do the Stahl data because can get positional information from the spot IDs
+mobLDAsRep12Deconv <- lapply(seq(3,20), function(l) {
+  lda <- buildLDAobject(LDAmodel = optimalModel(mobLDAsRep12, opt = l),
+                        corpus = mobCorpusReps$Rep12$corpus,
+                        deepSplit = 4,
+                        colorScheme = "rainbow")
+  lda
+})
+
+names(mobLDAsRep12Deconv) <- as.character(seq(3,20))
+
+```
+
+## Rep 2
+
+```{r}
+mobCorpusReps$Rep2$slm
+```
+
+Rep2 has 279 pixels and 385 genes so more genes than pixels this time
+
+```{r}
+
+# pdf(file = paste0(fig_path, "Fig1_D-1_mob_lda_fit.pdf"))
+mobLDAsRep2 <- fitLDA(counts = mobCorpusReps$Rep2$corpus,
+                        Ks = ks,
+                        testSize = NULL,
+                        perc.rare.thresh = 0.05,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+# dev.off()
+
+```
+
+select some different models for comparison
+
+```{r}
+
+# first do the Stahl data because can get positional information from the spot IDs
+mobLDAsRep2Deconv <- lapply(seq(3,20), function(l) {
+  lda <- buildLDAobject(LDAmodel = optimalModel(mobLDAsRep2, opt = l),
+                        corpus = mobCorpusReps$Rep2$corpus,
+                        deepSplit = 4,
+                        colorScheme = "rainbow")
+  lda
+})
+
+names(mobLDAsRep2Deconv) <- as.character(seq(3,20))
+
+```
+
+# Comparisons
+
+## inter
+
+```{r}
+
+k <- "12"
+
+## rep8 and rep2
+## --------------------------------------------------------
+corMtx_txn <- getCorrMtx(m1 = mobLDAsDeconv[[k]]$beta[,],
+                         m2 = mobLDAsRep2Deconv[[k]]$beta[,],
+                         type = "b")
+
+pairs <- lsatPairs(corMtx_txn)
+## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+## the properly ordered txn correlation matrix
+corMtx_txn_1 <- corMtx_txn[pairs$rowix, pairs$colsix]
+colnames(corMtx_txn_1) <- paste0("Cell-type ", colnames(corMtx_txn_1)) # columns
+rownames(corMtx_txn_1) <- paste0("Cell-type ", rownames(corMtx_txn_1))
+
+rep8_rep2 <- diag(corMtx_txn_1)
+
+## plot the txn correlations
+dat <- reshape2::melt(corMtx_txn_1)
+ggplot2::ggplot(data = dat) +
+  ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+  ggplot2::xlab("MOB replicate 8") + # corr mat rows
+  ggplot2::ylab("MOB replicate 2") + # corr mat columns
+  ggplot2::ggtitle("Cell-type transcriptional profile correlation") +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=8),
+                panel.grid = element_blank(),
+                axis.line=element_blank(),
+                # axis.text.x=element_blank(),
+                axis.text.y=element_text(size=8),
+                axis.ticks=element_blank(),
+                # axis.title.x=element_blank(),
+                # axis.title.y=element_blank(),
+                panel.background=element_blank()) +
+  ggplot2::coord_fixed()
+ggplot2::ggsave(filename = paste0("3_mob_k12_rep8_rep2_txn_corr_heatmap.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+## rep8 and rep12
+## --------------------------------------------------------
+corMtx_txn <- getCorrMtx(m1 = mobLDAsDeconv[[k]]$beta[,],
+                         m2 = mobLDAsRep12Deconv[[k]]$beta[,],
+                         type = "b")
+
+pairs <- lsatPairs(corMtx_txn)
+## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+## the properly ordered txn correlation matrix
+corMtx_txn_1 <- corMtx_txn[pairs$rowix, pairs$colsix]
+colnames(corMtx_txn_1) <- paste0("Cell-type ", colnames(corMtx_txn_1)) # columns
+rownames(corMtx_txn_1) <- paste0("Cell-type ", rownames(corMtx_txn_1))
+
+rep8_rep12 <- diag(corMtx_txn_1)
+
+## plot the txn correlations
+dat <- reshape2::melt(corMtx_txn_1)
+ggplot2::ggplot(data = dat) +
+  ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+  ggplot2::xlab("MOB replicate 8") + # corr mat rows
+  ggplot2::ylab("MOB replicate 12") + # corr mat columns
+  ggplot2::ggtitle("Cell-type transcriptional profile correlation") +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=8),
+                panel.grid = element_blank(),
+                axis.line=element_blank(),
+                # axis.text.x=element_blank(),
+                axis.text.y=element_text(size=8),
+                axis.ticks=element_blank(),
+                # axis.title.x=element_blank(),
+                # axis.title.y=element_blank(),
+                panel.background=element_blank()) +
+  ggplot2::coord_fixed()
+ggplot2::ggsave(filename = paste0("3_mob_k12_rep8_rep12_txn_corr_heatmap.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+## rep8 and rep5
+## --------------------------------------------------------
+corMtx_txn <- getCorrMtx(m1 = mobLDAsDeconv[[k]]$beta[,],
+                         m2 = mobLDAsRep5Deconv[[k]]$beta[,],
+                         type = "b")
+
+pairs <- lsatPairs(corMtx_txn)
+## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+## the properly ordered txn correlation matrix
+corMtx_txn_1 <- corMtx_txn[pairs$rowix, pairs$colsix]
+colnames(corMtx_txn_1) <- paste0("Cell-type ", colnames(corMtx_txn_1)) # columns
+rownames(corMtx_txn_1) <- paste0("Cell-type ", rownames(corMtx_txn_1))
+
+rep8_rep5 <- diag(corMtx_txn_1)
+
+## plot the txn correlations
+dat <- reshape2::melt(corMtx_txn_1)
+ggplot2::ggplot(data = dat) +
+  ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+  ggplot2::xlab("MOB replicate 8") + # corr mat rows
+  ggplot2::ylab("MOB replicate 5") + # corr mat columns
+  ggplot2::ggtitle("Cell-type transcriptional profile correlation") +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=8),
+                panel.grid = element_blank(),
+                axis.line=element_blank(),
+                # axis.text.x=element_blank(),
+                axis.text.y=element_text(size=8),
+                axis.ticks=element_blank(),
+                # axis.title.x=element_blank(),
+                # axis.title.y=element_blank(),
+                panel.background=element_blank()) +
+  ggplot2::coord_fixed()
+ggplot2::ggsave(filename = paste0("3_mob_k12_rep8_rep5_txn_corr_heatmap.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+
+## --------------------------------------------------------
+## --------------------------------------------------------
+cor_mob_summary <- list("Rep8 vs Rep2" = rep8_rep2,
+                        "Rep8 vs Rep12" = rep8_rep12,
+                        "Rep8 vs Rep5" = rep8_rep5)
+
+ggplot(data = reshape2::melt(plyr::ldply(cor_mob_summary, rbind)), 
+       aes(x=.id, y=value, fill=.id)) +
+  # geom_boxplot(outlier.shape=NA) +
+  # geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) +
+  ggplot2::geom_violin(trim=TRUE, fill="gray") +
+  ggplot2::geom_boxplot(width=0.1, outlier.shape=NA, fill="white") +
+  labs(title = "Correlations between cell-types deconvolved from different datasets\n(each model K=12)",
+       x = "Method", y = "Pearson's correlation") +
+  theme_classic() +
+  ylim(c(-1,1)) +
+  theme(axis.text.x = element_text(angle = 0, size = 12),
+        axis.text.y = element_text(size=12),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_text(size=15),
+        axis.title.y = element_text(size=15),
+        # axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        legend.position = "none")
+ggplot2::ggsave(filename = paste0("3_correlations_between_mob_reps_k12_boxplots.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3.5,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+
+What if I extracted beta theta from a different dataset than what was used to fit the lda model?
+
+Compare extracted beta theta from same dataset and then from different dataset?
+
+
+
+
+

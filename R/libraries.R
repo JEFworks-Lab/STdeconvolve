@@ -6,7 +6,7 @@ library(ggplot2)
 library(scatterpie)
 library(viridis) # for "scale_fill_viridis in `vizGeneCounts`
 library(dynamicTreeCut) # for clustering topics
-library(slam) # for formatting matrix for input into LDA 
+library(slam) # for formatting matrix for input into LDA
 
 # for figures but not for actual package
 library(Seurat) # for building scRNAseq references

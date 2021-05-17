@@ -12,32 +12,32 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 
 # all of the trained models for merfish:
-save(bregmaCellsGexpFN7, # 59651 cells in FN7 bregmas x 125 gene counts (blanks removed and ambiguous cells removed)
-      bregmaCellsGexpFN7_filt, # above but only cells kept in simulated patches (49142)
-      gtCtGenesFN7, # reference for 8 major cell types and 125 genes. relative average expression. Used all 59651 cells
-      gtCtNeuronalGenesFN7, # same as above but expanded into neuronal cts so 75 types
-      FN7, # hash table storing each simulated bregma in FN7. Built such that cellTypeTable is for 8 major cts
-      FN7_neuro, # same as above but with all cts
-      bregmaFN7FullSeur, # seurat object of the 49142 cells in patches. Meta data has all major and neuronal cts
-      bregmaFN7FullSeur_noNeuro, # 21652 non-neuronal cells also in patches
-      simBregmasFN7, # list of bregma corpuses and gt for each bregma in FN7
-      simBregmasFN7_neuro, # list of bregma corpuses and gt for each bregma in FN7_neuro
-      simFN7, # same as `simBregmasFN7` but all combined into single "bregma" corpus
-      simFN7_neuro, # same as `simBregmasFN7_neuro` but all combined into single "bregma" corpus. sim in both simFN7 and simFN7_neuro the same
-      FN7_K8, # LDA model K=8 and trained on simFN7 (entire FN7 animal)
-      FN7_K75, # LDA model K=75 and trained on simFN7 (entire FN7 animal)
-      bregmaFN7FullSeur_markers8cts, # ct markers with Seurat::FindAllMarkers(object = bregmaFN7FullSeur
-      bregmaFN7FullSeur_markers75neurocts, # ct markers with Seurat::FindAllMarkers(object = bregmaFN7FullSeur using all classes
-      bregmaFN7FullSeur_noNeuro_markers, # ct markers with Seurat::FindAllMarkers(object = bregmaFN7FullSeur_noNeuro 6 major cts
-      SL_bregmaFN7FullSeur8cts_fit, # SL deconvolve model using full `FN7`, `bregmaCellsGexpFN7`, and 8 major ct markers
-      SL_bregmaFN7FullSeur75neurocts_fit, # SL deconvolve model using full `simFN7_neuro`, `bregmaCellsGexpFN7`, and 75 major ct markers
-      RCTD_FN7_results_norm, # 3070 spots and 8 cts deconvolved with RCTD using bregmaCellsGexpFN7 ref with major classes
-      RCTD_FN7_neuro_results_norm, # 3070 spots and 73 cts deconvolved with RCTD using bregmaCellsGexpFN7 ref with All classes
-      SL_bregmaFN7FullSeur_noNeuro_fit, # SL deconvolve using `bregmaFN7FullSeur_noNeuro` (21652 cells) and noNeuro markers for 6 cts
-      RCTD_FN7_noNeuro_results_norm, # 3070 spots and 6 cts deconvovled with RCTD using `bregmaFN7FullSeur_noNeuro` 
-      file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/merfish_fitted_models.RData")
+# save(bregmaCellsGexpFN7, # 59651 cells in FN7 bregmas x 125 gene counts (blanks removed and ambiguous cells removed)
+#       bregmaCellsGexpFN7_filt, # above but only cells kept in simulated patches (49142)
+#       gtCtGenesFN7, # reference for 8 major cell types and 125 genes. relative average expression. Used all 59651 cells
+#       gtCtNeuronalGenesFN7, # same as above but expanded into neuronal cts so 75 types
+#       FN7, # hash table storing each simulated bregma in FN7. Built such that cellTypeTable is for 8 major cts
+#       FN7_neuro, # same as above but with all cts
+#       bregmaFN7FullSeur, # seurat object of the 49142 cells in patches. Meta data has all major and neuronal cts
+#       bregmaFN7FullSeur_noNeuro, # 21652 non-neuronal cells also in patches
+#       simBregmasFN7, # list of bregma corpuses and gt for each bregma in FN7
+#       simBregmasFN7_neuro, # list of bregma corpuses and gt for each bregma in FN7_neuro
+#       simFN7, # same as `simBregmasFN7` but all combined into single "bregma" corpus
+#       simFN7_neuro, # same as `simBregmasFN7_neuro` but all combined into single "bregma" corpus. sim in both simFN7 and simFN7_neuro the same
+#       FN7_K8, # LDA model K=8 and trained on simFN7 (entire FN7 animal)
+#       FN7_K75, # LDA model K=75 and trained on simFN7 (entire FN7 animal)
+#       bregmaFN7FullSeur_markers8cts, # ct markers with Seurat::FindAllMarkers(object = bregmaFN7FullSeur
+#       bregmaFN7FullSeur_markers75neurocts, # ct markers with Seurat::FindAllMarkers(object = bregmaFN7FullSeur using all classes
+#       bregmaFN7FullSeur_noNeuro_markers, # ct markers with Seurat::FindAllMarkers(object = bregmaFN7FullSeur_noNeuro 6 major cts
+#       SL_bregmaFN7FullSeur8cts_fit, # SL deconvolve model using full `FN7`, `bregmaCellsGexpFN7`, and 8 major ct markers
+#       SL_bregmaFN7FullSeur75neurocts_fit, # SL deconvolve model using full `simFN7_neuro`, `bregmaCellsGexpFN7`, and 75 major ct markers
+#       RCTD_FN7_results_norm, # 3070 spots and 8 cts deconvolved with RCTD using bregmaCellsGexpFN7 ref with major classes
+#       RCTD_FN7_neuro_results_norm, # 3070 spots and 73 cts deconvolved with RCTD using bregmaCellsGexpFN7 ref with All classes
+#       SL_bregmaFN7FullSeur_noNeuro_fit, # SL deconvolve using `bregmaFN7FullSeur_noNeuro` (21652 cells) and noNeuro markers for 6 cts
+#       RCTD_FN7_noNeuro_results_norm, # 3070 spots and 6 cts deconvovled with RCTD using `bregmaFN7FullSeur_noNeuro` 
+#       file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/merfish_fitted_models.RData")
 
-load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_data/merfish_fitted_models.RData")
+# load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/0draft_data/merfish_fitted_models.RData")
 
 ```
 
@@ -80,6 +80,8 @@ load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mpoa_merfish_clean.R
 ```
 
 171021_FN7_2_M22_M26 (anterior) and 171023_FN7_1_M22_M26 (posterior)
+
+generate `spatial_position_and_class_FN7` and `bregmaCellsGexpFN7`
 
 ```{r}
 
@@ -201,7 +203,7 @@ FN7_neuro_hash <- simulateBregmaSpots(spatial_position_and_class_FN7,
 
 ```
 
-Tables of number of celltypes in each spot for entire FN7 animal
+Tables of counts of cell-types in each spot for entire FN7 animal (100um2)
 
 ```{r}
 
@@ -232,6 +234,8 @@ rownames(FN7_cellTypeTable) <- FN7_spotIDs
 
 ```
 
+Tables of counts of cell-types and neuronal cell-types in each spot for entire FN7 animal (100um2)
+
 ```{r}
 
 # spot IDs
@@ -258,7 +262,6 @@ FN7_neuro_cellTypeTable <- as.matrix(FN7_neuro_cellTypeTable)
 rownames(FN7_neuro_cellTypeTable) <- FN7_neuro_spotIDs
 
 ```
-
 
 Generation of each simulated corpus for each bregma:
 
@@ -429,6 +432,7 @@ simFN7_neuro <- list(sim = sim_N7_neuro,
 ## 10um Sim
 
 this generates the hash tables of simulates spots for each bregma separately
+
 ```{r}
 
 # simulate spots for each bregma and contain in a hash table
@@ -817,7 +821,7 @@ bregmaFN7FullSeur[["All_classes"]] <- simFN7_neuro$annotDf$Cell_class
 ```
 
 # Simulations
-
+# ----------------------------------
 ## 10 um 8 major
 
 57397x125.
@@ -1029,7 +1033,7 @@ table(b)
 
 ```
 
-what is the overlap between the singles, doublets, triples of the actual vs predictions? 
+### singles, doublets
 
 ```{r}
 
@@ -1070,7 +1074,7 @@ round((length(intersect(names(which(a == 1)), names(which(b == 2)))) / length(na
 ```
 
 Seems to do really well detecting singlets, but most predicted doublets are actually singlets. Does poor job detecting doublets.
-
+# ----------------------------------
 ## 20 um 8 major
 
 45978x125 corpus
@@ -1209,195 +1213,374 @@ ggplot(data = reshape2::melt(simFN7_neuro_20um$gtSpotTopics)) +
 
 ```
 
-### Proportion correlation
+### Correlations 
 
 ```{r}
 
-corMtx <- getCorrMtx(m1 = FN7_LDAs_20um_k8$theta,
-                     m2 = as.matrix(simFN7_20um$gtSpotTopics),
-                     type = "t")
+gt <- simFN7_20um
+decon <- FN7_LDAs_20um_k8
+filt_theta <- FN7_LDAs_20um_k8$theta
 
-# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k75_neuro_thetaCor.pdf"))
-gplots::heatmap.2(x = corMtx,
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "Actual cell-types",
-                  ylab = "Predicted cell-types",
-                  key.title = NA,
-                  cexRow = 1,
-                  cexCol = 0.9,
-                  # lhei = c(1,3),
-                  margins = c(7,4))
-# dev.off()
+## cluster ground truth cell-types transcriptionally
+clust <- clusterTopics(beta = as.matrix(gt$gtCtGenes),
+                       clustering = "ward.D",
+                       dynamic = "hybrid",
+                       deepSplit = 4,
+                       plot = FALSE)
+ct_txn_order <- rownames(as.matrix(gt$gtCtGenes)[clust$order,])
 
-# pdf(file = paste0(fig_path, "Fig_2_STdev-k8-theta-heatmap.pdf"))
-# pair up best matching cell class to a predicted topic
-pairs <- lsatPairs(corMtx)
-gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
-                  Rowv = NA, # to order topics based on pairs and not dendrogram
-                  Colv = NA,
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "Actual cell-type",
-                  ylab = "Predicted cell-types",
-                  key.title = NA,
-                  cexRow = 1,
-                  cexCol = 0.9,
-                  # lhei = c(1,3),
-                  margins = c(7,4))
-# dev.off()
+## rows are the ground truth in order of their transcriptional similarity
+corMtx_txn <- getCorrMtx(m1 = as.matrix(gt$gtCtGenes)[ct_txn_order,],
+                         m2 = decon$beta,
+                         type = "b")
+pairs <- lsatPairs(corMtx_txn)
+## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+## the properly ordered txn correlation matrix
+corMtx_txn_1 <- corMtx_txn[pairs$rowix, pairs$colsix]
+colnames(corMtx_txn_1) <- paste0("Cell-type ", colnames(corMtx_txn_1))
 
-ggplot(data = reshape2::melt(corMtx[rev(pairs$rowix), pairs$colsix])) +
-  geom_tile(aes(x = Var2, y = Var1, fill=value)) +
-  scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
-  scale_y_continuous(breaks=pairs$rowix, labels=pairs$rowix) +
-  xlab("Ground truth cell-type") +
-  ylab("Predicted cell-type") +
-  ggtitle("Cell-type pixel proportion correlation") +
-  theme(axis.text.x=element_text(angle=-90),
-        panel.grid = element_blank(),
-        axis.line=element_blank(),
+## plot the txn correlations
+dat <- reshape2::melt(corMtx_txn_1)
+ggplot2::ggplot(data = dat) +
+  ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+  ggplot2::xlab("Ground truth cell-types") +
+  ggplot2::ylab("Deconvolved cell-types") +
+  ggplot2::ggtitle("Cell-type transcriptional profile correlation\n(20 micron pixels, 8 cell-types)") +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=8),
+                panel.grid = element_blank(),
+                axis.line=element_blank(),
+                # axis.text.x=element_blank(),
+                axis.text.y=element_text(size=8),
+                axis.ticks=element_blank(),
+                # axis.title.x=element_blank(),
+                # axis.title.y=element_blank(),
+                panel.background=element_blank()) +
+  ggplot2::coord_fixed()
+ggplot2::ggsave(filename = paste0("0_20um_8cts_txn_corr_heatmap.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+cat("mean transcriptional corr across diag:", mean(diag(corMtx_txn_1)), "\n")
+cat("median transcriptional corr across diag:", median(diag(corMtx_txn_1)), "\n")
+
+## -------------------------------------------------------------------
+## -------------------------------------------------------------------
+## pairing of deconvolved and ground truth based on transcriptional profiles
+## after filtering out cell-types <2.5% from deconvolved theta
+## -------------------------------------------------------------------
+## rows are the ground truth in order of their transcriptional similarity
+corMtx_txn <- getCorrMtx(m1 = as.matrix(gt$gtCtGenes)[ct_txn_order,],
+                         m2 = decon$beta,
+                         type = "b")
+pairs <- lsatPairs(corMtx_txn)
+## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+## the properly ordered txn correlation matrix
+
+## now get the pixel proportional correlations and order based on above pairings, which are based on txn similarities:
+corMtx_prop_1 <- getCorrMtx(m1 = as.matrix(gt$gtSpotTopics)[,ct_txn_order],
+                          m2 = filt_theta[,pairs$colsix],
+                          type = "t")
+colnames(corMtx_prop_1) <- paste0("Cell-type ", colnames(corMtx_prop_1))
+
+# plot the proportion correlations, cell-types ordered based on transcriptional pairing
+dat <- reshape2::melt(corMtx_prop_1)
+ggplot2::ggplot(data = dat) +
+  ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+  ggplot2::xlab("Ground truth cell-types") +
+  ggplot2::ylab("Deconvolved cell-types") +
+  ggplot2::ggtitle("Cell-type pixel proportion correlation\n(20 micron pixels, 8 cell-types)") +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=8),
+                panel.grid = element_blank(),
+                axis.line=element_blank(),
+                # axis.text.x=element_blank(),
+                axis.text.y=element_text(size=8),
+                axis.ticks=element_blank(),
+                # axis.title.x=element_blank(),
+                # axis.title.y=element_blank(),
+                panel.background=element_blank()) +
+  ggplot2::coord_fixed()
+ggplot2::ggsave(filename = paste0("0_20um_8cts_prop_corr_heatmap_txn_ordered_after_filtering.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+cat("mean proportional corr (txn order, after filtering) across diag:", mean(diag(corMtx_prop_1)), "\n")
+cat("median proportional corr (txn order, after filtering) across diag:", median(diag(corMtx_prop_1)), "\n")
+
+# plot the pixel proportions of each paired cell-type
+# after removing removing predicted cts from spots if less than 2.5%
+dat2 <- data.frame("Ground Truth" = colMeans(gt$gtSpotTopics[,ct_txn_order]),
+                   "STdeconvolve" = colMeans(filt_theta[,pairs$colsix]),
+                   "Cell Type" = ct_txn_order,
+                   "Topic" = names(colMeans(filt_theta[,pairs$colsix])))
+ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = value, color = variable)) +
+  # geom_boxplot() +
+  geom_point(position=position_jitterdodge(0.1), cex=1) +
+  # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
+  # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
+  # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
         # axis.text.x=element_blank(),
         # axis.text.y=element_blank(),
-        axis.ticks=element_blank(),
-        # axis.title.x=element_blank(),
-        # axis.title.y=element_blank(),
-        panel.background=element_blank()) +
-  coord_fixed()
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  labs(title = "Actual and deconvolved cell-type mean pixel proportions\npairs based on correlated txn profile\nafter filtering",
+       x = "Cell-types", y = "mean pixel proportion")
 
-diag_cors <- diag(corMtx[pairs$rowix, pairs$colsix])
+## -------------------------------------------------------------------
+## pairing of deconvolved and ground truth based on transcriptional profiles
+## before filtering out cell-types <2.5% from deconvolved theta
+## -------------------------------------------------------------------
 
-# pdf(file = paste0(fig_path, "Fig_2_STdev-k8-theta-vs-gt-box.pdf"),   # The directory you want to save the file in
-#     width = 5, # The width of the plot in inches
-#     height = 3) # The height of the plot in inches
-par( mfrow = c(1,3) )
-boxplot(diag_cors,
-        medcol = "black", # medium line color
-        medlty = 1, # line type
-        medlwd = 1, # line width
-        boxfill = "white", # color fill of box
-        boxcol = "black", # outline color of box
-        boxlty = 1, # box line type
-        boxlwd = 1, # width of box line
-        whisklty = 1, # whisker type
-        whisklwd = 1,
-        staplelwd = 0, # the ends of the whiskers
-        outpch = 1, # type of outlies
-        outcex = 0,
-        main = "",
-        cex.main = 1,
-        xlab = "",
-        ylab = "Correlation") # size of outliers
-stripchart(diag_cors, vertical = TRUE, 
-    method = "jitter", add = TRUE, pch = 20, col = 'black')
-# dev.off()
+# corMtx_prop_2 <- getCorrMtx(m1 = as.matrix(gt$gtSpotTopics)[,ct_txn_order],
+#                           m2 = decon$theta[,pairs$colsix],
+#                           type = "t")
+# colnames(corMtx_prop_2) <- paste0("Cell-type ", colnames(corMtx_prop_2))
+# 
+# # plot the proportion correlations, cell-types ordered based on transcriptional pairing
+# dat <- reshape2::melt(corMtx_prop_2)
+# ggplot2::ggplot(data = dat) +
+#   ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+#   ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+#   ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+#   ggplot2::xlab("Ground truth cell-types") +
+#   ggplot2::ylab("Deconvolved cell-types") +
+#   ggplot2::ggtitle("Cell-type pixel proportion correlation\n(20 micron pixels, 8 cell-types)") +
+#   ggplot2::theme(axis.text.x=element_text(angle=-90, size=5),
+#                 panel.grid = element_blank(),
+#                 axis.line=element_blank(),
+#                 # axis.text.x=element_blank(),
+#                 axis.text.y=element_text(size=5),
+#                 axis.ticks=element_blank(),
+#                 # axis.title.x=element_blank(),
+#                 # axis.title.y=element_blank(),
+#                 panel.background=element_blank()) +
+#   ggplot2::coord_fixed()
+# ggplot2::ggsave(filename = paste0("0_20um_8cts_prop_corr_heatmap_txn_ordered_before_filtering.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 4,
+#          units = c("in"),
+#          dpi = 300)
+# 
+# cat("mean proportional corr (txn order, before filtering) across diag:", mean(diag(corMtx_prop_2)), "\n")
+# cat("median proportional corr (txn order, before filtering) across diag:", median(diag(corMtx_prop_2)), "\n")
+# 
+# # plot the pixel proportions of each paired cell-type
+# # note that this is without removing predicted cts from spots if less than 2.5%
+# dat2 <- data.frame("Ground Truth" = colMeans(gt$gtSpotTopics[,ct_txn_order]),
+#                    "STdeconvolve" = colMeans(decon$theta[,pairs$colsix]),
+#                    "Cell Type" = ct_txn_order,
+#                    "Topic" = names(colMeans(decon$theta[,pairs$colsix])))
+# ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = value, color = variable)) +
+#   # geom_boxplot() +
+#   geom_point(position=position_jitterdodge(0.1), cex=0.1) +
+#   # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
+#   # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
+#   # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+#         # panel.grid = element_blank(),
+#         # axis.line=element_blank(),
+#         # axis.text.x=element_blank(),
+#         # axis.text.y=element_blank(),
+#         # axis.ticks=element_blank(),
+#         axis.title.x=element_blank(),
+#         axis.title.y=element_blank(),
+#         panel.background=element_blank()
+#         ) +
+#   labs(title = "Actual and deconvolved cell-type mean pixel proportions\npairs based on correlated txn profile\nbefore filtering",
+#        x = "Cell-types", y = "mean pixel proportion")
 
-print("summary:")
-summary(diag_cors)
+## -------------------------------------------------------------------
+## -------------------------------------------------------------------
+## pairing of deconvolved and ground truth based on proportional profiles
+## before filtering out cell-types <2.5% from deconvolved theta
+## -------------------------------------------------------------------
+# corMtx_prop_3 <- getCorrMtx(m1 = as.matrix(gt$gtSpotTopics)[,ct_txn_order],
+#                          m2 = decon$theta,
+#                          type = "t")
+# pairs <- lsatPairs(corMtx_prop_3)
+# ## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+# ## the properly ordered proportional correlation matrix
+# corMtx_prop_3 <- corMtx_prop_3[pairs$rowix, pairs$colsix]
+# colnames(corMtx_prop_3) <- paste0("Cell-type ", colnames(corMtx_prop_3))
+# 
+# # plot the proportion correlations
+# dat <- reshape2::melt(corMtx_prop_3)
+# ggplot2::ggplot(data = dat) +
+#   ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+#   ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+#   ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+#   ggplot2::xlab("Ground truth cell-types") +
+#   ggplot2::ylab("Deconvolved cell-types") +
+#   ggplot2::ggtitle("Cell-type pixel proportion correlation\n(20 micron pixels, 8 cell-types)") +
+#   ggplot2::theme(axis.text.x=element_text(angle=-90, size=5),
+#                 panel.grid = element_blank(),
+#                 axis.line=element_blank(),
+#                 # axis.text.x=element_blank(),
+#                 axis.text.y=element_text(size=5),
+#                 axis.ticks=element_blank(),
+#                 # axis.title.x=element_blank(),
+#                 # axis.title.y=element_blank(),
+#                 panel.background=element_blank()) +
+#   ggplot2::coord_fixed()
+# ggplot2::ggsave(filename = paste0("0_20um_8cts_prop_corr_heatmap_before_filtering.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 4,
+#          units = c("in"),
+#          dpi = 300)
+# 
+# cat("mean proportional corr (prop order, before filtering) across diag:", mean(diag(corMtx_prop_3)), "\n")
+# cat("median proportional corr (prop order, before filtering) across diag:", median(diag(corMtx_prop_3)), "\n")
+# 
+# # plot the pixel proportions of each paired cell-type
+# # note that this is without removing predicted cts from spots if less than 2.5%
+# dat2 <- data.frame("Ground Truth" = colMeans(gt$gtSpotTopics[,ct_txn_order]),
+#                    "STdeconvolve" = colMeans(decon$theta[,pairs$colsix]),
+#                    "Cell Type" = ct_txn_order,
+#                    "Topic" = names(colMeans(decon$theta[,pairs$colsix])))
+# ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = value, color = variable)) +
+#   # geom_boxplot() +
+#   geom_point(position=position_jitterdodge(0.1), cex=0.1) +
+#   # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
+#   # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
+#   # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+#         # panel.grid = element_blank(),
+#         # axis.line=element_blank(),
+#         # axis.text.x=element_blank(),
+#         # axis.text.y=element_blank(),
+#         # axis.ticks=element_blank(),
+#         axis.title.x=element_blank(),
+#         axis.title.y=element_blank(),
+#         panel.background=element_blank()
+#         ) +
+#   labs(title = "Actual and deconvolved cell-type mean pixel proportions\npairs based on correlated proportion profile\nbefore filtering",
+#        x = "Cell-types", y = "mean pixel proportion")
+
+## -------------------------------------------------------------------
+## pairing of deconvolved and ground truth based on proportional profiles
+## after filtering out cell-types <2.5% from deconvolved theta
+## -------------------------------------------------------------------
+corMtx_prop_4 <- getCorrMtx(m1 = as.matrix(gt$gtSpotTopics)[,ct_txn_order],
+                         m2 = filt_theta,
+                         type = "t")
+pairs <- lsatPairs(corMtx_prop_4)
+## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+## the properly ordered proportional correlation matrix
+corMtx_prop_4 <- corMtx_prop_4[pairs$rowix, pairs$colsix]
+colnames(corMtx_prop_4) <- paste0("Cell-type ", colnames(corMtx_prop_4))
+
+# plot the proportion correlations
+dat <- reshape2::melt(corMtx_prop_4)
+ggplot2::ggplot(data = dat) +
+  ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+  ggplot2::xlab("Ground truth cell-types") +
+  ggplot2::ylab("Deconvolved cell-types") +
+  ggplot2::ggtitle("Cell-type pixel proportion correlation\n(20 micron pixels, 8 cell-types)") +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=8),
+                panel.grid = element_blank(),
+                axis.line=element_blank(),
+                # axis.text.x=element_blank(),
+                axis.text.y=element_text(size=8),
+                axis.ticks=element_blank(),
+                # axis.title.x=element_blank(),
+                # axis.title.y=element_blank(),
+                panel.background=element_blank()) +
+  ggplot2::coord_fixed()
+ggplot2::ggsave(filename = paste0("0_20um_8cts_prop_corr_heatmap_after_filtering.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+cat("mean proportional corr (prop order, after filtering) across diag:", mean(diag(corMtx_prop_4)), "\n")
+cat("median proportional corr (prop order, after filtering) across diag:", median(diag(corMtx_prop_4)), "\n")
+
+# plot the pixel proportions of each paired cell-type
+# note that this is without removing predicted cts from spots if less than 2.5%
+dat2 <- data.frame("Ground Truth" = colMeans(gt$gtSpotTopics[,ct_txn_order]),
+                   "STdeconvolve" = colMeans(filt_theta[,pairs$colsix]),
+                   "Cell Type" = ct_txn_order,
+                   "Topic" = names(colMeans(filt_theta[,pairs$colsix])))
+ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = value, color = variable)) +
+  # geom_boxplot() +
+  geom_point(position=position_jitterdodge(0.1), cex=1) +
+  # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
+  # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
+  # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  labs(title = "Actual and deconvolved cell-type mean pixel proportions\npairs based on correlated proportion profile\nafter filtering",
+       x = "Cell-types", y = "mean pixel proportion")
+
+
+## boxplot summary of correlations
+dat3 <- reshape2::melt(data.frame(
+                                  transcriptional = diag(corMtx_txn_1),
+                                  proportional_txn = diag(corMtx_prop_1),
+                                  proportional_prop = diag(corMtx_prop_4)))
+colnames(dat3) <- c("Comparison", "Correlation")
+ggplot2::ggplot(data = dat3, aes(x=Comparison, y=Correlation)) +
+  ggplot2::geom_violin(trim=TRUE, fill="gray") +
+  ggplot2::geom_boxplot(width=0.1) +
+  ggplot2::ylim(c(-1,1)) +
+  ggplot2::scale_fill_grey() +
+  ggplot2::labs(title = "Deconvolved and ground truth cell-type correlations, between pairs\n(20 micron pixels, 8 cell-types)",
+                x = "Comparison",
+                y = "Correlation") +
+  ggplot2::theme_classic()
+ggplot2::ggsave(filename = paste0("0_20um_8cts_heatmap_daig_corrs_after_filtering.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
 
 ```
 
-#### Gexp correlation
-
-```{r}
-
-corMtx <- getCorrMtx(m1 = FN7_LDAs_20um_k8$beta,
-                     m2 <- as.matrix(gtCtGenesFN7),
-                     type = "b")
-
-# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k75_neuro_thetaCor.pdf"))
-gplots::heatmap.2(x = corMtx,
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "Actual cell-types",
-                  ylab = "Predicted cell-types",
-                  key.title = NA,
-                  cexRow = 1,
-                  cexCol = 0.9,
-                  # lhei = c(1,3),
-                  margins = c(7,4))
-# dev.off()
-
-# pdf(file = paste0(fig_path, "Fig_2_STdev-k8-theta-heatmap.pdf"))
-# pair up best matching cell class to a predicted topic
-pairs <- lsatPairs(corMtx)
-gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
-                  Rowv = NA, # to order topics based on pairs and not dendrogram
-                  Colv = NA,
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "Actual cell-type",
-                  ylab = "Predicted cell-types",
-                  key.title = NA,
-                  cexRow = 1,
-                  cexCol = 0.9,
-                  # lhei = c(1,3),
-                  margins = c(7,4))
-# dev.off()
-
-ggplot(data = reshape2::melt(corMtx[rev(pairs$rowix), pairs$colsix])) +
-  geom_tile(aes(x = Var2, y = Var1, fill=value)) +
-  scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
-  scale_y_continuous(breaks=pairs$rowix, labels=pairs$rowix) +
-  xlab("Ground truth cell-type") +
-  ylab("Predicted cell-type") +
-  ggtitle("Cell-type pixel gene expression correlation") +
-  theme(axis.text.x=element_text(angle=-90),
-        panel.grid = element_blank(),
-        axis.line=element_blank(),
-        # axis.text.x=element_blank(),
-        # axis.text.y=element_blank(),
-        axis.ticks=element_blank(),
-        # axis.title.x=element_blank(),
-        # axis.title.y=element_blank(),
-        panel.background=element_blank()) +
-  coord_fixed()
-
-diag_cors <- diag(corMtx[pairs$rowix, pairs$colsix])
-
-# pdf(file = paste0(fig_path, "Fig_2_STdev-k8-theta-vs-gt-box.pdf"),   # The directory you want to save the file in
-#     width = 5, # The width of the plot in inches
-#     height = 3) # The height of the plot in inches
-par( mfrow = c(1,3) )
-boxplot(diag_cors,
-        medcol = "black", # medium line color
-        medlty = 1, # line type
-        medlwd = 1, # line width
-        boxfill = "white", # color fill of box
-        boxcol = "black", # outline color of box
-        boxlty = 1, # box line type
-        boxlwd = 1, # width of box line
-        whisklty = 1, # whisker type
-        whisklwd = 1,
-        staplelwd = 0, # the ends of the whiskers
-        outpch = 1, # type of outlies
-        outcex = 0,
-        main = "",
-        cex.main = 1,
-        xlab = "",
-        ylab = "Correlation") # size of outliers
-stripchart(diag_cors, vertical = TRUE, 
-    method = "jitter", add = TRUE, pch = 20, col = 'black')
-# dev.off()
-
-print("summary:")
-summary(diag_cors)
-
-```
+### Gene ranks
 
 MERIGNUE differential genes for each cluster:
+
 ```{r}
 
 # cells and their associated clusters
@@ -1464,18 +1647,29 @@ summary_df <- do.call(rbind, lapply(pairs$rowix, function(i){
          
         prsn <- cor(x, y, method = "pearson")
         sprn <- cor(x, y, method = "spearman")
-        p <- ggplot(data = ct_df) +
-                geom_point(aes(x = gexp_rank, y = beta_rank)) +
-                labs(title = paste("Beta pairs: Topic", topic, "vs", ct, "; cor =", round(corMtx[topic, ct],2), "\n",
+        p <- ggplot2::ggplot(data = ct_df) +
+                ggplot2::geom_point(aes(x = gexp_rank, y = beta_rank)) +
+                ggplot2::labs(title = paste("Beta pairs: Topic", topic, "vs", ct, "; cor =", round(corMtx[topic, ct],2), "\n",
                                    "pearson =", round(prsn, 2), "spearman =", round(sprn, 2)))
         print(p)
         ct_df
 })) 
 
-ggplot(data = summary_df) +
-        geom_hex(aes(x = gexp_rank, y = beta_rank), bins=10) +
-        scale_fill_gradient(low = "white", high = "red") +
-        theme_classic()
+ggplot2::ggplot(data = summary_df) +
+        ggplot2::geom_hex(aes(x = gexp_rank, y = beta_rank), bins=10) +
+        ggplot2::scale_fill_gradient(low = "white", high = "red") +
+        ggplot2::labs(title = "Deconvolved vs ground truth transcriptional profile gene rank",
+                      x = "Ground truth gene expression level",
+                      y = "Deconvolved gene expression level") +
+        ggplot2::theme_classic()
+ggplot2::ggsave(filename = paste0("0_20um_8cts_gene_ranks_hex.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
 
 x <- summary_df$gexp_rank
 # y <- ct_df$beta
@@ -1486,6 +1680,8 @@ cor(x, y, method = "pearson")
 cor(x, y, method = "spearman")
 
 ```
+
+### singlets, doublets
 
 ```{r}
 
@@ -1677,8 +1873,8 @@ print("predicted singlets that were actually doublets")
 round((length(intersect(names(which(a == 1)), names(which(b == 2)))) / length(names(which(a == 1))))*100, 2)
 
 ```
-
-## 100 um 8 major
+# ----------------------------------
+## 100 um
 
 ### Viz bregmas
 
@@ -1693,8 +1889,8 @@ classCols <- c("Astrocyte" = "#F8766D",
                "OD" = "#C77CFF",
                "Pericytes" = "#FF61CC")
 
-for(ix in names(simBregmasFN7)){
-  
+for(ix in names(simBregmasFN7)[1]){
+# do.call(rbind, lapply(names(simBregmasFN7), function(ix){
   breg <- simFN7$annotDf[simFN7$annotDf$Bregma == ix,]
   cellCounts <- simFN7$cellCounts[which(rownames(simFN7$cellCounts) %in% breg$patch_id),]
   
@@ -1714,7 +1910,8 @@ for(ix in names(simBregmasFN7)){
           axis.ticks=element_blank(),
           axis.title.x=element_blank(),
           axis.title.y=element_blank(),
-          panel.background=element_blank()) +
+          panel.background=element_blank(),
+          legend.position = "none") +
     ggtitle(ix)
   print(p1)
   ggsave(filename = paste0("0_8cts_separate_bregma_", ix, ".png"),
@@ -1745,7 +1942,8 @@ for(ix in names(simBregmasFN7)){
           axis.ticks=element_blank(),
           axis.title.x=element_blank(),
           axis.title.y=element_blank(),
-          panel.background=element_blank()) +
+          panel.background=element_blank(),
+          legend.position = "none") +
     ggtitle(ix)
   print(p2)
   ggsave(filename = paste0("0_8cts_grid_bregma_", ix, ".png"),
@@ -1769,7 +1967,7 @@ for(ix in names(simBregmasFN7)){
                group_cols = c("0" = "black"),
                r = 40, # different size piecharts for mOB data sets
                lwd = 0.4,
-               showLegend = TRUE,
+               showLegend = FALSE,
                plotTitle = ix)
   print(p3)
   ggsave(filename = paste0("0_8cts_simST_bregma_", ix, ".png"),
@@ -1780,8 +1978,12 @@ for(ix in names(simBregmasFN7)){
          height = 4,
          units = c("in"),
          dpi = 300)
-
+  # c(p1, p2, p3)
+  
 }
+  
+
+# }
 
 ```
 
@@ -1888,35 +2090,60 @@ ggplot(data = reshape2::melt(simFN7_neuro$gtSpotTopics)) +
 
 ```
 
-
 ### Train LDA
 
 ```{r}
 
-ks <- seq(from = 2, to = 10, by = 1)
-ks <- c(ks, seq(from = 15, to = 75, by = 10))
+ks <- seq(from = 2, to = 20, by = 1)
+ks <- c(ks, seq(from = 25, to = 75, by = 10))
 
 ```
 
 ```{r}
 
 # pdf(file = paste0(fig_path, "Fig1_B-1_FN7_lda_fit.pdf"))
-FN7_LDAs <- fitLDA(counts = simFN7$sim,
-                        Ks = ks,
-                        seed = 0,
-                        ncores = 7,
-                        plot = TRUE)
+FN7_LDAs <- fitLDA(counts = as.matrix(simFN7$sim),
+                   Ks = ks,
+                   testSize = NULL,
+                   seed = 0,
+                   ncores = 7,
+                   plot = TRUE)
 # dev.off()
 
 ```
 
 ### k = 8
 
+viz the perplexity and rare cts just for viz purposes here
+
+```{r}
+
+ks <- seq(from = 2, to = 20, by = 1)
+
+```
+
+```{r}
+
+# pdf(file = paste0(fig_path, "Fig1_B-1_FN7_lda_fit.pdf"))
+FN7_LDAs_2to20 <- fitLDA(counts = as.matrix(simFN7$sim),
+                   Ks = ks,
+                   testSize = NULL,
+                   perc.rare.thresh = 0.025,
+                   seed = 0,
+                   ncores = 7,
+                   plot = TRUE)
+# dev.off()
+
+```
+
+### extract betas thetas
+
 ```{r}
 
 FN7_K8 <- buildLDAobject(LDAmodel = optimalModel(FN7_LDAs, opt = 8),
-                      deepSplit = 4,
-                      colorScheme = "rainbow")
+                         corpus = as.matrix(simFN7$sim),
+                         deepSplit = 4,
+                         colorScheme = "rainbow")
 
 ```
 
@@ -1928,8 +2155,8 @@ lda_k8_theta <- FN7_K8$theta
 lda_k8_theta[lda_k8_theta < 0.025] <- 0
 
 # try just calling the unassigned proportions "ambiguous"
-ambig <- 1 - rowSums(lda_k8_theta)
-lda_k8_theta2 <- cbind(lda_k8_theta, ambig)
+# ambig <- 1 - rowSums(lda_k8_theta)
+# lda_k8_theta2 <- cbind(lda_k8_theta, ambig)
 
 # readjust proportions
 lda_k8_theta <- lda_k8_theta/rowSums(lda_k8_theta)
@@ -1942,9 +2169,9 @@ ggplot(data = reshape2::melt(lda_k8_theta)) +
   geom_boxplot(aes(x = reorder(Var2, -value), y = value)) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-# drop ant cts that are 0 for all pixels
+# drop any cts that are 0 for all pixels
 lda_k8_theta <- lda_k8_theta[,which(colSums(lda_k8_theta) > 0)]
-lda_k8_theta2 <- lda_k8_theta2[,which(colSums(lda_k8_theta2) > 0)]
+# lda_k8_theta2 <- lda_k8_theta2[,which(colSums(lda_k8_theta2) > 0)]
 
 ```
 
@@ -1959,7 +2186,7 @@ corMtx <- getCorrMtx(m1 = lda_k8_theta, # rows
 pairs <- lsatPairs(corMtx) # reorder cols (gt cell-types) by best matches to the rows
 
 # plot each bregma separately
-for(ix in names(simBregmasFN7)){
+for(ix in names(simBregmasFN7)[1]){
   
   breg <- simFN7$annotDf[simFN7$annotDf$Bregma == ix,]
   cellCounts <- simFN7$cellCounts[which(rownames(simFN7$cellCounts) %in% breg$patch_id),]
@@ -1977,10 +2204,10 @@ for(ix in names(simBregmasFN7)){
                      group_cols = c("0" = "black"),
                      r = 40,
                      lwd = 0.4,
-                     showLegend = TRUE,
+                     showLegend = FALSE,
                      plotTitle = ix)
   print(p1)
-  ggsave(filename = paste0("0_8cts_STdev_bregma_", ix, ".png"),
+  ggplot2::ggsave(filename = paste0("0_8cts_STdev_bregma_", ix, ".png"),
          device = "png",
          path = fig_path,
          scale = 1.5,
@@ -1993,193 +2220,565 @@ for(ix in names(simBregmasFN7)){
 
 ```
 
-#### Proportion correlation
+```{r, fig.height=48, fig.width=5}
 
-```{r}
+classCols <- c("Astrocyte" = "#F8766D",
+               "Endothelial" = "#CD9600",
+               "Ependymal" = "#7CAE00",
+               "Excitatory" = "#00BE67",
+               "Inhibitory" = "#00BFC4",
+               "Microglia" = "#00A9FF",
+               "OD" = "#C77CFF",
+               "Pericytes" = "#FF61CC")
 
-corMtx <- getCorrMtx(m1 = lda_k8_theta,
-                     m2 = as.matrix(simFN7$gtSpotTopics),
+# matching up topics to gt cell-types for coloring
+corMtx <- getCorrMtx(m1 = lda_k8_theta, # rows
+                     m2 = as.matrix(simFN7$gtSpotTopics), # cols
                      type = "t")
+pairs <- lsatPairs(corMtx) # reorder cols (gt cell-types) by best matches to the rows
 
-# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k75_neuro_thetaCor.pdf"))
-gplots::heatmap.2(x = corMtx,
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "Actual cell-types",
-                  ylab = "Predicted cell-types",
-                  key.title = NA,
-                  cexRow = 1,
-                  cexCol = 0.9,
-                  # lhei = c(1,3),
-                  margins = c(7,4))
-# dev.off()
 
-# pdf(file = paste0(fig_path, "Fig_2_STdev-k8-theta-heatmap.pdf"))
-# pair up best matching cell class to a predicted topic
-pairs <- lsatPairs(corMtx)
-gplots::heatmap.2(x = corMtx[rev(pairs$rowix), pairs$colsix],
-                  Rowv = NA, # to order topics based on pairs and not dendrogram
-                  Colv = NA,
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "Actual cell-type",
-                  ylab = "Predicted cell-types",
-                  key.title = NA,
-                  cexRow = 1,
-                  cexCol = 0.9,
-                  # lhei = c(1,3),
-                  margins = c(7,4))
-# dev.off()
+## -------------------------------------------------------------
+## each cell type separately
+plts1 <- lapply(names(simBregmasFN7), function(ix){
+  breg <- simFN7$annotDf[simFN7$annotDf$Bregma == ix,]
+  cellCounts <- simFN7$cellCounts[which(rownames(simFN7$cellCounts) %in% breg$patch_id),]
+  
+  p1 <- ggplot() +
+    geom_point(data = breg,
+               aes(x = Centroid_X, y = Centroid_Y, color = Cell_class), size=0.3) +
+    facet_wrap(~Cell_class) +
+    scale_fill_manual(values = classCols[breg$Cell_class]) +
+    theme(
+          #panel.background = element_rect(fill = "white"),
+          panel.grid = element_blank(),
+          axis.line=element_blank(),
+          axis.text.x=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),
+          panel.background=element_blank(),
+          legend.position = "none") +
+    ggtitle(ix)
+  ggplotGrob(p1)
+})
 
-ggplot(data = reshape2::melt(corMtx[rev(pairs$rowix), pairs$colsix])) +
-  geom_tile(aes(x = Var2, y = Var1, fill=value)) +
-  scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
-  scale_y_continuous(breaks=pairs$rowix, labels=pairs$rowix) +
-  xlab("Ground truth cell-type") +
-  ylab("Predicted cell-type") +
-  ggtitle("Cell-type pixel proportion correlation") +
-  theme(axis.text.x=element_text(angle=-90),
-        panel.grid = element_blank(),
-        axis.line=element_blank(),
-        # axis.text.x=element_blank(),
-        # axis.text.y=element_blank(),
-        axis.ticks=element_blank(),
-        # axis.title.x=element_blank(),
-        # axis.title.y=element_blank(),
-        panel.background=element_blank()) +
-  coord_fixed()
+layout <- matrix(seq(12))
+plts1_grid <- gridExtra::grid.arrange(
+                  grobs = plts1,
+                  layout_matrix = layout
+)
+plts1_grid
+ggplot2::ggsave(filename = paste0("0_100um_8cts_separateCts_AllBregmas.png"),
+                plot = plts1_grid,
+                device = "png",
+                path = fig_path,
+                scale = 1,
+                width = 5,
+                height = 48,
+                units = c("in"),
+                dpi = 300)
 
-diag_cors <- diag(corMtx[pairs$rowix, pairs$colsix])
+## -------------------------------------------------------------
+## all cells with grid showing
+plts2 <- lapply(names(simBregmasFN7), function(ix){
+  breg <- simFN7$annotDf[simFN7$annotDf$Bregma == ix,]
+  cellCounts <- simFN7$cellCounts[which(rownames(simFN7$cellCounts) %in% breg$patch_id),]
+  
+  p2 <- ggplot() +
+    geom_point(data = breg,
+               aes(x = Centroid_X, y = Centroid_Y, color = Cell_class), size=0.4) +
+    scale_fill_manual(values = classCols[breg$Cell_class]) +
+    geom_rect(data = cellCounts,
+              aes(xmin = x - 0, xmax = x + 100,
+                  ymin = y - 0, ymax = y + 100),
+              fill = NA, color = "black", linetype = "dashed") +
+    theme(
+          #panel.background = element_rect(fill = "white"),
+          panel.grid = element_blank(),
+          axis.line=element_blank(),
+          axis.text.x=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),
+          panel.background=element_blank(),
+          legend.position = "none") #+
+    #ggtitle(ix)
+  ggplotGrob(p2)
+})
 
-# pdf(file = paste0(fig_path, "Fig_2_STdev-k8-theta-vs-gt-box.pdf"),   # The directory you want to save the file in
-#     width = 5, # The width of the plot in inches
-#     height = 3) # The height of the plot in inches
-par( mfrow = c(1,3) )
-boxplot(diag_cors,
-        medcol = "black", # medium line color
-        medlty = 1, # line type
-        medlwd = 1, # line width
-        boxfill = "white", # color fill of box
-        boxcol = "black", # outline color of box
-        boxlty = 1, # box line type
-        boxlwd = 1, # width of box line
-        whisklty = 1, # whisker type
-        whisklwd = 1,
-        staplelwd = 0, # the ends of the whiskers
-        outpch = 1, # type of outlies
-        outcex = 0,
-        main = "",
-        cex.main = 1,
-        xlab = "",
-        ylab = "Correlation") # size of outliers
-stripchart(diag_cors, vertical = TRUE, 
-    method = "jitter", add = TRUE, pch = 20, col = 'black')
-# dev.off()
+layout <- matrix(seq(12))
+plts2_grid <- gridExtra::grid.arrange(
+                  grobs = plts2,
+                  layout_matrix = layout
+)
+plts2_grid
+ggplot2::ggsave(filename = paste0("0_100um_8cts_grid_AllBregmas.png"),
+                plot = plts2_grid,
+                device = "png",
+                path = fig_path,
+                scale = 1,
+                width = 5,
+                height = 48,
+                units = c("in"),
+                dpi = 300)
+  
+## -------------------------------------------------------------
+## ground truth proportions
+plts3 <- lapply(names(simBregmasFN7), function(ix){
+  breg <- simFN7$annotDf[simFN7$annotDf$Bregma == ix,]
+  cellCounts <- simFN7$cellCounts[which(rownames(simFN7$cellCounts) %in% breg$patch_id),]
 
-print("summary:")
-summary(diag_cors)
+  m <- as.matrix(simFN7$gtSpotTopics[rownames(cellCounts),])
+  pos <- cellCounts[,c("x", "y")]
+  p3 <- vizAllTopics(theta = m,
+               pos = pos,
+               topicOrder=seq(ncol(m)),
+               topicCols=as.vector(classCols[colnames(m)[colSums(m) > 0]]),
+               groups = rep("0", dim(m)[1]),
+               group_cols = c("0" = "black"),
+               r = 40, # different size piecharts for mOB data sets
+               lwd = 0.4,
+               showLegend = FALSE,
+               plotTitle = NA)
+  ggplotGrob(p3)
+})
+
+layout <- matrix(seq(12))
+plts3_grid <- gridExtra::grid.arrange(
+                  grobs = plts3,
+                  layout_matrix = layout
+)
+plts3_grid
+ggplot2::ggsave(filename = paste0("0_100um_8cts_simST_AllBregmas.png"),
+                plot = plts3_grid,
+                device = "png",
+                path = fig_path,
+                scale = 1,
+                width = 5,
+                height = 48,
+                units = c("in"),
+                dpi = 300)
+  
+## -------------------------------------------------------------
+## STdeconvolve proportions
+plts4 <- lapply(names(simBregmasFN7), function(ix){
+
+  breg <- simFN7$annotDf[simFN7$annotDf$Bregma == ix,]
+  cellCounts <- simFN7$cellCounts[which(rownames(simFN7$cellCounts) %in% breg$patch_id),]
+  spots <- rownames(cellCounts)
+  gtFreqs <- simFN7$gtSpotTopics[spots,]
+
+  m <- lda_k8_theta[spots,]
+  p <- cellCounts[, c("x", "y")]
+
+  p4 <- vizAllTopics(theta = m,
+                     pos = p,
+                     topicOrder=seq(ncol(m)),
+                     topicCols=as.vector(classCols[pairs$colsix]),
+                     groups = rep("0", dim(m)[1]),
+                     group_cols = c("0" = "black"),
+                     r = 40,
+                     lwd = 0.4,
+                     showLegend = FALSE,
+                     plotTitle = NA)
+  ggplotGrob(p4)
+})
+
+layout <- matrix(seq(12))
+plts4_grid <- gridExtra::grid.arrange(
+                  grobs = plts4,
+                  layout_matrix = layout
+)
+plts4_grid
+ggplot2::ggsave(filename = paste0("0_100um_8cts_STdeconvolve_AllBregmas.png"),
+                plot = plts4_grid,
+                device = "png",
+                path = fig_path,
+                scale = 1,
+                width = 5,
+                height = 48,
+                units = c("in"),
+                dpi = 300)
+
+# layout <- t(matrix(seq(length((simBregmasFN7))*4), nrow=4))
 
 ```
 
-#### Gexp correlation
+#### Correlations 
 
 ```{r}
 
-corMtx <- getCorrMtx(m1 = FN7_K8$beta,
-                     m2 <- as.matrix(gtCtGenesFN7),
-                     type = "b")
+gt <- simFN7
+decon <- FN7_K8
+filt_theta <- lda_k8_theta
 
-# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k75_neuro_thetaCor.pdf"))
-gplots::heatmap.2(x = corMtx,
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "Actual cell-types",
-                  ylab = "Predicted cell-types",
-                  key.title = NA,
-                  cexRow = 1,
-                  cexCol = 0.9,
-                  # lhei = c(1,3),
-                  margins = c(7,4))
-# dev.off()
+## cluster ground truth cell-types transcriptionally
+clust <- clusterTopics(beta = as.matrix(gt$gtCtGenes),
+                       clustering = "ward.D",
+                       dynamic = "hybrid",
+                       deepSplit = 4,
+                       plot = FALSE)
+ct_txn_order <- rownames(as.matrix(gt$gtCtGenes)[clust$order,])
 
-# pdf(file = paste0(fig_path, "Fig_2_STdev-k8-theta-heatmap.pdf"))
-# pair up best matching cell class to a predicted topic
-pairs <- lsatPairs(corMtx)
-gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
-                  Rowv = NA, # to order topics based on pairs and not dendrogram
-                  Colv = NA,
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "Actual cell-type",
-                  ylab = "Predicted cell-types",
-                  key.title = NA,
-                  cexRow = 1,
-                  cexCol = 0.9,
-                  # lhei = c(1,3),
-                  margins = c(7,4))
-# dev.off()
+## rows are the ground truth in order of their transcriptional similarity
+corMtx_txn <- getCorrMtx(m1 = as.matrix(gt$gtCtGenes)[ct_txn_order,],
+                         m2 = decon$beta,
+                         type = "b")
+pairs <- lsatPairs(corMtx_txn)
+## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+## the properly ordered txn correlation matrix
+corMtx_txn_1 <- corMtx_txn[pairs$rowix, pairs$colsix]
+colnames(corMtx_txn_1) <- paste0("Cell-type ", colnames(corMtx_txn_1))
 
-ggplot(data = reshape2::melt(corMtx[rev(pairs$rowix), pairs$colsix])) +
-  geom_tile(aes(x = Var2, y = Var1, fill=value)) +
-  scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
-  scale_y_continuous(breaks=pairs$rowix, labels=pairs$rowix) +
-  xlab("Ground truth cell-type") +
-  ylab("Predicted cell-type") +
-  ggtitle("Cell-type pixel gene expression correlation") +
-  theme(axis.text.x=element_text(angle=-90),
-        panel.grid = element_blank(),
-        axis.line=element_blank(),
+## plot the txn correlations
+dat <- reshape2::melt(corMtx_txn_1)
+ggplot2::ggplot(data = dat) +
+  ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+  ggplot2::xlab("Ground truth cell-types") +
+  ggplot2::ylab("Deconvolved cell-types") +
+  ggplot2::ggtitle("Transcriptional profile correlation\n(100 micron pixels)") +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=10),
+                 axis.text.y=element_text(angle=0, size=10),
+                 axis.title.y=element_text(size=12),
+                 axis.title.x=element_text(size=12),
+                 plot.title = element_text(size=15),
+                 panel.grid = element_blank(),
+                 axis.line=element_blank(),
+                 axis.ticks=element_blank(),
+                 panel.background=element_blank()) +
+  ggplot2::coord_fixed()
+ggplot2::ggsave(filename = paste0("0_100um_8cts_txn_corr_heatmap.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+cat("mean transcriptional corr across diag:", mean(diag(corMtx_txn_1)), "\n")
+cat("median transcriptional corr across diag:", median(diag(corMtx_txn_1)), "\n")
+
+## -------------------------------------------------------------------
+## -------------------------------------------------------------------
+## pairing of deconvolved and ground truth based on transcriptional profiles
+## after filtering out cell-types <2.5% from deconvolved theta
+## -------------------------------------------------------------------
+## rows are the ground truth in order of their transcriptional similarity
+corMtx_txn <- getCorrMtx(m1 = as.matrix(gt$gtCtGenes)[ct_txn_order,],
+                         m2 = decon$beta,
+                         type = "b")
+pairs <- lsatPairs(corMtx_txn)
+## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+## the properly ordered txn correlation matrix
+
+## now get the pixel proportional correlations and order based on above pairings, which are based on txn similarities:
+corMtx_prop_1 <- getCorrMtx(m1 = as.matrix(gt$gtSpotTopics)[,ct_txn_order],
+                          m2 = filt_theta[,pairs$colsix],
+                          type = "t")
+colnames(corMtx_prop_1) <- paste0("Cell-type ", colnames(corMtx_prop_1))
+
+# plot the proportion correlations, cell-types ordered based on transcriptional pairing
+dat <- reshape2::melt(corMtx_prop_1)
+ggplot2::ggplot(data = dat) +
+  ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+  ggplot2::xlab("Ground truth cell-types") +
+  ggplot2::ylab("Deconvolved cell-types") +
+  ggplot2::ggtitle("Pixel proportion correlation\n(100 micron pixels)") +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=10),
+                 axis.text.y=element_text(angle=0, size=10),
+                 axis.title.y=element_text(size=12),
+                 axis.title.x=element_text(size=12),
+                 plot.title = element_text(size=15),
+                 panel.grid = element_blank(),
+                 axis.line=element_blank(),
+                 axis.ticks=element_blank(),
+                 panel.background=element_blank()) +
+  ggplot2::coord_fixed()
+ggplot2::ggsave(filename = paste0("0_100um_8cts_prop_corr_heatmap_txn_ordered_after_filtering.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+cat("mean proportional corr (txn order, after filtering) across diag:", mean(diag(corMtx_prop_1)), "\n")
+cat("median proportional corr (txn order, after filtering) across diag:", median(diag(corMtx_prop_1)), "\n")
+
+# plot the pixel proportions of each paired cell-type
+# after removing removing predicted cts from spots if less than 2.5%
+dat2 <- data.frame("Ground Truth" = colMeans(gt$gtSpotTopics[,ct_txn_order]),
+                   "STdeconvolve" = colMeans(filt_theta[,pairs$colsix]),
+                   "Cell Type" = ct_txn_order,
+                   "Topic" = names(colMeans(filt_theta[,pairs$colsix])))
+ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = value, color = variable)) +
+  # geom_boxplot() +
+  geom_point(position=position_jitterdodge(0.1), cex=1) +
+  # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
+  # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
+  # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
         # axis.text.x=element_blank(),
         # axis.text.y=element_blank(),
-        axis.ticks=element_blank(),
-        # axis.title.x=element_blank(),
-        # axis.title.y=element_blank(),
-        panel.background=element_blank()) +
-  coord_fixed()
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  labs(title = "Actual and deconvolved cell-type mean pixel proportions\npairs based on correlated txn profile\nafter filtering",
+       x = "Cell-types", y = "mean pixel proportion")
 
-diag_cors <- diag(corMtx[pairs$rowix, pairs$colsix])
+## -------------------------------------------------------------------
+## pairing of deconvolved and ground truth based on transcriptional profiles
+## before filtering out cell-types <2.5% from deconvolved theta
+## -------------------------------------------------------------------
 
-# pdf(file = paste0(fig_path, "Fig_2_STdev-k8-theta-vs-gt-box.pdf"),   # The directory you want to save the file in
-#     width = 5, # The width of the plot in inches
-#     height = 3) # The height of the plot in inches
-par( mfrow = c(1,3) )
-boxplot(diag_cors,
-        medcol = "black", # medium line color
-        medlty = 1, # line type
-        medlwd = 1, # line width
-        boxfill = "white", # color fill of box
-        boxcol = "black", # outline color of box
-        boxlty = 1, # box line type
-        boxlwd = 1, # width of box line
-        whisklty = 1, # whisker type
-        whisklwd = 1,
-        staplelwd = 0, # the ends of the whiskers
-        outpch = 1, # type of outlies
-        outcex = 0,
-        main = "",
-        cex.main = 1,
-        xlab = "",
-        ylab = "Correlation") # size of outliers
-stripchart(diag_cors, vertical = TRUE, 
-    method = "jitter", add = TRUE, pch = 20, col = 'black')
-# dev.off()
+# corMtx_prop_2 <- getCorrMtx(m1 = as.matrix(gt$gtSpotTopics)[,ct_txn_order],
+#                           m2 = decon$theta[,pairs$colsix],
+#                           type = "t")
+# colnames(corMtx_prop_2) <- paste0("Cell-type ", colnames(corMtx_prop_2))
+# 
+# # plot the proportion correlations, cell-types ordered based on transcriptional pairing
+# dat <- reshape2::melt(corMtx_prop_2)
+# ggplot2::ggplot(data = dat) +
+#   ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+#   ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+#   ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+#   ggplot2::xlab("Ground truth cell-types") +
+#   ggplot2::ylab("Deconvolved cell-types") +
+#   ggplot2::ggtitle("Cell-type pixel proportion correlation\n(100 micron pixels, 8 cell-types)") +
+#   ggplot2::theme(axis.text.x=element_text(angle=-90, size=5),
+#                 panel.grid = element_blank(),
+#                 axis.line=element_blank(),
+#                 # axis.text.x=element_blank(),
+#                 axis.text.y=element_text(size=5),
+#                 axis.ticks=element_blank(),
+#                 # axis.title.x=element_blank(),
+#                 # axis.title.y=element_blank(),
+#                 panel.background=element_blank()) +
+#   ggplot2::coord_fixed()
+# ggplot2::ggsave(filename = paste0("0_100um_8cts_prop_corr_heatmap_txn_ordered_before_filtering.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 4,
+#          units = c("in"),
+#          dpi = 300)
+# 
+# cat("mean proportional corr (txn order, before filtering) across diag:", mean(diag(corMtx_prop_2)), "\n")
+# cat("median proportional corr (txn order, before filtering) across diag:", median(diag(corMtx_prop_2)), "\n")
+# 
+# # plot the pixel proportions of each paired cell-type
+# # note that this is without removing predicted cts from spots if less than 2.5%
+# dat2 <- data.frame("Ground Truth" = colMeans(gt$gtSpotTopics[,ct_txn_order]),
+#                    "STdeconvolve" = colMeans(decon$theta[,pairs$colsix]),
+#                    "Cell Type" = ct_txn_order,
+#                    "Topic" = names(colMeans(decon$theta[,pairs$colsix])))
+# ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = value, color = variable)) +
+#   # geom_boxplot() +
+#   geom_point(position=position_jitterdodge(0.1), cex=0.1) +
+#   # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
+#   # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
+#   # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+#         # panel.grid = element_blank(),
+#         # axis.line=element_blank(),
+#         # axis.text.x=element_blank(),
+#         # axis.text.y=element_blank(),
+#         # axis.ticks=element_blank(),
+#         axis.title.x=element_blank(),
+#         axis.title.y=element_blank(),
+#         panel.background=element_blank()
+#         ) +
+#   labs(title = "Actual and deconvolved cell-type mean pixel proportions\npairs based on correlated txn profile\nbefore filtering",
+#        x = "Cell-types", y = "mean pixel proportion")
 
-print("summary:")
-summary(diag_cors)
+## -------------------------------------------------------------------
+## -------------------------------------------------------------------
+## pairing of deconvolved and ground truth based on proportional profiles
+## before filtering out cell-types <2.5% from deconvolved theta
+## -------------------------------------------------------------------
+# corMtx_prop_3 <- getCorrMtx(m1 = as.matrix(gt$gtSpotTopics)[,ct_txn_order],
+#                          m2 = decon$theta,
+#                          type = "t")
+# pairs <- lsatPairs(corMtx_prop_3)
+# ## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+# ## the properly ordered proportional correlation matrix
+# corMtx_prop_3 <- corMtx_prop_3[pairs$rowix, pairs$colsix]
+# colnames(corMtx_prop_3) <- paste0("Cell-type ", colnames(corMtx_prop_3))
+# 
+# # plot the proportion correlations
+# dat <- reshape2::melt(corMtx_prop_3)
+# ggplot2::ggplot(data = dat) +
+#   ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+#   ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+#   ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+#   ggplot2::xlab("Ground truth cell-types") +
+#   ggplot2::ylab("Deconvolved cell-types") +
+#   ggplot2::ggtitle("Cell-type pixel proportion correlation\n(100 micron pixels, 8 cell-types)") +
+#   ggplot2::theme(axis.text.x=element_text(angle=-90, size=5),
+#                 panel.grid = element_blank(),
+#                 axis.line=element_blank(),
+#                 # axis.text.x=element_blank(),
+#                 axis.text.y=element_text(size=5),
+#                 axis.ticks=element_blank(),
+#                 # axis.title.x=element_blank(),
+#                 # axis.title.y=element_blank(),
+#                 panel.background=element_blank()) +
+#   ggplot2::coord_fixed()
+# ggplot2::ggsave(filename = paste0("0_100um_8cts_prop_corr_heatmap_before_filtering.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 4,
+#          units = c("in"),
+#          dpi = 300)
+# 
+# cat("mean proportional corr (prop order, before filtering) across diag:", mean(diag(corMtx_prop_3)), "\n")
+# cat("median proportional corr (prop order, before filtering) across diag:", median(diag(corMtx_prop_3)), "\n")
+# 
+# # plot the pixel proportions of each paired cell-type
+# # note that this is without removing predicted cts from spots if less than 2.5%
+# dat2 <- data.frame("Ground Truth" = colMeans(gt$gtSpotTopics[,ct_txn_order]),
+#                    "STdeconvolve" = colMeans(decon$theta[,pairs$colsix]),
+#                    "Cell Type" = ct_txn_order,
+#                    "Topic" = names(colMeans(decon$theta[,pairs$colsix])))
+# ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = value, color = variable)) +
+#   # geom_boxplot() +
+#   geom_point(position=position_jitterdodge(0.1), cex=0.1) +
+#   # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
+#   # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
+#   # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+#         # panel.grid = element_blank(),
+#         # axis.line=element_blank(),
+#         # axis.text.x=element_blank(),
+#         # axis.text.y=element_blank(),
+#         # axis.ticks=element_blank(),
+#         axis.title.x=element_blank(),
+#         axis.title.y=element_blank(),
+#         panel.background=element_blank()
+#         ) +
+#   labs(title = "Actual and deconvolved cell-type mean pixel proportions\npairs based on correlated proportion profile\nbefore filtering",
+#        x = "Cell-types", y = "mean pixel proportion")
+
+## -------------------------------------------------------------------
+## pairing of deconvolved and ground truth based on proportional profiles
+## after filtering out cell-types <2.5% from deconvolved theta
+## -------------------------------------------------------------------
+corMtx_prop_4 <- getCorrMtx(m1 = as.matrix(gt$gtSpotTopics)[,ct_txn_order],
+                         m2 = filt_theta,
+                         type = "t")
+pairs <- lsatPairs(corMtx_prop_4)
+## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+## the properly ordered proportional correlation matrix
+corMtx_prop_4 <- corMtx_prop_4[pairs$rowix, pairs$colsix]
+colnames(corMtx_prop_4) <- paste0("Cell-type ", colnames(corMtx_prop_4))
+
+# plot the proportion correlations
+dat <- reshape2::melt(corMtx_prop_4)
+ggplot2::ggplot(data = dat) +
+  ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+  ggplot2::xlab("Ground truth cell-types") +
+  ggplot2::ylab("Deconvolved cell-types") +
+  ggplot2::ggtitle("Pixel proportion correlation\n(100 micron pixels)") +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=10),
+                 axis.text.y=element_text(angle=0, size=10),
+                 axis.title.y=element_text(size=12),
+                 axis.title.x=element_text(size=12),
+                 plot.title = element_text(size=15),
+                 panel.grid = element_blank(),
+                 axis.line=element_blank(),
+                 axis.ticks=element_blank(),
+                 panel.background=element_blank()) +
+  ggplot2::coord_fixed()
+ggplot2::ggsave(filename = paste0("0_100um_8cts_prop_corr_heatmap_after_filtering.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+cat("mean proportional corr (prop order, after filtering) across diag:", mean(diag(corMtx_prop_4)), "\n")
+cat("median proportional corr (prop order, after filtering) across diag:", median(diag(corMtx_prop_4)), "\n")
+
+# plot the pixel proportions of each paired cell-type
+# note that this is without removing predicted cts from spots if less than 2.5%
+dat2 <- data.frame("Ground Truth" = colMeans(gt$gtSpotTopics[,ct_txn_order]),
+                   "STdeconvolve" = colMeans(filt_theta[,pairs$colsix]),
+                   "Cell Type" = ct_txn_order,
+                   "Topic" = names(colMeans(filt_theta[,pairs$colsix])))
+ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = value, color = variable)) +
+  # geom_boxplot() +
+  geom_point(position=position_jitterdodge(0.1), cex=1) +
+  # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
+  # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
+  # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  labs(title = "Actual and deconvolved cell-type mean pixel proportions\npairs based on correlated proportion profile\nafter filtering",
+       x = "Cell-types", y = "mean pixel proportion")
+
+
+## boxplot summary of correlations
+dat3 <- reshape2::melt(data.frame(
+                                  transcriptional = diag(corMtx_txn_1),
+                                  # proportional_txn = diag(corMtx_prop_1),
+                                  # proportional_prop = diag(corMtx_prop_4)
+                                  proportional = diag(corMtx_prop_4)
+                                  ))
+colnames(dat3) <- c("Comparison", "Correlation")
+ggplot2::ggplot(data = dat3, aes(x=Comparison, y=Correlation)) +
+  ggplot2::geom_violin(trim=TRUE, fill="gray") +
+  ggplot2::geom_boxplot(width=0.1) +
+  ggplot2::ylim(c(-1,1)) +
+  ggplot2::scale_fill_grey() +
+  ggplot2::labs(title = "Deconvolved and ground truth\ncell-type correlations",
+                x = "Comparison",
+                y = "Correlation") +
+  ggplot2::theme_classic() +
+  ggplot2::theme(axis.text.x=element_text(size=15),
+                 axis.text.y=element_text(size=15),
+                 axis.title.y=element_text(size=15),
+                 axis.title.x=element_blank(),
+                 plot.title=element_text(size=15))
+ggplot2::ggsave(filename = paste0("0_100um_8cts_heatmap_daig_corrs_after_filtering.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 3,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
 
 ```
+
+#### Gene ranks
 
 MERIGNUE differential genes for each cluster:
 ```{r}
@@ -2256,10 +2855,26 @@ summary_df <- do.call(rbind, lapply(pairs$rowix, function(i){
         ct_df
 })) 
 
-ggplot(data = summary_df) +
-        geom_hex(aes(x = gexp_rank, y = beta_rank), bins=10) +
-        scale_fill_gradient(low = "white", high = "red") +
-        theme_classic()
+ggplot2::ggplot(data = summary_df) +
+        ggplot2::geom_hex(aes(x = gexp_rank, y = beta_rank), bins=10) +
+        ggplot2::scale_fill_gradient(low = "white", high = "red") +
+        ggplot2::labs(title = "Cell-type transcriptional profiles",
+                      x = "Ground truth gene expression level",
+                      y = "Deconvolved gene expression level") +
+        ggplot2::theme_classic() +
+        ggplot2::theme(axis.text.x=element_text(size=15),
+                       axis.text.y=element_text(size=15),
+                       axis.title.y=element_text(size=15),
+                       axis.title.x=element_text(size=15),
+                       plot.title=element_text(size=15))
+ggplot2::ggsave(filename = paste0("0_100um_8cts_gene_ranks_hex.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 4,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
 
 x <- summary_df$gexp_rank
 # y <- ct_df$beta
@@ -2275,9 +2890,10 @@ cor(x, y, method = "spearman")
 
 ```{r}
 
-FN7_K75 <- buildLDAobject(LDAmodel = optimalModel(FN7_LDAs, opt = "min"),
-                      deepSplit = 2, # collapsed more to reduce number of clusters to 15
-                      colorScheme = "rainbow")
+FN7_K75 <- buildLDAobject(LDAmodel = optimalModel(FN7_LDAs, opt = "75"),
+                          corpus = as.matrix(simFN7$sim),
+                          deepSplit = 2, # collapsed more to reduce number of clusters to 15
+                          colorScheme = "rainbow")
 
 ```
 
@@ -2289,8 +2905,8 @@ lda_k75_theta <- FN7_K75$theta
 lda_k75_theta[lda_k75_theta < 0.025] <- 0
 
 # try just calling the unassigned proportions "ambiguous"
-ambig <- 1 - rowSums(lda_k75_theta)
-lda_k75_theta2 <- cbind(lda_k75_theta, ambig)
+# ambig <- 1 - rowSums(lda_k75_theta)
+# lda_k75_theta2 <- cbind(lda_k75_theta, ambig)
 
 # readjust proportions
 lda_k75_theta <- lda_k75_theta/rowSums(lda_k75_theta)
@@ -2305,201 +2921,377 @@ ggplot(data = reshape2::melt(lda_k75_theta)) +
 
 # drop ant cts that are 0 for all pixels
 lda_k75_theta <- lda_k75_theta[,which(colSums(lda_k75_theta) > 0)]
-lda_k75_theta2 <- lda_k75_theta2[,which(colSums(lda_k75_theta2) > 0)]
+# lda_k75_theta2 <- lda_k75_theta2[,which(colSums(lda_k75_theta2) > 0)]
 
 ```
 
-#### theta correlation
-
-FN7 fitted with k=8 major cell types (ambiguous removed)
+#### Correlations 
 
 ```{r}
 
-corMtx <- getCorrMtx(m1 = lda_k75_theta,
-                     m2 = as.matrix(simFN7_neuro$gtSpotTopics),
-                     type = "t")
+gt <- simFN7_neuro
+decon <- FN7_K75
+filt_theta <- lda_k75_theta
 
-# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor.pdf"))
-gplots::heatmap.2(x = corMtx,
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "Major cell class",
-                  ylab = "Predicted topics",
-                  key.title = NA,
-                  cexRow = 1,
-                  cexCol = 0.9,
-                  # lhei = c(1,3),
-                  margins = c(7,4))
-# dev.off()
+## cluster ground truth cell-types transcriptionally
+clust <- clusterTopics(beta = as.matrix(gt$gtCtGenes),
+                       clustering = "ward.D",
+                       dynamic = "hybrid",
+                       deepSplit = 4,
+                       plot = FALSE)
+ct_txn_order <- rownames(as.matrix(gt$gtCtGenes)[clust$order,])
 
-# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k8_mjrcts_thetaCor_pairs.pdf"))
-# pair up best matching cell class to a predicted topic
-pairs <- lsatPairs(corMtx)
-gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
-                  Rowv = NA, # to order topics based on pairs and not dendrogram
-                  Colv = NA,
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "Major cell class",
-                  ylab = "Predicted topics",
-                  key.title = NA,
-                  cexRow = 1,
-                  cexCol = 0.9,
-                  # lhei = c(1,3),
-                  margins = c(7,4))
-# dev.off()
+## rows are the ground truth in order of their transcriptional similarity
+corMtx_txn <- getCorrMtx(m1 = as.matrix(gt$gtCtGenes)[ct_txn_order,],
+                         m2 = decon$beta,
+                         type = "b")
+pairs <- lsatPairs(corMtx_txn)
+## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+## the properly ordered txn correlation matrix
+corMtx_txn_1 <- corMtx_txn[pairs$rowix, pairs$colsix]
+colnames(corMtx_txn_1) <- paste0("Cell-type ", colnames(corMtx_txn_1))
 
-ggplot(data = reshape2::melt(corMtx[rev(pairs$rowix), pairs$colsix])) +
-  geom_tile(aes(x = Var2, y = Var1, fill=value)) +
-  scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
-  scale_y_continuous(breaks=pairs$rowix, labels=pairs$rowix) +
-  xlab("Ground truth cell-type") +
-  ylab("Predicted cell-type") +
-  ggtitle("Cell-type pixel proportion correlation") +
-  theme(axis.text.x = element_text(angle=-90),
-        text = element_text(size=6),
-        panel.grid = element_blank(),
-        axis.line = element_blank(),
+## plot the txn correlations
+dat <- reshape2::melt(corMtx_txn_1)
+ggplot2::ggplot(data = dat) +
+  ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+  ggplot2::xlab("Ground truth cell-types") +
+  ggplot2::ylab("Deconvolved cell-types") +
+  ggplot2::ggtitle("Cell-type transcriptional profile correlation\n(100 micron pixels, 75 cell-types)") +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=5),
+                panel.grid = element_blank(),
+                axis.line=element_blank(),
+                # axis.text.x=element_blank(),
+                axis.text.y=element_text(size=5),
+                axis.ticks=element_blank(),
+                # axis.title.x=element_blank(),
+                # axis.title.y=element_blank(),
+                panel.background=element_blank()) +
+  ggplot2::coord_fixed()
+ggplot2::ggsave(filename = paste0("0_100um_75cts_txn_corr_heatmap.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+cat("mean transcriptional corr across diag:", mean(diag(corMtx_txn_1)), "\n")
+cat("median transcriptional corr across diag:", median(diag(corMtx_txn_1)), "\n")
+
+## -------------------------------------------------------------------
+## -------------------------------------------------------------------
+## pairing of deconvolved and ground truth based on transcriptional profiles
+## after filtering out cell-types <2.5% from deconvolved theta
+## -------------------------------------------------------------------
+## rows are the ground truth in order of their transcriptional similarity
+corMtx_txn <- getCorrMtx(m1 = as.matrix(gt$gtCtGenes)[ct_txn_order,],
+                         m2 = decon$beta,
+                         type = "b")
+pairs <- lsatPairs(corMtx_txn)
+## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+## the properly ordered txn correlation matrix
+
+## now get the pixel proportional correlations and order based on above pairings, which are based on txn similarities:
+corMtx_prop_1 <- getCorrMtx(m1 = as.matrix(gt$gtSpotTopics)[,ct_txn_order],
+                          m2 = filt_theta[,pairs$colsix],
+                          type = "t")
+colnames(corMtx_prop_1) <- paste0("Cell-type ", colnames(corMtx_prop_1))
+
+# plot the proportion correlations, cell-types ordered based on transcriptional pairing
+dat <- reshape2::melt(corMtx_prop_1)
+ggplot2::ggplot(data = dat) +
+  ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+  ggplot2::xlab("Ground truth cell-types") +
+  ggplot2::ylab("Deconvolved cell-types") +
+  ggplot2::ggtitle("Cell-type pixel proportion correlation\n(100 micron pixels, 75 cell-types)") +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=5),
+                panel.grid = element_blank(),
+                axis.line=element_blank(),
+                # axis.text.x=element_blank(),
+                axis.text.y=element_text(size=5),
+                axis.ticks=element_blank(),
+                # axis.title.x=element_blank(),
+                # axis.title.y=element_blank(),
+                panel.background=element_blank()) +
+  ggplot2::coord_fixed()
+ggplot2::ggsave(filename = paste0("0_100um_75cts_prop_corr_heatmap_txn_ordered_after_filtering.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+cat("mean proportional corr (txn order, after filtering) across diag:", mean(diag(corMtx_prop_1)), "\n")
+cat("median proportional corr (txn order, after filtering) across diag:", median(diag(corMtx_prop_1)), "\n")
+
+# plot the pixel proportions of each paired cell-type
+# after removing removing predicted cts from spots if less than 2.5%
+dat2 <- data.frame("Ground Truth" = colMeans(gt$gtSpotTopics[,ct_txn_order]),
+                   "STdeconvolve" = colMeans(filt_theta[,pairs$colsix]),
+                   "Cell Type" = ct_txn_order,
+                   "Topic" = names(colMeans(filt_theta[,pairs$colsix])))
+ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = value, color = variable)) +
+  # geom_boxplot() +
+  geom_point(position=position_jitterdodge(0.1), cex=0.1) +
+  # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
+  # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
+  # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
         # axis.text.x=element_blank(),
         # axis.text.y=element_blank(),
-        axis.ticks = element_blank(),
-        # axis.title.x=element_blank(),
-        # axis.title.y=element_blank(),
-        panel.background = element_blank()) +
-  coord_fixed()
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  labs(title = "Actual and deconvolved cell-type mean pixel proportions\npairs based on correlated txn profile\nafter filtering",
+       x = "Cell-types", y = "mean pixel proportion")
 
-diag_cors <- diag(corMtx[pairs$rowix, pairs$colsix])
+## -------------------------------------------------------------------
+## pairing of deconvolved and ground truth based on transcriptional profiles
+## before filtering out cell-types <2.5% from deconvolved theta
+## -------------------------------------------------------------------
 
-# pdf(file = paste0(fig_path, "Fig_2_STdev-k8-theta-vs-gt-box.pdf"),   # The directory you want to save the file in
-#     width = 5, # The width of the plot in inches
-#     height = 3) # The height of the plot in inches
-par( mfrow = c(1,3) )
-boxplot(diag_cors,
-        medcol = "black", # medium line color
-        medlty = 1, # line type
-        medlwd = 1, # line width
-        boxfill = "white", # color fill of box
-        boxcol = "black", # outline color of box
-        boxlty = 1, # box line type
-        boxlwd = 1, # width of box line
-        whisklty = 1, # whisker type
-        whisklwd = 1,
-        staplelwd = 0, # the ends of the whiskers
-        outpch = 1, # type of outlies
-        outcex = 0,
-        main = "",
-        cex.main = 1,
-        xlab = "",
-        ylab = "Correlation") # size of outliers
-stripchart(diag_cors, vertical = TRUE, 
-    method = "jitter", add = TRUE, pch = 20, col = 'black')
-# dev.off()
+# corMtx_prop_2 <- getCorrMtx(m1 = as.matrix(gt$gtSpotTopics)[,ct_txn_order],
+#                           m2 = decon$theta[,pairs$colsix],
+#                           type = "t")
+# colnames(corMtx_prop_2) <- paste0("Cell-type ", colnames(corMtx_prop_2))
+# 
+# # plot the proportion correlations, cell-types ordered based on transcriptional pairing
+# dat <- reshape2::melt(corMtx_prop_2)
+# ggplot2::ggplot(data = dat) +
+#   ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+#   ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+#   ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+#   ggplot2::xlab("Ground truth cell-types") +
+#   ggplot2::ylab("Deconvolved cell-types") +
+#   ggplot2::ggtitle("Cell-type pixel proportion correlation\n(100 micron pixels, 75 cell-types)") +
+#   ggplot2::theme(axis.text.x=element_text(angle=-90, size=5),
+#                 panel.grid = element_blank(),
+#                 axis.line=element_blank(),
+#                 # axis.text.x=element_blank(),
+#                 axis.text.y=element_text(size=5),
+#                 axis.ticks=element_blank(),
+#                 # axis.title.x=element_blank(),
+#                 # axis.title.y=element_blank(),
+#                 panel.background=element_blank()) +
+#   ggplot2::coord_fixed()
+# ggplot2::ggsave(filename = paste0("0_100um_75cts_prop_corr_heatmap_txn_ordered_before_filtering.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 4,
+#          units = c("in"),
+#          dpi = 300)
+# 
+# cat("mean proportional corr (txn order, before filtering) across diag:", mean(diag(corMtx_prop_2)), "\n")
+# cat("median proportional corr (txn order, before filtering) across diag:", median(diag(corMtx_prop_2)), "\n")
+# 
+# # plot the pixel proportions of each paired cell-type
+# # note that this is without removing predicted cts from spots if less than 2.5%
+# dat2 <- data.frame("Ground Truth" = colMeans(gt$gtSpotTopics[,ct_txn_order]),
+#                    "STdeconvolve" = colMeans(decon$theta[,pairs$colsix]),
+#                    "Cell Type" = ct_txn_order,
+#                    "Topic" = names(colMeans(decon$theta[,pairs$colsix])))
+# ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = value, color = variable)) +
+#   # geom_boxplot() +
+#   geom_point(position=position_jitterdodge(0.1), cex=0.1) +
+#   # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
+#   # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
+#   # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+#         # panel.grid = element_blank(),
+#         # axis.line=element_blank(),
+#         # axis.text.x=element_blank(),
+#         # axis.text.y=element_blank(),
+#         # axis.ticks=element_blank(),
+#         axis.title.x=element_blank(),
+#         axis.title.y=element_blank(),
+#         panel.background=element_blank()
+#         ) +
+#   labs(title = "Actual and deconvolved cell-type mean pixel proportions\npairs based on correlated txn profile\nbefore filtering",
+#        x = "Cell-types", y = "mean pixel proportion")
 
-print("summary:")
-summary(diag_cors)
+## -------------------------------------------------------------------
+## -------------------------------------------------------------------
+## pairing of deconvolved and ground truth based on proportional profiles
+## before filtering out cell-types <2.5% from deconvolved theta
+## -------------------------------------------------------------------
+# corMtx_prop_3 <- getCorrMtx(m1 = as.matrix(gt$gtSpotTopics)[,ct_txn_order],
+#                          m2 = decon$theta,
+#                          type = "t")
+# pairs <- lsatPairs(corMtx_prop_3)
+# ## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+# ## the properly ordered proportional correlation matrix
+# corMtx_prop_3 <- corMtx_prop_3[pairs$rowix, pairs$colsix]
+# colnames(corMtx_prop_3) <- paste0("Cell-type ", colnames(corMtx_prop_3))
+# 
+# # plot the proportion correlations
+# dat <- reshape2::melt(corMtx_prop_3)
+# ggplot2::ggplot(data = dat) +
+#   ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+#   ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+#   ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+#   ggplot2::xlab("Ground truth cell-types") +
+#   ggplot2::ylab("Deconvolved cell-types") +
+#   ggplot2::ggtitle("Cell-type pixel proportion correlation\n(100 micron pixels, 75 cell-types)") +
+#   ggplot2::theme(axis.text.x=element_text(angle=-90, size=5),
+#                 panel.grid = element_blank(),
+#                 axis.line=element_blank(),
+#                 # axis.text.x=element_blank(),
+#                 axis.text.y=element_text(size=5),
+#                 axis.ticks=element_blank(),
+#                 # axis.title.x=element_blank(),
+#                 # axis.title.y=element_blank(),
+#                 panel.background=element_blank()) +
+#   ggplot2::coord_fixed()
+# ggplot2::ggsave(filename = paste0("0_100um_75cts_prop_corr_heatmap_before_filtering.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 4,
+#          units = c("in"),
+#          dpi = 300)
+# 
+# cat("mean proportional corr (prop order, before filtering) across diag:", mean(diag(corMtx_prop_3)), "\n")
+# cat("median proportional corr (prop order, before filtering) across diag:", median(diag(corMtx_prop_3)), "\n")
+# 
+# # plot the pixel proportions of each paired cell-type
+# # note that this is without removing predicted cts from spots if less than 2.5%
+# dat2 <- data.frame("Ground Truth" = colMeans(gt$gtSpotTopics[,ct_txn_order]),
+#                    "STdeconvolve" = colMeans(decon$theta[,pairs$colsix]),
+#                    "Cell Type" = ct_txn_order,
+#                    "Topic" = names(colMeans(decon$theta[,pairs$colsix])))
+# ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = value, color = variable)) +
+#   # geom_boxplot() +
+#   geom_point(position=position_jitterdodge(0.1), cex=0.1) +
+#   # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
+#   # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
+#   # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+#         # panel.grid = element_blank(),
+#         # axis.line=element_blank(),
+#         # axis.text.x=element_blank(),
+#         # axis.text.y=element_blank(),
+#         # axis.ticks=element_blank(),
+#         axis.title.x=element_blank(),
+#         axis.title.y=element_blank(),
+#         panel.background=element_blank()
+#         ) +
+#   labs(title = "Actual and deconvolved cell-type mean pixel proportions\npairs based on correlated proportion profile\nbefore filtering",
+#        x = "Cell-types", y = "mean pixel proportion")
+
+## -------------------------------------------------------------------
+## pairing of deconvolved and ground truth based on proportional profiles
+## after filtering out cell-types <2.5% from deconvolved theta
+## -------------------------------------------------------------------
+corMtx_prop_4 <- getCorrMtx(m1 = as.matrix(gt$gtSpotTopics)[,ct_txn_order],
+                         m2 = filt_theta,
+                         type = "t")
+pairs <- lsatPairs(corMtx_prop_4)
+## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+## the properly ordered proportional correlation matrix
+corMtx_prop_4 <- corMtx_prop_4[pairs$rowix, pairs$colsix]
+colnames(corMtx_prop_4) <- paste0("Cell-type ", colnames(corMtx_prop_4))
+
+# plot the proportion correlations
+dat <- reshape2::melt(corMtx_prop_4)
+ggplot2::ggplot(data = dat) +
+  ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+  ggplot2::xlab("Ground truth cell-types") +
+  ggplot2::ylab("Deconvolved cell-types") +
+  ggplot2::ggtitle("Cell-type pixel proportion correlation\n(100 micron pixels, 75 cell-types)") +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=5),
+                panel.grid = element_blank(),
+                axis.line=element_blank(),
+                # axis.text.x=element_blank(),
+                axis.text.y=element_text(size=5),
+                axis.ticks=element_blank(),
+                # axis.title.x=element_blank(),
+                # axis.title.y=element_blank(),
+                panel.background=element_blank()) +
+  ggplot2::coord_fixed()
+ggplot2::ggsave(filename = paste0("0_100um_75cts_prop_corr_heatmap_after_filtering.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+cat("mean proportional corr (prop order, after filtering) across diag:", mean(diag(corMtx_prop_4)), "\n")
+cat("median proportional corr (prop order, after filtering) across diag:", median(diag(corMtx_prop_4)), "\n")
+
+# plot the pixel proportions of each paired cell-type
+# note that this is without removing predicted cts from spots if less than 2.5%
+dat2 <- data.frame("Ground Truth" = colMeans(gt$gtSpotTopics[,ct_txn_order]),
+                   "STdeconvolve" = colMeans(filt_theta[,pairs$colsix]),
+                   "Cell Type" = ct_txn_order,
+                   "Topic" = names(colMeans(filt_theta[,pairs$colsix])))
+ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = value, color = variable)) +
+  # geom_boxplot() +
+  geom_point(position=position_jitterdodge(0.1), cex=0.1) +
+  # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
+  # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
+  # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        # panel.grid = element_blank(),
+        # axis.line=element_blank(),
+        # axis.text.x=element_blank(),
+        # axis.text.y=element_blank(),
+        # axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank()
+        ) +
+  labs(title = "Actual and deconvolved cell-type mean pixel proportions\npairs based on correlated proportion profile\nafter filtering",
+       x = "Cell-types", y = "mean pixel proportion")
+
+
+## boxplot summary of correlations
+dat3 <- reshape2::melt(data.frame(
+                                  transcriptional = diag(corMtx_txn_1),
+                                  proportional_txn = diag(corMtx_prop_1),
+                                  proportional_prop = diag(corMtx_prop_4)))
+colnames(dat3) <- c("Comparison", "Correlation")
+ggplot2::ggplot(data = dat3, aes(x=Comparison, y=Correlation)) +
+  ggplot2::geom_violin(trim=TRUE, fill="gray") +
+  ggplot2::geom_boxplot(width=0.1) +
+  ggplot2::ylim(c(-1,1)) +
+  ggplot2::scale_fill_grey() +
+  ggplot2::labs(title = "Deconvolved and ground truth cell-type correlations, between pairs\n(100 micron pixels, 75 cell-types)",
+                x = "Comparison",
+                y = "Correlation") +
+  ggplot2::theme_classic()
+ggplot2::ggsave(filename = paste0("0_100um_75cts_heatmap_daig_corrs_after_filtering.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
 
 ```
 
-#### Gexp correlation
+Transcriptional correlation still high but pixel proportions lower, but this is likely due to the fact that it is more difficult to deconvovle rare cell-types. (note that this positional correlation is when pairing cells based on highest pixel proportional correlation. If I pair based on transcriptional correlation, then compute pixel proportional correlation, then its a lot lower. So this probably speaks to the fact that a lot of the rare cell types are also very transcriptionally similar, making it even harder to assign the right one. But if more distinct, cell-types instead of subtypes, it becomes a lot easier. The pairing based on transcriptional and proportional correlation is the same)
 
-```{r}
-
-corMtx <- getCorrMtx(m1 = FN7_K75$beta,
-                     m2 <- as.matrix(gtCtNeuronalGenesFN7),
-                     type = "b")
-
-# pdf(file = paste0(fig_path, "Fig1_B-4_FN7_k75_neuro_thetaCor.pdf"))
-gplots::heatmap.2(x = corMtx,
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "Actual cell-types",
-                  ylab = "Predicted cell-types",
-                  key.title = NA,
-                  cexRow = 1,
-                  cexCol = 0.9,
-                  # lhei = c(1,3),
-                  margins = c(7,4))
-# dev.off()
-
-# pdf(file = paste0(fig_path, "Fig_2_STdev-k8-theta-heatmap.pdf"))
-# pair up best matching cell class to a predicted topic
-pairs <- lsatPairs(corMtx)
-gplots::heatmap.2(x = corMtx[pairs$rowix, pairs$colsix],
-                  Rowv = NA, # to order topics based on pairs and not dendrogram
-                  Colv = NA,
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "Actual cell-type",
-                  ylab = "Predicted cell-types",
-                  key.title = NA,
-                  cexRow = 1,
-                  cexCol = 0.9,
-                  # lhei = c(1,3),
-                  margins = c(7,4))
-# dev.off()
-
-ggplot(data = reshape2::melt(corMtx[rev(pairs$rowix), pairs$colsix])) +
-  geom_tile(aes(x = Var2, y = Var1, fill=value)) +
-  scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
-  scale_y_continuous(breaks=pairs$rowix, labels=pairs$rowix) +
-  xlab("Ground truth cell-type") +
-  ylab("Predicted cell-type") +
-  ggtitle("Cell-type gene expression correlation") +
-  theme(axis.text.x = element_text(angle=-90),
-        text = element_text(size=6),
-        panel.grid = element_blank(),
-        axis.line = element_blank(),
-        # axis.text.x=element_blank(),
-        # axis.text.y=element_blank(),
-        axis.ticks = element_blank(),
-        # axis.title.x=element_blank(),
-        # axis.title.y=element_blank(),
-        panel.background = element_blank()) +
-  coord_fixed()
-
-diag_cors <- diag(corMtx[pairs$rowix, pairs$colsix])
-
-# pdf(file = paste0(fig_path, "Fig_2_STdev-k8-theta-vs-gt-box.pdf"),   # The directory you want to save the file in
-#     width = 5, # The width of the plot in inches
-#     height = 3) # The height of the plot in inches
-par( mfrow = c(1,3) )
-boxplot(diag_cors,
-        medcol = "black", # medium line color
-        medlty = 1, # line type
-        medlwd = 1, # line width
-        boxfill = "white", # color fill of box
-        boxcol = "black", # outline color of box
-        boxlty = 1, # box line type
-        boxlwd = 1, # width of box line
-        whisklty = 1, # whisker type
-        whisklwd = 1,
-        staplelwd = 0, # the ends of the whiskers
-        outpch = 1, # type of outlies
-        outcex = 0,
-        main = "",
-        cex.main = 1,
-        xlab = "",
-        ylab = "Correlation") # size of outliers
-stripchart(diag_cors, vertical = TRUE, 
-    method = "jitter", add = TRUE, pch = 20, col = 'black')
-# dev.off()
-
-print("summary:")
-summary(diag_cors)
-
-```
+#### Gene ranks
 
 ```{r}
 
@@ -2560,10 +3352,21 @@ summary_df <- do.call(rbind, lapply(pairs$rowix, function(i){
         ct_df
 })) 
 
-ggplot(data = summary_df) +
-        geom_hex(aes(x = gexp_rank, y = beta_rank), bins=10) +
-        scale_fill_gradient(low = "white", high = "red") +
-        theme_classic()
+ggplot2::ggplot(data = summary_df) +
+        ggplot2::geom_hex(aes(x = gexp_rank, y = beta_rank), bins=10) +
+        ggplot2::scale_fill_gradient(low = "white", high = "red") +
+        ggplot2::labs(title = "Deconvolved vs ground truth transcriptional profile gene rank",
+                      x = "Ground truth gene expression level",
+                      y = "Deconvolved gene expression level") +
+        ggplot2::theme_classic()
+ggplot2::ggsave(filename = paste0("0_100um_75cts_gene_ranks_hex.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
 
 x <- summary_df$gexp_rank
 # y <- ct_df$beta
@@ -2576,6 +3379,149 @@ cor(x, y, method = "spearman")
 ```
 
 # ----------------------------------
+
+# Number of pixels benchmark
+
+```{r}
+numPixelsBenchmark <- readRDS("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/numPixelsBenchmark.Rds")
+```
+
+```{r}
+
+corpus <- as.matrix(simFN7$sim)
+Ks <- seq(3,10)
+numDocs <- c(3,5,10,50,100,150)
+# numDocs <- c(3,10,50,100)
+numReps <- seq(10)
+# numDocs <- c(3,5)
+# numReps <- seq(3)
+
+# Ks <- seq(2,3)
+# numDocs <- c(3,10)
+# numReps <- seq(1)
+
+numPixelsBenchmark <- do.call(rbind, lapply(numDocs, function(d){
+# for(d in numDocs){
+  combined_df <- data.frame(numDocs=character(),
+                            replicate=character(),
+                            K=character(),
+                            RMSE=double())
+  for(r in numReps){
+    set.seed(r)
+    ## for each replicate, get a sample of pixel of size d
+    s <- sample(nrow(corpus), d)
+    sampleCorpus <- corpus[s,]
+    gtCorpus <- simFN7$gtSpotTopics[s,]
+    ## drop cell-types that are 0 for all samples pixels
+    gtCorpus <- gtCorpus[,which(colSums(gtCorpus) > 0)]
+    
+    ## fit LDA models for each K in Ks on the sampled corpus
+    ldas <- fitLDA(counts = sampleCorpus,
+                   Ks = Ks,
+                   testSize = NULL,
+                   seed = seed,
+                   ncores = 7,
+                   plot = FALSE)
+    # get beta and theta of sampled pixels for each fitted LDA model
+    for(k in Ks){
+      res <- getBetaTheta(lda = optimalModel(models = ldas, opt = k),
+                          corpus = sampleCorpus)
+      ## compute rmse
+      ## get pairs of topics and ground truth cell types that correlate best
+      ## cannot have more rows than columns when pairing
+      if (ncol(res$theta) <= ncol(as.matrix(gtCorpus))){
+        theta_pairs <- lsatPairs(getCorrMtx(m1 = as.matrix(res$theta),
+                                            m2 = as.matrix(gtCorpus),
+                                            type = "t"))
+        predict_theta <- res$theta[,theta_pairs$rowix]
+        truth_theta <- gtCorpus[,theta_pairs$colsix]
+      } else {
+        theta_pairs <- lsatPairs(getCorrMtx(m1 = as.matrix(gtCorpus),
+                                            m2 = as.matrix(res$theta),
+                                            type = "t"))
+        predict_theta <- res$theta[,theta_pairs$colsix]
+        truth_theta <- gtCorpus[,theta_pairs$rowix]
+      }
+      ## the rmse for the pixels, for a given K and numDocs; and for each replicate of that combo
+      rmses <- unlist(lapply(seq(dim(truth_theta)[1]), function(i){
+        # for each spot, compute RMSE based on proportions across cts
+        # so a RMSE for each spots based on all the cts
+        actual <- as.vector(truth_theta[i,])
+        predict <- as.vector(predict_theta[i,])
+        mltools::rmse(preds = predict, actuals = actual)
+      }))
+      m <- data.frame(numDocs = rep(d, length(rmses)),
+                      replicate = rep(r, length(rmses)),
+                      K = rep(k, length(rmses)),
+                      RMSE = rmses)
+      combined_df <- rbind(combined_df, m)
+    }
+  }
+  combined_df
+}))
+
+numPixelsBenchmark
+
+```
+
+```{r}
+
+tmp_df <- numPixelsBenchmark[numPixelsBenchmark$K %in% c(8),]
+tmp_df <- tmp_df[tmp_df$numDocs %in% c(5,10,50,100,150),]
+
+## mean rmse for each replicate
+summary_df <- tmp_df %>%
+  group_by(numDocs, replicate) %>%
+  dplyr::summarize(MeanRMSE = mean(RMSE, na.rm=TRUE),
+                   n = n(),
+                   sd = sd(RMSE, na.rm=TRUE),
+                   se = sd/sqrt(n))
+
+## mean rmse for the means of all replicates for a given numDoc
+summary_df2 <- summary_df %>%
+  group_by(numDocs) %>%
+  dplyr::summarize(MeanRMSEreps = mean(MeanRMSE, na.rm=TRUE),
+                   n = n(),
+                   sd = sd(MeanRMSE, na.rm=TRUE),
+                   se = sd/sqrt(n))
+
+ggplot() +
+  geom_point(data = summary_df, aes(x = numDocs, y = MeanRMSE)) +
+  geom_line(data = summary_df2, aes(x = numDocs, y = MeanRMSEreps), lwd = 2) +
+  # geom_ribbon(aes(ymax = `Mean RMSE` + sd, ymin = `Mean RMSE` - sd, x = numDocs, fill = as.character(K)), alpha = 0.2, lwd = 0)
+  # guides(color=guide_legend(title="K (number of cell-types")) +
+  scale_x_continuous(breaks = c(5,10,50,100,150), labels = c(5,10,50,100,150)) +
+  labs(title = "STdeconvolve accuracy on MERFISH ST dataset",
+       x = "number of pixels", y = "mean RMSE") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 12),
+        axis.text.y = element_text(size = 12),
+        axis.title.x = element_text(size=15),
+        axis.title.y = element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        panel.grid.minor = ggplot2::element_blank(),
+        panel.grid.major = ggplot2::element_line(color = "black", size = 0.1)
+        )
+ggplot2::ggsave(filename = paste0("2_100um_8cts_numPixels_benchmark.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+# ----------------------------------
+
+Use the RMSE for each pixel Because each method would be compared to the same cell-type for each pixel, ok to use RMSE, as the units would technically be equivalent for all methods.
+
+But when comparing each cell-type individually, should normalize.
+
+Double check the the normalization is doing what you think it is.
+
+
 # RMSE
 
 ## SL 8 Cts
@@ -2646,8 +3592,8 @@ sl_k8_theta <- sl_FN7$thetaCt
 sl_k8_theta[sl_k8_theta < 0.025] <- 0
 
 # try just calling the unassigned proportions "ambiguous"
-ambig <- 1 - rowSums(sl_k8_theta)
-sl_k8_theta2 <- cbind(sl_k8_theta, ambig)
+# ambig <- 1 - rowSums(sl_k8_theta)
+# sl_k8_theta2 <- cbind(sl_k8_theta, ambig)
 
 # readjust proportions
 sl_k8_theta <- sl_k8_theta/rowSums(sl_k8_theta)
@@ -2662,7 +3608,7 @@ ggplot(data = reshape2::melt(sl_k8_theta)) +
 
 # drop ant cts that are 0 for all pixels
 sl_k8_theta <- sl_k8_theta[,which(colSums(sl_k8_theta) > 0)]
-sl_k8_theta2 <- sl_k8_theta2[,which(colSums(sl_k8_theta2) > 0)]
+# sl_k8_theta2 <- sl_k8_theta2[,which(colSums(sl_k8_theta2) > 0)]
 
 ```
 
@@ -2926,6 +3872,11 @@ sl_k75_theta <- sl_k75_theta[,which(colSums(sl_k75_theta) > 0)]
 sl_k75_theta2 <- sl_k75_theta2[,which(colSums(sl_k75_theta2) > 0)]
 
 ```
+
+```{r}
+m2 <- m2[rownames(m2) != "I-39",]
+```
+
 
 ```{r}
 
@@ -4503,7 +5454,7 @@ colnames(raw_RMSE_rctd_noNeur_8cts_cosine) <- colnames(truth_theta)
 
 ```
 
-
+## ----------------------------------
 ## Compare across spots
 
 Spots:
@@ -4550,147 +5501,208 @@ raw_8cts <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots),
 
 ggplot(data = reshape2::melt(raw_8cts),
        aes(x = variable, y = value, fill = variable)) +
-  geom_boxplot(outlier.shape=NA) +
-  geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
-  labs(title = "MERFISH cell-type predictions in FN7 spots",
+  # geom_boxplot(outlier.shape=NA) +
+  # geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) +
+  ggplot2::geom_violin(trim=TRUE, fill="gray") +
+  ggplot2::geom_boxplot(width=0.1, outlier.shape=NA, fill="white") +
+  labs(title = "Deconvolution accuracy across simulated MERFISH pixels",
        x = "Method", y = "RMSE") +
   theme_classic() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-# ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
-#        device = "pdf",
-#        path = fig_path,
-#        scale = 1.5,
-#        width = 5,
-#        height = 4,
-#        units = c("in"),
-#        dpi = 600)
+  theme(axis.text.x = element_text(angle = 0, size = 15),
+        axis.text.y = element_text(size=15),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        legend.position = "none") +
+ggplot2::ggsave(filename = paste0("1_100um_8cts_RMSE_lda_sl_rctd.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
 
 raw_8cts <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots),
-                        "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots),
-                        "RCTD noNeuro" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots))
+                        "SPOTlight\nmissing neuronals" = as.vector(raw_RMSE_sl_noNeur_8cts_spots),
+                        "RCTD\nmissing neuronals" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots))
 
-ggplot(data = reshape2::melt(raw_8cts),
+dat <- reshape2::melt(raw_8cts)
+
+dat$variable <- factor(dat$variable)
+levels(dat$variable) <- c('STdeconvolve', 'SPOTlight\nmissing neuronals', 'RCTD\nmissing neuronals')
+
+ggplot(data = dat,
        aes(x = variable, y = value, fill = variable)) +
-  geom_boxplot(outlier.shape=NA) +
-  geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
-  labs(title = "MERFISH cell-type predictions in FN7 spots",
+  # geom_boxplot(outlier.shape=NA) +
+  # geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) +
+  ggplot2::geom_violin(trim=TRUE, fill="gray") +
+  ggplot2::geom_boxplot(width=0.1, outlier.shape=NA, fill="white") +
+  labs(title = "Deconvolution accuracy across simulated MERFISH pixels",
        x = "Method", y = "RMSE") +
   theme_classic() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-# ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
-#        device = "pdf",
-#        path = fig_path,
-#        scale = 1.5,
-#        width = 5,
-#        height = 4,
-#        units = c("in"),
-#        dpi = 600)
+  theme(axis.text.x = element_text(angle = 0, size = 15),
+        axis.text.y = element_text(size=15),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        legend.position = "none") +
+ggplot2::ggsave(filename = paste0("1_100um_8cts_RMSE_lda_sl_rctd_noNeuros.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+
+raw_8cts <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots),
+                       "SPOTlight" = as.vector(raw_RMSE_sl_8cts_spots),
+                        "RCTD" = as.vector(raw_RMSE_rctd_8cts_spots),
+                        "SPOTlight\nmissing neuronals" = as.vector(raw_RMSE_sl_noNeur_8cts_spots),
+                        "RCTD\nmissing neuronals" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots))
+
+dat <- reshape2::melt(raw_8cts)
+
+dat$variable <- factor(dat$variable)
+levels(dat$variable) <- c('STdeconvolve', 'SPOTlight', 'RCTD', 'SPOTlight\nmissing neuronals', 'RCTD\nmissing neuronals')
+
+ggplot(data = dat,
+       aes(x = variable, y = value, fill = variable)) +
+  # geom_boxplot(outlier.shape=NA) +
+  # geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) +
+  ggplot2::geom_violin(trim=TRUE, fill="gray") +
+  ggplot2::geom_boxplot(width=0.1, outlier.shape=NA, fill="white") +
+  labs(title = "Deconvolution accuracy across simulated MERFISH pixels",
+       x = "Method", y = "RMSE") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 15),
+        axis.text.y = element_text(size=15),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        legend.position = "none") +
+ggplot2::ggsave(filename = paste0("1_100um_8cts_RMSE_lda_sl_rctd_noNeuros_all.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 8,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
 
 # -----------------------------------------------------------------------------
 
-raw_8cts_adj <- data.frame("SPOTlight" = as.vector(raw_RMSE_sl_8cts_spots_adj),
-                        "RCTD" = as.vector(raw_RMSE_rctd_8cts_spots_adj),
-                        "STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots_adj),
-                        "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots_adj),
-                        "RCTD noNeuro" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots_adj))
-summary(raw_8cts_adj)
-write.csv(summary(raw_8cts_adj), paste0(fig_path, "rmse_raw_8cts_adj.csv"))
-
-raw_8cts_adj <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots_adj),
-                        "SPOTlight" = as.vector(raw_RMSE_sl_8cts_spots_adj),
-                        "RCTD" = as.vector(raw_RMSE_rctd_8cts_spots_adj)
-                        )
-
-ggplot(data = reshape2::melt(raw_8cts_adj),
-       aes(x = variable, y = value, fill = variable)) +
-  geom_boxplot(outlier.shape=NA) +
-  geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
-  labs(title = "MERFISH cell-type predictions in FN7 spots; sd adj",
-       x = "Method", y = "NRMSE") +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-# ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
-#        device = "pdf",
-#        path = fig_path,
-#        scale = 1.5,
-#        width = 5,
-#        height = 4,
-#        units = c("in"),
-#        dpi = 600)
-
-raw_8cts_adj <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots_adj),
-                        "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots_adj),
-                        "RCTD noNeuro" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots_adj))
-
-ggplot(data = reshape2::melt(raw_8cts_adj),
-       aes(x = variable, y = value, fill = variable)) +
-  geom_boxplot(outlier.shape=NA) +
-  geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
-  labs(title = "MERFISH cell-type predictions in FN7 spots, sd adj",
-       x = "Method", y = "NRMSE") +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-# ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
-#        device = "pdf",
-#        path = fig_path,
-#        scale = 1.5,
-#        width = 5,
-#        height = 4,
-#        units = c("in"),
-#        dpi = 600)
+# raw_8cts_adj <- data.frame("SPOTlight" = as.vector(raw_RMSE_sl_8cts_spots_adj),
+#                         "RCTD" = as.vector(raw_RMSE_rctd_8cts_spots_adj),
+#                         "STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots_adj),
+#                         "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots_adj),
+#                         "RCTD noNeuro" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots_adj))
+# summary(raw_8cts_adj)
+# write.csv(summary(raw_8cts_adj), paste0(fig_path, "rmse_raw_8cts_adj.csv"))
+# 
+# raw_8cts_adj <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots_adj),
+#                         "SPOTlight" = as.vector(raw_RMSE_sl_8cts_spots_adj),
+#                         "RCTD" = as.vector(raw_RMSE_rctd_8cts_spots_adj)
+#                         )
+# 
+# ggplot(data = reshape2::melt(raw_8cts_adj),
+#        aes(x = variable, y = value, fill = variable)) +
+#   geom_boxplot(outlier.shape=NA) +
+#   geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
+#   labs(title = "MERFISH cell-type predictions in FN7 spots; sd adj",
+#        x = "Method", y = "NRMSE") +
+#   theme_classic() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# # ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
+# #        device = "pdf",
+# #        path = fig_path,
+# #        scale = 1.5,
+# #        width = 5,
+# #        height = 4,
+# #        units = c("in"),
+# #        dpi = 600)
+# 
+# raw_8cts_adj <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots_adj),
+#                         "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots_adj),
+#                         "RCTD noNeuro" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots_adj))
+# 
+# ggplot(data = reshape2::melt(raw_8cts_adj),
+#        aes(x = variable, y = value, fill = variable)) +
+#   geom_boxplot(outlier.shape=NA) +
+#   geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
+#   labs(title = "MERFISH cell-type predictions in FN7 spots, sd adj",
+#        x = "Method", y = "NRMSE") +
+#   theme_classic() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# # ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
+# #        device = "pdf",
+# #        path = fig_path,
+# #        scale = 1.5,
+# #        width = 5,
+# #        height = 4,
+# #        units = c("in"),
+# #        dpi = 600)
 
 # -----------------------------------------------------------------------------
 
-raw_8cts_cosine <- data.frame("SPOTlight" = as.vector(raw_RMSE_sl_8cts_spots_cosine),
-                        "RCTD" = as.vector(raw_RMSE_rctd_8cts_spots_cosine),
-                        "STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots_cosine),
-                        "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots_cosine),
-                        "RCTD noNeuro" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots_cosine))
-summary(raw_8cts_cosine)
-write.csv(summary(raw_8cts_cosine), paste0(fig_path, "rmse_raw_8cts_cosine.csv"))
-
-raw_8cts_cosine <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots_cosine),
-                        "SPOTlight" = as.vector(raw_RMSE_sl_8cts_spots_cosine),
-                        "RCTD" = as.vector(raw_RMSE_rctd_8cts_spots_cosine)
-                        )
-
-ggplot(data = reshape2::melt(raw_8cts_cosine),
-       aes(x = variable, y = value, fill = variable)) +
-  geom_boxplot(outlier.shape=NA) +
-  geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
-  labs(title = "MERFISH cell-type predictions in FN7 spots; cosine",
-       x = "Method", y = "Cosine Similarity") +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-# ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
-#        device = "pdf",
-#        path = fig_path,
-#        scale = 1.5,
-#        width = 5,
-#        height = 4,
-#        units = c("in"),
-#        dpi = 600)
-
-raw_8cts_cosine <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots_cosine),
-                        "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots_cosine),
-                        "RCTD noNeuro" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots_cosine))
-
-ggplot(data = reshape2::melt(raw_8cts_cosine),
-       aes(x = variable, y = value, fill = variable)) +
-  geom_boxplot(outlier.shape=NA) +
-  geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
-  labs(title = "MERFISH cell-type predictions in FN7 spots, cosine",
-       x = "Method", y = "Cosine Similarity") +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-# ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
-#        device = "pdf",
-#        path = fig_path,
-#        scale = 1.5,
-#        width = 5,
-#        height = 4,
-#        units = c("in"),
-#        dpi = 600)
+# raw_8cts_cosine <- data.frame("SPOTlight" = as.vector(raw_RMSE_sl_8cts_spots_cosine),
+#                         "RCTD" = as.vector(raw_RMSE_rctd_8cts_spots_cosine),
+#                         "STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots_cosine),
+#                         "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots_cosine),
+#                         "RCTD noNeuro" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots_cosine))
+# summary(raw_8cts_cosine)
+# write.csv(summary(raw_8cts_cosine), paste0(fig_path, "rmse_raw_8cts_cosine.csv"))
+# 
+# raw_8cts_cosine <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots_cosine),
+#                         "SPOTlight" = as.vector(raw_RMSE_sl_8cts_spots_cosine),
+#                         "RCTD" = as.vector(raw_RMSE_rctd_8cts_spots_cosine)
+#                         )
+# 
+# ggplot(data = reshape2::melt(raw_8cts_cosine),
+#        aes(x = variable, y = value, fill = variable)) +
+#   geom_boxplot(outlier.shape=NA) +
+#   geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
+#   labs(title = "MERFISH cell-type predictions in FN7 spots; cosine",
+#        x = "Method", y = "Cosine Similarity") +
+#   theme_classic() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# # ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
+# #        device = "pdf",
+# #        path = fig_path,
+# #        scale = 1.5,
+# #        width = 5,
+# #        height = 4,
+# #        units = c("in"),
+# #        dpi = 600)
+# 
+# raw_8cts_cosine <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots_cosine),
+#                         "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots_cosine),
+#                         "RCTD noNeuro" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots_cosine))
+# 
+# ggplot(data = reshape2::melt(raw_8cts_cosine),
+#        aes(x = variable, y = value, fill = variable)) +
+#   geom_boxplot(outlier.shape=NA) +
+#   geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
+#   labs(title = "MERFISH cell-type predictions in FN7 spots, cosine",
+#        x = "Method", y = "Cosine Similarity") +
+#   theme_classic() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# # ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
+# #        device = "pdf",
+# #        path = fig_path,
+# #        scale = 1.5,
+# #        width = 5,
+# #        height = 4,
+# #        units = c("in"),
+# #        dpi = 600)
 
 ```
 
@@ -4713,20 +5725,24 @@ raw_75cts <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_75cts_spots),
 
 ggplot(data = reshape2::melt(raw_75cts),
        aes(x = variable, y = value, fill = variable)) +
-  geom_boxplot(outlier.shape=NA) +
-  geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
-  labs(title = "MERFISH cell-subtype predictions in FN7 spots",
+  # geom_boxplot(outlier.shape=NA) +
+  # geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) +
+  ggplot2::geom_violin(trim=TRUE, fill="gray") +
+  ggplot2::geom_boxplot(width=0.1, outlier.shape=NA, fill="white") +
+  labs(title = "Deconvolution accuracy across simulated MERFISH pixels\n100 micron pixels, 75 cell-types",
        x = "Method", y = "RMSE") +
   theme_classic() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-# ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
-#        device = "pdf",
-#        path = fig_path,
-#        scale = 1.5,
-#        width = 5,
-#        height = 4,
-#        units = c("in"),
-#        dpi = 600)
+  theme(axis.text.x = element_text(angle = 0, size = 10),
+        axis.text.y=element_text(size=10),
+        legend.position = "none")
+ggplot2::ggsave(filename = paste0("1_100um_75cts_RMSE_lda_sl_rctd.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
 
 # raw_8cts <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots),
 #                         "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots),
@@ -4751,35 +5767,35 @@ ggplot(data = reshape2::melt(raw_75cts),
 
 # -----------------------------------------------------------------------------
 
-raw_75cts_adj <- data.frame("SPOTlight" = as.vector(raw_RMSE_sl_75cts_spots_adj),
-                        "RCTD" = as.vector(raw_RMSE_rctd_75cts_spots_adj),
-                        "STdeconvolve" = as.vector(raw_RMSE_lda_75cts_spots_adj),
-                        "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots_adj),
-                        "RCTD noNeuro" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots_adj))
-summary(raw_75cts_adj)
-write.csv(summary(raw_75cts_adj), paste0(fig_path, "rmse_raw_75cts_adj.csv"))
-
-raw_75cts_adj <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_75cts_spots_adj),
-                        "SPOTlight" = as.vector(raw_RMSE_sl_75cts_spots_adj),
-                        "RCTD" = as.vector(raw_RMSE_rctd_75cts_spots_adj)
-                        )
-
-ggplot(data = reshape2::melt(raw_75cts_adj),
-       aes(x = variable, y = value, fill = variable)) +
-  geom_boxplot(outlier.shape=NA) +
-  geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
-  labs(title = "MERFISH cell-subtype predictions in FN7 spots; sd adj",
-       x = "Method", y = "NRMSE") +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-# ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
-#        device = "pdf",
-#        path = fig_path,
-#        scale = 1.5,
-#        width = 5,
-#        height = 4,
-#        units = c("in"),
-#        dpi = 600)
+# raw_75cts_adj <- data.frame("SPOTlight" = as.vector(raw_RMSE_sl_75cts_spots_adj),
+#                         "RCTD" = as.vector(raw_RMSE_rctd_75cts_spots_adj),
+#                         "STdeconvolve" = as.vector(raw_RMSE_lda_75cts_spots_adj),
+#                         "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots_adj),
+#                         "RCTD noNeuro" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots_adj))
+# summary(raw_75cts_adj)
+# write.csv(summary(raw_75cts_adj), paste0(fig_path, "rmse_raw_75cts_adj.csv"))
+# 
+# raw_75cts_adj <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_75cts_spots_adj),
+#                         "SPOTlight" = as.vector(raw_RMSE_sl_75cts_spots_adj),
+#                         "RCTD" = as.vector(raw_RMSE_rctd_75cts_spots_adj)
+#                         )
+# 
+# ggplot(data = reshape2::melt(raw_75cts_adj),
+#        aes(x = variable, y = value, fill = variable)) +
+#   geom_boxplot(outlier.shape=NA) +
+#   geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
+#   labs(title = "MERFISH cell-subtype predictions in FN7 spots; sd adj",
+#        x = "Method", y = "NRMSE") +
+#   theme_classic() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# # ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
+# #        device = "pdf",
+# #        path = fig_path,
+# #        scale = 1.5,
+# #        width = 5,
+# #        height = 4,
+# #        units = c("in"),
+# #        dpi = 600)
 
 # raw_8cts_adj <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots_adj),
 #                         "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots_adj),
@@ -4804,35 +5820,35 @@ ggplot(data = reshape2::melt(raw_75cts_adj),
 
 # -----------------------------------------------------------------------------
 
-raw_75cts_cosine <- data.frame("SPOTlight" = as.vector(raw_RMSE_sl_75cts_spots_cosine),
-                        "RCTD" = as.vector(raw_RMSE_rctd_75cts_spots_cosine),
-                        "STdeconvolve" = as.vector(raw_RMSE_lda_75cts_spots_cosine),
-                        "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots_cosine),
-                        "RCTD noNeuro" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots_cosine))
-summary(raw_75cts_cosine)
-write.csv(summary(raw_75cts_cosine), paste0(fig_path, "rmse_raw_75cts_cosine.csv"))
-
-raw_75cts_cosine <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_75cts_spots_cosine),
-                        "SPOTlight" = as.vector(raw_RMSE_sl_75cts_spots_cosine),
-                        "RCTD" = as.vector(raw_RMSE_rctd_75cts_spots_cosine)
-                        )
-
-ggplot(data = reshape2::melt(raw_75cts_cosine),
-       aes(x = variable, y = value, fill = variable)) +
-  geom_boxplot(outlier.shape=NA) +
-  geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
-  labs(title = "MERFISH cell-subtype predictions in FN7 spots; cosine",
-       x = "Method", y = "Cosine Similarity") +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-# ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
-#        device = "pdf",
-#        path = fig_path,
-#        scale = 1.5,
-#        width = 5,
-#        height = 4,
-#        units = c("in"),
-#        dpi = 600)
+# raw_75cts_cosine <- data.frame("SPOTlight" = as.vector(raw_RMSE_sl_75cts_spots_cosine),
+#                         "RCTD" = as.vector(raw_RMSE_rctd_75cts_spots_cosine),
+#                         "STdeconvolve" = as.vector(raw_RMSE_lda_75cts_spots_cosine),
+#                         "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots_cosine),
+#                         "RCTD noNeuro" = as.vector(raw_RMSE_rctd_noNeur_8cts_spots_cosine))
+# summary(raw_75cts_cosine)
+# write.csv(summary(raw_75cts_cosine), paste0(fig_path, "rmse_raw_75cts_cosine.csv"))
+# 
+# raw_75cts_cosine <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_75cts_spots_cosine),
+#                         "SPOTlight" = as.vector(raw_RMSE_sl_75cts_spots_cosine),
+#                         "RCTD" = as.vector(raw_RMSE_rctd_75cts_spots_cosine)
+#                         )
+# 
+# ggplot(data = reshape2::melt(raw_75cts_cosine),
+#        aes(x = variable, y = value, fill = variable)) +
+#   geom_boxplot(outlier.shape=NA) +
+#   geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) + 
+#   labs(title = "MERFISH cell-subtype predictions in FN7 spots; cosine",
+#        x = "Method", y = "Cosine Similarity") +
+#   theme_classic() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# # ggsave(filename = "Fig_2-RMSEraw-mjr-cts.pdf",
+# #        device = "pdf",
+# #        path = fig_path,
+# #        scale = 1.5,
+# #        width = 5,
+# #        height = 4,
+# #        units = c("in"),
+# #        dpi = 600)
 
 # raw_8cts_cosine <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots_cosine),
 #                         "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots_cosine),
@@ -4857,6 +5873,11 @@ ggplot(data = reshape2::melt(raw_75cts_cosine),
 
 ```
 
+rmse differ between 8 and 75 because proportions of the 75 cts are much smaller
+
+but comparing cell-type to cell-type should normalize before comparing
+
+## ----------------------------------
 ## Compare across cell types
 
 cts:
@@ -4915,7 +5936,7 @@ raw_RMSE_sl_8cts_df <- data.frame("Cell type" = cts,
                              # "Bregma" = breg,
                              "RMSE kind" = rmse_type,
                              "Method" = tool,
-                             "Proportion" = proportion,
+                             "Proportion" = proportion, # overall proportion in ground truth dataset
                              "Max spot proportion" = spot_max,
                              "Median spot proportion" = spot_median,
                              "Spot proportion std" = spot_sd)
@@ -4976,7 +5997,7 @@ l_eachCt <- raw_RMSE_sl_noNeur_8cts
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("SPOTlight No Neuro", length(cts))
+tool <- rep("SPOTlight missing neuronals", length(cts))
 rmse_type <- rep("Raw", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_cellTypeTable)/sum(colSums(FN7_cellTypeTable))
@@ -5002,7 +6023,7 @@ l_eachCt <- raw_RMSE_rctd_noNeur_8cts
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("RCTD No Neuro", length(cts))
+tool <- rep("RCTD missing neuronals", length(cts))
 rmse_type <- rep("Raw", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_cellTypeTable)/sum(colSums(FN7_cellTypeTable))
@@ -5270,7 +6291,7 @@ l_eachCt <- raw_RMSE_sl_noNeur_8cts_nrmse
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("SPOTlight No Neuro", length(cts))
+tool <- rep("SPOTlight missing neuronals", length(cts))
 rmse_type <- rep("NRMSE", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_cellTypeTable)/sum(colSums(FN7_cellTypeTable))
@@ -5296,7 +6317,7 @@ l_eachCt <- raw_RMSE_rctd_noNeur_8cts_nrmse
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("RCTD No Neuro", length(cts))
+tool <- rep("RCTD missing neuronals", length(cts))
 rmse_type <- rep("NRMSE", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_cellTypeTable)/sum(colSums(FN7_cellTypeTable))
@@ -5419,7 +6440,7 @@ l_eachCt <- raw_RMSE_sl_noNeur_8cts_cosine
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("SPOTlight No Neuro", length(cts))
+tool <- rep("SPOTlight missing neuronals", length(cts))
 rmse_type <- rep("Cosine", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_cellTypeTable)/sum(colSums(FN7_cellTypeTable))
@@ -5445,7 +6466,7 @@ l_eachCt <- raw_RMSE_rctd_noNeur_8cts_cosine
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("RCTD No Neuro", length(cts))
+tool <- rep("RCTD missing neuronals", length(cts))
 rmse_type <- rep("Cosine", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_cellTypeTable)/sum(colSums(FN7_cellTypeTable))
@@ -5488,7 +6509,7 @@ l_eachCt <- raw_RMSE_sl_75cts
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("SPOTlight all cts", length(cts))
+tool <- rep("SPOTlight", length(cts))
 rmse_type <- rep("Raw", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_neuro_cellTypeTable)/sum(colSums(FN7_neuro_cellTypeTable))
@@ -5514,7 +6535,7 @@ l_eachCt <- raw_RMSE_rctd_75cts
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("RCTD all cts", length(cts))
+tool <- rep("RCTD", length(cts))
 rmse_type <- rep("Raw", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_neuro_cellTypeTable)/sum(colSums(FN7_neuro_cellTypeTable))
@@ -5540,7 +6561,7 @@ l_eachCt <- raw_RMSE_lda_75cts
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("STdeconvolve all cts", length(cts))
+tool <- rep("STdeconvolve", length(cts))
 rmse_type <- rep("Raw", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_neuro_cellTypeTable)/sum(colSums(FN7_neuro_cellTypeTable))
@@ -5577,7 +6598,7 @@ l_eachCt <- scaled_RMSE_sl_75cts
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("SPOTlight all cts", length(cts))
+tool <- rep("SPOTlight", length(cts))
 rmse_type <- rep("Scaled", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_neuro_cellTypeTable)/sum(colSums(FN7_neuro_cellTypeTable))
@@ -5603,7 +6624,7 @@ l_eachCt <- scaled_RMSE_rctd_75cts
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("RCTD all cts", length(cts))
+tool <- rep("RCTD", length(cts))
 rmse_type <- rep("Scaled", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_neuro_cellTypeTable)/sum(colSums(FN7_neuro_cellTypeTable))
@@ -5629,7 +6650,7 @@ l_eachCt <- scaled_RMSE_lda_75cts
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("STdeconvolve all cts", length(cts))
+tool <- rep("STdeconvolve", length(cts))
 rmse_type <- rep("Scaled", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_neuro_cellTypeTable)/sum(colSums(FN7_neuro_cellTypeTable))
@@ -5666,7 +6687,7 @@ l_eachCt <- raw_RMSE_sl_75cts_nrmse
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("SPOTlight all cts", length(cts))
+tool <- rep("SPOTlight", length(cts))
 rmse_type <- rep("NRMSE", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_neuro_cellTypeTable)/sum(colSums(FN7_neuro_cellTypeTable))
@@ -5692,7 +6713,7 @@ l_eachCt <- raw_RMSE_rctd_75cts_nrmse
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("RCTD all cts", length(cts))
+tool <- rep("RCTD", length(cts))
 rmse_type <- rep("NRMSE", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_neuro_cellTypeTable)/sum(colSums(FN7_neuro_cellTypeTable))
@@ -5718,7 +6739,7 @@ l_eachCt <- raw_RMSE_lda_75cts_nrmse
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("STdeconvolve all cts", length(cts))
+tool <- rep("STdeconvolve", length(cts))
 rmse_type <- rep("NRMSE", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_neuro_cellTypeTable)/sum(colSums(FN7_neuro_cellTypeTable))
@@ -5755,7 +6776,7 @@ l_eachCt <- raw_RMSE_sl_75cts_cosine
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("SPOTlight all cts", length(cts))
+tool <- rep("SPOTlight", length(cts))
 rmse_type <- rep("Cosine", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_neuro_cellTypeTable)/sum(colSums(FN7_neuro_cellTypeTable))
@@ -5781,7 +6802,7 @@ l_eachCt <- raw_RMSE_rctd_75cts_cosine
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("RCTD all cts", length(cts))
+tool <- rep("RCTD", length(cts))
 rmse_type <- rep("Cosine", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_neuro_cellTypeTable)/sum(colSums(FN7_neuro_cellTypeTable))
@@ -5807,7 +6828,7 @@ l_eachCt <- raw_RMSE_lda_75cts_cosine
 cts <- labels(l_eachCt)[[2]]
 rmses <- as.vector(l_eachCt)
 # breg <- rep(ix, length(cts))
-tool <- rep("STdeconvolve all cts", length(cts))
+tool <- rep("STdeconvolve", length(cts))
 rmse_type <- rep("Cosine", length(cts))
 # total ct proportions
 tot_p <- colSums(FN7_neuro_cellTypeTable)/sum(colSums(FN7_neuro_cellTypeTable))
@@ -5842,80 +6863,6 @@ k8_raw_ct_rmse_summary
 k8_scaled_ct_rmse_summary
 k75_raw_ct_rmse_summary
 k75_scaled_ct_rmse_summary
-
-```{r}
-
-ggplot(data = k8_raw_ct_rmse_summary_nrmse, aes(x = Method, y = RMSE, color = Cell.type)) +
-  geom_point(position=position_jitterdodge(0.1), cex=1) +
-  # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
-  # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
-  # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-        # panel.grid = element_blank(),
-        # axis.line=element_blank(),
-        # axis.text.x=element_blank(),
-        # axis.text.y=element_blank(),
-        # axis.ticks=element_blank(),
-        axis.title.x=element_blank(),
-        axis.title.y=element_blank(),
-        panel.background=element_blank()
-        ) +
-  ggtitle("NRMSE")
-
-ggplot(data = k75_raw_ct_rmse_summary_nrmse, aes(x = Method, y = RMSE, color = Cell.type)) +
-  geom_point(position=position_jitterdodge(0.1), cex=1) +
-  # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
-  # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
-  # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-        # panel.grid = element_blank(),
-        # axis.line=element_blank(),
-        # axis.text.x=element_blank(),
-        # axis.text.y=element_blank(),
-        # axis.ticks=element_blank(),
-        axis.title.x=element_blank(),
-        axis.title.y=element_blank(),
-        panel.background=element_blank()
-        ) +
-  ggtitle("NRMSE")
-
-ggplot(data = k8_raw_ct_rmse_summary_cosine, aes(x = Method, y = RMSE, color = Cell.type)) +
-  geom_point(position=position_jitterdodge(0.1), cex=1) +
-  # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
-  # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
-  # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-        # panel.grid = element_blank(),
-        # axis.line=element_blank(),
-        # axis.text.x=element_blank(),
-        # axis.text.y=element_blank(),
-        # axis.ticks=element_blank(),
-        axis.title.x=element_blank(),
-        axis.title.y=element_blank(),
-        panel.background=element_blank()
-        ) +
-  ggtitle("Cosine Similarity")
-
-ggplot(data = k75_raw_ct_rmse_summary_cosine, aes(x = Method, y = RMSE, color = Cell.type)) +
-  geom_point(position=position_jitterdodge(0.1), cex=1) +
-  # geom_jitter(aes(x = variable, y = value, color = group), position=position_jitter(0.1), cex=0.1) +
-  # geom_jitter(data = reshape2::melt(truth_theta), aes(x = Var2, y = value), position=position_jitter(0.1), cex=0.1) +
-  # scale_y_continuous(breaks = seq(0,max(predict_theta),1)) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-        # panel.grid = element_blank(),
-        # axis.line=element_blank(),
-        # axis.text.x=element_blank(),
-        # axis.text.y=element_blank(),
-        # axis.ticks=element_blank(),
-        axis.title.x=element_blank(),
-        axis.title.y=element_blank(),
-        panel.background=element_blank()
-        ) +
-  ggtitle("Cosine Similarity")
-
-```
-
-
 
 ```{r, fig.height=4, fig.width=10}
 
@@ -5991,31 +6938,106 @@ ggplot(data = k75_raw_ct_rmse_summary_cosine, aes(x = Method, y = RMSE)) +
 
 Looking closer, SPOTlight also does worse with ODs. LDA does well for Inhibatory subtypes - sometimes better than RCTD and SPOTlight
 
+
+Proportion = overall proportion in ground truth dataset
+
+#### 8 cell-types each method
+
 ```{r, fig.height=6, fig.width=12}
 
-ggplot(data = k8_raw_ct_rmse_summary, aes(x = Proportion, y = RMSE, color = Cell.type)) +
-  geom_point() +
-  facet_wrap(~Method) +
-  theme_classic() +
-  labs(title = "MERFISH 8 cell-type predictions by method", y = "RMSE")
-
-ggplot(data = k8_scaled_ct_rmse_summary, aes(x = Proportion, y = RMSE, color = Cell.type)) +
-  geom_point() +
-  facet_wrap(~Method) +
-  theme_classic() +
-  labs(title = "MERFISH 8 cell-type predictions by method", y = "Scaled RMSE")
-
 ggplot(data = k8_raw_ct_rmse_summary_nrmse, aes(x = Proportion, y = RMSE, color = Cell.type)) +
-  geom_point() +
+  geom_point(size=3) +
   facet_wrap(~Method) +
   theme_classic() +
-  labs(title = "MERFISH 8 cell-type predictions by method", y = "NRMSE")
+  theme(axis.text.x = element_text(angle = 0, size = 13),
+        axis.text.y=element_text(size=15),
+        strip.text = element_text(size=15),
+        # axis.title.x = element_text(size=15),
+        # axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=18, face=NULL)) +
+  labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 8 cell-types", y = "Normalized RMSE",
+       x = "proportion in ground truth dataset") +
+  guides(color=guide_legend(title="Cell-types"))
+ggplot2::ggsave(filename = paste0("2_100um_8cts_NRMSE_vs_proportion.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 7,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+ggplot(data = k8_raw_ct_rmse_summary_nrmse, aes(x = Spot.proportion.std, y = RMSE, color = Cell.type)) +
+  geom_point(size=3) +
+  facet_wrap(~Method) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 13),
+        axis.text.y=element_text(size=15),
+        strip.text = element_text(size=15),
+        # axis.title.x = element_text(size=15),
+        # axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=18, face=NULL)) +
+  labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 8 cell-types", y = "Normalized RMSE",
+       x = "Pixel proportion std") +
+  guides(color=guide_legend(title="Cell-types"))
+ggplot2::ggsave(filename = paste0("2_100um_8cts_NRMSE_vs_std.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 7,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+## ----------------------------------------------------------------
 
 ggplot(data = k8_raw_ct_rmse_summary_cosine, aes(x = Proportion, y = RMSE, color = Cell.type)) +
-  geom_point() +
+  geom_point(size=3) +
   facet_wrap(~Method) +
   theme_classic() +
-  labs(title = "MERFISH 8 cell-type predictions by method", y = "Cosine Similarity")
+  theme(axis.text.x = element_text(angle = 0, size = 13),
+        axis.text.y=element_text(size=15),
+        strip.text = element_text(size=15),
+        # axis.title.x = element_text(size=15),
+        # axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=18, face=NULL)) +
+  labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 8 cell-types", y = "Cosine Similarity",
+       x = "proportion in ground truth dataset") +
+  guides(color=guide_legend(title="Cell-types"))
+ggplot2::ggsave(filename = paste0("2_100um_8cts_Cosine_vs_proportion.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 7,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+ggplot(data = k8_raw_ct_rmse_summary_cosine, aes(x = Spot.proportion.std, y = RMSE, color = Cell.type)) +
+  geom_point(size=3) +
+  facet_wrap(~Method) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 13),
+        axis.text.y=element_text(size=15),
+        strip.text = element_text(size=15),
+        # axis.title.x = element_text(size=15),
+        # axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=18, face=NULL)) +
+  labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 8 cell-types", y = "Cosine Similarity",
+       x = "Pixel proportion std") +
+  guides(color=guide_legend(title="Cell-types"))
+ggplot2::ggsave(filename = paste0("2_100um_8cts_Cosine_vs_std.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 7,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
 
 ```
 
@@ -6049,125 +7071,120 @@ ggplot(data = k75_raw_ct_rmse_summary_cosine, aes(x = Proportion, y = RMSE, colo
 
 ```
 
+```{r}
+
+k75_raw_ct_rmse_summary_nrmse[k75_raw_ct_rmse_summary_nrmse$Cell.type != "I-39",]
+
+```
+
+#### 75 cell-types each method
+
+```{r, fig.height=4, fig.width=12}
+
+# only 1 I-39 cell in ref. Inflates the NRMSE. Remove
+dat <- k75_raw_ct_rmse_summary_nrmse[k75_raw_ct_rmse_summary_nrmse$Cell.type != "I-39",]
+
+ggplot(data = dat, aes(x = Proportion, y = RMSE, color = Cell.type)) +
+  geom_point(size=1) +
+  facet_wrap(~Method) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 10),
+        axis.text.y=element_text(size=15),
+        strip.text = element_text(size=15),
+        # axis.title.x = element_text(size=15),
+        # axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=18, face=NULL)) +
+  labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 75 cell-types", y = "Normalized RMSE",
+       x = "proportion of ground truth dataset") +
+  guides(color=guide_legend(title="Cell-types", ncol = 6))
+ggplot2::ggsave(filename = paste0("2_100um_75cts_NRMSE_vs_proportion.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 8.5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+ggplot(data = dat, aes(x = Spot.proportion.std, y = RMSE, color = Cell.type)) +
+  geom_point(size=1) +
+  facet_wrap(~Method) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 10),
+        axis.text.y=element_text(size=15),
+        strip.text = element_text(size=15),
+        # axis.title.x = element_text(size=15),
+        # axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=18, face=NULL)) +
+  labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 75 cell-types", y = "Normalized RMSE",
+       x = "pixel proportion std") +
+  guides(color=guide_legend(title="Cell-types", ncol = 6))
+ggplot2::ggsave(filename = paste0("2_100um_75cts_NRMSE_vs_std.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 8.5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+## ----------------------------------------------------------------
+
+dat <- k75_raw_ct_rmse_summary_cosine[k75_raw_ct_rmse_summary_cosine$Cell.type != "I-39",]
+
+ggplot(data = dat, aes(x = Proportion, y = RMSE, color = Cell.type)) +
+  geom_point(size=1) +
+  facet_wrap(~Method) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 10),
+        axis.text.y=element_text(size=15),
+        strip.text = element_text(size=15),
+        # axis.title.x = element_text(size=15),
+        # axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=18, face=NULL)) +
+  labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 75 cell-types", y = "Cosine Similarity",
+       x = "proportion of ground truth dataset") +
+  guides(color=guide_legend(title="Cell-types", ncol = 6))
+ggplot2::ggsave(filename = paste0("2_100um_75cts_Cosine_vs_proportion.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 8.5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+ggplot(data = dat, aes(x = Spot.proportion.std, y = RMSE, color = Cell.type)) +
+  geom_point(size=1) +
+  facet_wrap(~Method) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 10),
+        axis.text.y=element_text(size=15),
+        strip.text = element_text(size=15),
+        # axis.title.x = element_text(size=15),
+        # axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=18, face=NULL)) +
+  labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 75 cell-types", y = "Cosine Similarity",
+       x = "pixel proportion std") +
+  guides(color=guide_legend(title="Cell-types", ncol = 6))
+ggplot2::ggsave(filename = paste0("2_100um_75cts_Cosine_vs_std.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 8.5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+
 In general the trend is that at higher proportions each method has an easier time deconvolving cell types. But for rare neuronal subtypes, it is highly variable depending on subtype. Might be because the MERFISH genes were marker genes so in theory should be able to ID the subtypes. Of course some are probably similar and thus become more difficult to ID.
 
-
-# -------------------------------------
-
-# 20um Sim analysis
-
-# perplexity cell type proportion
-
-```{r}
-
-fitLDA2 <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
-                   ncores = parallel::detectCores(logical = TRUE) - 1,
-                   plot = TRUE) {
-  
-  if (is.null(testSize)){
-    set.seed(seed)
-    testingPixels <- seq(nrow(counts))
-    fittingPixels <- seq(nrow(counts))
-  } else if ((0 < testSize) & (testSize < 1.0)){
-    cat("Splitting pixels into", testSize*100, "% and", 100-testSize*100, "% testing and fitting corpuses", "\n")
-    set.seed(seed)
-    testingPixels <- sample(nrow(counts), round(nrow(counts)*testSize))
-    fittingPixels <- seq(nrow(counts))[-testingPixels]
-  } else {
-    stop("`testSize` must be NULL or decimal between 0 and 1")
-  }
-  
-  ## counts must be pixels (rows) x genes (cols) matrix
-  corpusFit <- slam::as.simple_triplet_matrix((as.matrix(counts[fittingPixels,])))
-  corpusTest <- slam::as.simple_triplet_matrix((as.matrix(counts[testingPixels,])))
-  
-  # if (slam::is.simple_triplet_matrix(counts) == TRUE){
-  #   corpus <- counts
-  # } else {
-  #   corpus <- slam::as.simple_triplet_matrix(t(as.matrix(counts)))
-  # }
-  
-  controls <- list(seed = seed,
-                   verbose = 1, keep = 1, estimate.alpha = TRUE)
-  
-  start_time <- Sys.time()
-  fitted_models <- parallel::mclapply(Ks, function(k) {
-    topicmodels::LDA(corpusFit, k=k, control = controls)
-  },
-  mc.cores = ncores
-  )
-  names(fitted_models) <- Ks
-  total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
-  print(sprintf("Time to fit LDA models was %smins", total_t))
-  
-  print("Computing perplexity for each fitted model...")
-  pScores <- unlist(lapply(fitted_models, function(model){
-    p <- topicmodels::perplexity(model, newdata = corpusTest)
-    return(p)
-  }))
-
-  ## Kneed algorithm
-  kOpt1 <- Ks[where.is.knee(pScores)]
-  ## Min
-  kOpt2 <- Ks[which(pScores == min(pScores))]
-  
-  ## check number of predicted cell-types at low proportions
-  out <- lapply(1:length(Ks), function(i) {
-    apply(getBetaTheta(fitted_models[[i]])$theta, 2, mean)
-    })
-  ## number of topics present at fewer than 5% on average across pixels
-  numrare <- unlist(lapply(out, function(x) sum(x < 0.05)))
-  kOpt3 <- Ks[where.is.knee(numrare)]
-
-  if(plot) {
-    plot(Ks, pScores, ylab = "perplexity", xlab = "K", main = "K vs perplexity")
-    abline(v = kOpt1, col='blue')
-    abline(v = kOpt2, col='red')
-    legend(x = "top",
-           legend = c("kneed", "min"), col = c("blue", "red"), lty = 1, lwd = 1)
-    
-    plot(Ks, numrare, ylab = "number of cell-types at < 5% mean proportion", xlab = "K", main = "K vs number of rare predicted cell-types")
-    abline(v = kOpt3, col='red')
-    legend(x = "top",
-           legend = c("kneed"), col = c("red"), lty = 1, lwd = 1)
-  }
-
-  return(list(models = fitted_models,
-              kOpt1 = kOpt1,
-              kOpt2 = kOpt2,
-              kOpt3 = kOpt3,
-              numRare = numrare,
-              perplexities = pScores,
-              fitCorpus = corpusFit,
-              testCorpus = corpusTest))
-}
-
-```
-
-
-```{r}
-
-# mobLDAs <- fitLDA(counts = mobCorpus$slm,
-#                         Ks = ks,
-#                         seed = 0,
-#                         ncores = 7,
-#                         plot = TRUE)
-
-fitLDA2(counts = as.matrix(simFN7$sim),
-        seed = 0,
-        Ks = seq(2,20, by = 2),
-        testSize = 0.2,
-        ncores = 7,
-        plot = TRUE)
-
-fitLDA2(counts = as.matrix(simFN7$sim),
-        seed = 0,
-        Ks = seq(2,20, by = 2),
-        testSize = NULL,
-        ncores = 7,
-        plot = TRUE)
-
-```
 
 
 

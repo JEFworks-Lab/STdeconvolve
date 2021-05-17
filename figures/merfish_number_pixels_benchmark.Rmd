@@ -1,0 +1,146 @@
+---
+title: "Untitled"
+author: "Brendan F. Miller"
+date: "5/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/20210512-merfish_v2.Image.RData")
+```
+
+```{r}
+
+corpus <- as.matrix(simFN7$sim)
+Ks <- seq(3,10)
+numDocs <- c(3,5,10,50,100,150)
+# numDocs <- c(3,10,50,100)
+numReps <- seq(10)
+# numDocs <- c(3,5)
+# numReps <- seq(3)
+
+# Ks <- seq(2,3)
+# numDocs <- c(3,10)
+# numReps <- seq(1)
+
+numPixelsBenchmark <- do.call(rbind, lapply(numDocs, function(d){
+# for(d in numDocs){
+  combined_df <- data.frame(numDocs=character(),
+                            replicate=character(),
+                            K=character(),
+                            RMSE=double())
+  for(r in numReps){
+    set.seed(r)
+    ## for each replicate, get a sample of pixel of size d
+    s <- sample(nrow(corpus), d)
+    sampleCorpus <- corpus[s,]
+    gtCorpus <- simFN7$gtSpotTopics[s,]
+    ## drop cell-types that are 0 for all samples pixels
+    gtCorpus <- gtCorpus[,which(colSums(gtCorpus) > 0)]
+    
+    ## fit LDA models for each K in Ks on the sampled corpus
+    ldas <- fitLDA(counts = sampleCorpus,
+                   Ks = Ks,
+                   testSize = NULL,
+                   seed = seed,
+                   ncores = 7,
+                   plot = FALSE)
+    # get beta and theta of sampled pixels for each fitted LDA model
+    for(k in Ks){
+      res <- getBetaTheta(lda = optimalModel(models = ldas, opt = k),
+                          corpus = sampleCorpus)
+      ## compute rmse
+      ## get pairs of topics and ground truth cell types that correlate best
+      ## cannot have more rows than columns when pairing
+      if (ncol(res$theta) <= ncol(as.matrix(gtCorpus))){
+        theta_pairs <- lsatPairs(getCorrMtx(m1 = as.matrix(res$theta),
+                                            m2 = as.matrix(gtCorpus),
+                                            type = "t"))
+        predict_theta <- res$theta[,theta_pairs$rowix]
+        truth_theta <- gtCorpus[,theta_pairs$colsix]
+      } else {
+        theta_pairs <- lsatPairs(getCorrMtx(m1 = as.matrix(gtCorpus),
+                                            m2 = as.matrix(res$theta),
+                                            type = "t"))
+        predict_theta <- res$theta[,theta_pairs$colsix]
+        truth_theta <- gtCorpus[,theta_pairs$rowix]
+      }
+      ## the rmse for the pixels, for a given K and numDocs; and for each replicate of that combo
+      rmses <- unlist(lapply(seq(dim(truth_theta)[1]), function(i){
+        # for each spot, compute RMSE based on proportions across cts
+        # so a RMSE for each spots based on all the cts
+        actual <- as.vector(truth_theta[i,])
+        predict <- as.vector(predict_theta[i,])
+        mltools::rmse(preds = predict, actuals = actual)
+      }))
+      m <- data.frame(numDocs = rep(d, length(rmses)),
+                      replicate = rep(r, length(rmses)),
+                      K = rep(k, length(rmses)),
+                      RMSE = rmses)
+      combined_df <- rbind(combined_df, m)
+    }
+  }
+  combined_df
+}))
+
+numPixelsBenchmark
+
+```
+
+
+```{r}
+
+tmp_df <- numPixelsBenchmark[numPixelsBenchmark$K %in% c(8),]
+tmp_df <- tmp_df[tmp_df$numDocs %in% c(5,10,50,100,150),]
+
+## mean rmse for each replicate
+summary_df <- tmp_df %>%
+  group_by(numDocs, replicate) %>%
+  dplyr::summarize(MeanRMSE = mean(RMSE, na.rm=TRUE),
+                   n = n(),
+                   sd = sd(RMSE, na.rm=TRUE),
+                   se = sd/sqrt(n))
+
+## mean rmse for the means of all replicates for a given numDoc
+summary_df2 <- summary_df %>%
+  group_by(numDocs) %>%
+  dplyr::summarize(MeanRMSEreps = mean(MeanRMSE, na.rm=TRUE),
+                   n = n(),
+                   sd = sd(MeanRMSE, na.rm=TRUE),
+                   se = sd/sqrt(n))
+
+ggplot() +
+  geom_point(data = summary_df, aes(x = numDocs, y = MeanRMSE)) +
+  geom_line(data = summary_df2, aes(x = numDocs, y = MeanRMSEreps), lwd = 2) +
+  # geom_ribbon(aes(ymax = `Mean RMSE` + sd, ymin = `Mean RMSE` - sd, x = numDocs, fill = as.character(K)), alpha = 0.2, lwd = 0)
+  # guides(color=guide_legend(title="K (number of cell-types")) +
+  scale_x_continuous(breaks = c(5,10,50,100,150), labels = c(5,10,50,100,150)) +
+  labs(title = "STdeconvolve accuracy on MERFISH ST dataset",
+       x = "number of pixels", y = "mean RMSE") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 12),
+        axis.text.y = element_text(size = 12),
+        axis.title.x = element_text(size=15),
+        axis.title.y = element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        panel.grid.minor = ggplot2::element_blank(),
+        panel.grid.major = ggplot2::element_line(color = "black", size = 0.1)
+        )
+ggplot2::ggsave(filename = paste0("2_100um_8cts_numPixels_benchmark.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+
+
+

@@ -71,7 +71,7 @@ mOB dataset. Get the cleaned data set, CPM normalized, and build corpus using th
 
 ```{r}
 
-# load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mOB.rda")
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mOB.rda")
 
 mobClean <- cleanCounts(mOB$counts,
                         min.lib.size = 100,
@@ -91,14 +91,16 @@ mobCorpus <- preprocess(t(mOB$counts),
                        selected.genes = NA,
                        nTopGenes = NA,
                        genes.to.remove = NA,
-                       perc.spots = NA,
+                       removeAbove = NA,
+                       removeBelow = NA,
                        min.reads = 100,
                        min.lib.size = 100,
                        min.detected = 1,
                        ODgenes = TRUE,
                        nTopOD = NA,
                        od.genes.alpha = 0.05,
-                       gam.k = 5)
+                       gam.k = 5,
+                       verbose = TRUE)
 mobCorpus$pos <- mOB$pos[rownames(mobCorpus$corpus), ]
 
 ```
@@ -3986,135 +3988,6 @@ for (gene in marker_genes){
 
 
 # ----------------------------------
-
-# Perplexity adjustments
-
-```{r}
-
-mobCorpus$corpus
-
-```
-
-
-```{r}
-
-fitLDA2 <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
-                   ncores = parallel::detectCores(logical = TRUE) - 1,
-                   plot = TRUE) {
-  
-  if (is.null(testSize)){
-    set.seed(seed)
-    testingPixels <- seq(nrow(counts))
-    fittingPixels <- seq(nrow(counts))
-  } else if ((0 < testSize) & (testSize < 1.0)){
-    cat("Splitting pixels into", testSize*100, "% and", 100-testSize*100, "% testing and fitting corpuses", "\n")
-    set.seed(seed)
-    testingPixels <- sample(nrow(counts), round(nrow(counts)*testSize))
-    fittingPixels <- seq(nrow(counts))[-testingPixels]
-  } else {
-    stop("`testSize` must be NULL or decimal between 0 and 1")
-  }
-  
-  ## counts must be pixels (rows) x genes (cols) matrix
-  corpusFit <- slam::as.simple_triplet_matrix((as.matrix(counts[fittingPixels,])))
-  corpusTest <- slam::as.simple_triplet_matrix((as.matrix(counts[testingPixels,])))
-  
-  # if (slam::is.simple_triplet_matrix(counts) == TRUE){
-  #   corpus <- counts
-  # } else {
-  #   corpus <- slam::as.simple_triplet_matrix(t(as.matrix(counts)))
-  # }
-  
-  controls <- list(seed = seed,
-                   verbose = 1, keep = 1, estimate.alpha = TRUE)
-  
-  start_time <- Sys.time()
-  fitted_models <- parallel::mclapply(Ks, function(k) {
-    topicmodels::LDA(corpusFit, k=k, control = controls)
-  },
-  mc.cores = ncores
-  )
-  names(fitted_models) <- Ks
-  total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
-  print(sprintf("Time to fit LDA models was %smins", total_t))
-  
-  print("Computing perplexity for each fitted model...")
-  pScores <- unlist(lapply(fitted_models, function(model){
-    p <- topicmodels::perplexity(model, newdata = corpusTest)
-    return(p)
-  }))
-
-  ## Kneed algorithm
-  kOpt1 <- Ks[where.is.knee(pScores)]
-  ## Min
-  kOpt2 <- Ks[which(pScores == min(pScores))]
-  
-  ## check number of predicted cell-types at low proportions
-  out <- lapply(1:length(Ks), function(i) {
-    apply(getBetaTheta(fitted_models[[i]])$theta, 2, mean)
-    })
-  ## number of topics present at fewer than 5% on average across pixels
-  numrare <- unlist(lapply(out, function(x) sum(x < 0.05)))
-  kOpt3 <- Ks[where.is.knee(numrare)]
-
-  if(plot) {
-    plot(Ks, pScores, ylab = "perplexity", xlab = "K", main = "K vs perplexity")
-    abline(v = kOpt1, col='blue')
-    abline(v = kOpt2, col='red')
-    legend(x = "top",
-           legend = c("kneed", "min"), col = c("blue", "red"), lty = 1, lwd = 1)
-    
-    plot(Ks, numrare, ylab = "number of cell-types at < 5% mean proportion", xlab = "K", main = "K vs number of rare predicted cell-types")
-    abline(v = kOpt3, col='red')
-    legend(x = "top",
-           legend = c("kneed"), col = c("red"), lty = 1, lwd = 1)
-  }
-
-  return(list(models = fitted_models,
-              kOpt1 = kOpt1,
-              kOpt2 = kOpt2,
-              kOpt3 = kOpt3,
-              numRare = numrare,
-              perplexities = pScores,
-              fitCorpus = corpusFit,
-              testCorpus = corpusTest))
-}
-
-```
-
-```{r}
-
-# mobLDAs <- fitLDA(counts = mobCorpus$slm,
-#                         Ks = ks,
-#                         seed = 0,
-#                         ncores = 7,
-#                         plot = TRUE)
-
-fitLDA2(counts = mobCorpus$corpus,
-        seed = 0,
-        Ks = seq(2,20, by = 2),
-        testSize = 0.2,
-        ncores = 7,
-        plot = TRUE)
-
-fitLDA2(counts = mobCorpus$corpus,
-        seed = 0,
-        Ks = seq(2,20, by = 2),
-        testSize = NULL,
-        ncores = 7,
-        plot = TRUE)
-
-```
-
-
-```{r}
-
-df <- data.frame(matrix(rnorm(20), nrow=10))
-df
-
-df[sample(nrow(df), 3), ]
-
-```
 
 
 
