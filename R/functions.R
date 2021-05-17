@@ -1,9 +1,9 @@
 #' Restrict to informative words (genes) for topic modeling
-#' 
+#'
 #' @description identifies over dispersed genes across pixels to use as informative words
 #'     (genes) in topic modeling. Also allows ability to restrict over dispersed genes
 #'     to those that occur in more than and/or less than selected fractions of pixels in corpus.
-#' 
+#'
 #' @param counts genes x pixels gene count matrix
 #' @param removeAbove remove over dispersed genes that are present in more than this fraction of pixels (default: 1.0)
 #' @param removeBelow remove over dispersed genes that are present in less than this fraction of pixels (default: 0.05)
@@ -62,7 +62,7 @@ restrictCorpus <- function(counts,
 
 
 #' Find the optimal number of cell-types K for the LDA model
-#' 
+#'
 #' @description The input for topicmodels::LDA needs to be a
 #'     slam::as.simple_triplet_matrix (docs x words). Access a given model in
 #'     the returned list via: lda$models[[k]][1]. The models are objects from
@@ -74,6 +74,8 @@ restrictCorpus <- function(counts,
 #' @param seed Random seed
 #' @param testSize fraction of pixels to set aside for test corpus when computing perplexity (default: NULL)
 #'    Either NULL or decimal between 0 and 1.
+#' @param perc.rare.thresh the number of deconvolved cell-types with mean pixel proportion below this fraction used to assess
+#'     performance of fitted models for each K. Recorded for each K. (default: 0.05)
 #' @param ncores Number of cores for parallelization
 #' @plot Boolean for plotting
 #'
@@ -90,7 +92,8 @@ restrictCorpus <- function(counts,
 #' }
 #'
 #' @export
-fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
+fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
+                   seed = 0, testSize = NULL, perc.rare.thresh = 0.05,
                    ncores = parallel::detectCores(logical = TRUE) - 1,
                    plot = TRUE, verbose = TRUE) {
   
@@ -160,28 +163,71 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
   out <- lapply(1:length(Ks), function(i) {
     apply(getBetaTheta(fitted_models[[i]], corpus = corpus)$theta, 2, mean)
   })
-  ## number of cell-types present at fewer than 5% on average across pixels
-  numrare <- unlist(lapply(out, function(x) sum(x < 0.05)))
+  ## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
+  numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))
   kOpt3 <- Ks[where.is.knee(numrare)]
   
   if(plot) {
-    plot(Ks, pScores,
-         ylab = "perplexity",
-         xlab = "K",
-         main = "K vs perplexity")
-    abline(v = kOpt1, col='blue')
-    abline(v = kOpt2, col='red')
-    legend(x = "top",
-           legend = c("kneed", "min"), col = c("blue", "red"), lty = 1, lwd = 1)
-    
-    plot(Ks, numrare,
-         ylab = paste0("number of cell-types", "\n","with < 5% mean proportion"),
-         xlab = "K",
-         main = "K vs number of rare predicted cell-types",
-         ylim = c(min=0, max=round((max(numrare)+1)*1.5)) )
+    # plot(Ks, pScores,
+    #      ylab = "perplexity",
+    #      xlab = "K",
+    #      main = "K vs perplexity")
+    # abline(v = kOpt1, col='blue')
+    # abline(v = kOpt2, col='red')
+    # legend(x = "top",
+    #        legend = c("kneed", "min"), col = c("blue", "red"), lty = 1, lwd = 1)
+    #
+    # plot(Ks, numrare,
+    #      ylab = paste0("number of cell-types", "\n","with < 5% mean proportion"),
+    #      xlab = "K",
+    #      main = "K vs number of rare predicted cell-types",
+    #      ylim = c(min=0, max=round((max(numrare)+1)*1.5)) )
     # abline(v = kOpt3, col='red')
     # legend(x = "top",
     #        legend = c("kneed"), col = c("red"), lty = 1, lwd = 1)
+    
+    dat <- data.frame(K = as.double(Ks),
+                      rareCts = numrare,
+                      perplexity = pScores,
+                      rareCtsAdj = scale0_1(numrare),
+                      perplexAdj = scale0_1(pScores))
+    
+    prim_ax_labs <- seq(min(dat$rareCts), max(dat$rareCts))
+    prim_ax_breaks <- scale0_1(prim_ax_labs)
+    ## if number rareCts stays constant, then only one break. scale0_1(prim_ax_labs) would be NaN so change to 0
+    if(length(prim_ax_labs) == 1){
+      prim_ax_breaks <- 0
+      ## also the rareCtsAdj <- scale0_1(rareCts) would be NaN, so set to 0, so at same position as the tick,
+      ## and its label will still be set to the constant value of rareCts
+      dat$rareCtsAdj <- 0
+    }
+    if(max(dat$rareCts) < 1){
+      sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/1)
+    } else {
+      sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/max(dat$rareCts))
+    }
+    sec_ax_breaks <- scale0_1(sec_ax_labs)
+    
+    plt <- ggplot2::ggplot(dat, aes(x=K)) +
+      ggplot2::geom_line(aes(y=rareCtsAdj), col="blue", lwd = 2) +
+      ggplot2::geom_line(aes(y=perplexAdj), col="red", lwd = 2) +
+      ggplot2::scale_y_continuous(name=paste0("# cell-types with mean proportion < ", round(perc.rare.thresh*100, 2), "%"), breaks = prim_ax_breaks, labels = prim_ax_labs,
+                                  sec.axis=sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
+      ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
+      ggplot2::ggtitle("Fitted model K's vs deconvolved cell-types and perplexity") +
+      ggplot2::theme_classic() +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(size=15, face=NULL),
+        panel.grid.minor = ggplot2::element_blank(),
+        panel.grid.major = ggplot2::element_line(color = "black", size = 0.1),
+        axis.title.y.left = ggplot2::element_text(color="blue", size = 13),
+        axis.text.y.left = ggplot2::element_text(color="blue", size = 13),
+        axis.title.y.right = ggplot2::element_text(color="red", size = 15, vjust = 1.5),
+        axis.text.y.right = ggplot2::element_text(color="red", size = 13),
+        axis.text.x = ggplot2::element_text(angle = 0, size = 13),
+        axis.title.x = ggplot2::element_text(size=13)
+      )
+    print(plt)
   }
   
   return(list(models = fitted_models,
@@ -197,7 +243,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2), seed = 0, testSize = NULL,
 
 #' Pull out cell-type proportions across pixels (theta) and
 #' cell-type gene probabilities (beta) matrices from fitted LDA models from fitLDA
-#' 
+#'
 #' @param lda an LDA model from `topicmodels`. From list of models returned by
 #'     fitLDA
 #' @param corpus Gene expression counts with pixels as rows and genes as columns
@@ -307,7 +353,7 @@ clusterTopics <- function(beta,
 
 
 #' Aggregate cell-types in the same cluster into a single cell-type
-#' 
+#'
 #' @description Note: for the beta matrix, each row is a cell-type, each column
 #'     is a gene. The cell-type row is a distribution of terms that sums to 1. So
 #'     combining cell-type row vectors, these should be adjusted such that the
@@ -317,15 +363,15 @@ clusterTopics <- function(beta,
 #'     each doc and these will not necessarily add to 1, should not take average.
 #'     Just sum cell-type row vectors together. This way, each document column still
 #'     adds to 1 when considering the proportion of each cell-type-cluster in the document.
-#' 
+#'
 #' @param mtx either a beta (cell-type gene distribution matrix) or a
 #'     theta (pixel-cell type distribution matrix)
 #' @param clusters factor of the cell-types (names) and their assigned cluster (levels)
 #' @param type either "t" or "b". Affects the adjustment to the combined
 #'     cell-type vectors. "b" divides summed cell-type vectors by number of aggregated cell-types
-#' 
+#'
 #' @return matrix where cell-types are now cell-type-clusters
-#' 
+#'
 #' @export
 combineTopics <- function(mtx, clusters, type) {
   
@@ -375,15 +421,15 @@ combineTopics <- function(mtx, clusters, type) {
 
 
 #' Get the optimal LDA model
-#' 
+#'
 #' @param models list returned from fitLDA
 #' @param opt either "kneed" (kOpt1) or "min" (kOpt2), or designate a specific K.
 #'     "kneed" = K vs perplexity inflection point.
 #'     "min" = K corresponding to minimum perplexity
 #'     "proportion" = K vs number of cell-type with mean proportion < 5% inflection point
-#' 
+#'
 #' @return optimal LDA model fitted to the K based on `opt`
-#' 
+#'
 #' @export
 optimalModel <- function(models, opt) {
   
@@ -405,12 +451,12 @@ optimalModel <- function(models, opt) {
 #' Wrapper to extract beta (cell type-gene distribution matrix),
 #' theta (pixel cell-type distribution) for individual cell-types and aggregated cell-type-clusters
 #' for an LDA model in `fitLDA` output list.
-#' 
+#'
 #' @description Wrapper that combines the functions `getBetaTheta`, `clusterTopics`,
 #'     `combineTopics` and slots of the topicmodels::LDA object to return a list
 #'     that contains the most relevant components of a given LDA model for ease
 #'     of analysis and visualization.
-#' 
+#'
 #' @param LDAmodel LDA model from fitLDA
 #' @param corpus Gene expression counts with pixels as rows and genes as columns
 #'     for which to get predicted cell-type proportions and cell-type gene expression profiles.
@@ -422,7 +468,7 @@ optimalModel <- function(models, opt) {
 #' @param colorScheme color scheme for generating colors assigned to cell-type
 #'     clusters for visualizing. Either "rainbow" or "ggplot" (default: "rainbow")
 #' @param plot Boolean for plotting
-#' 
+#'
 #' @return A list that contains
 #' \itemize{
 #' \item beta: cell-type (rows) by gene (columns) distribution matrix.
@@ -493,16 +539,16 @@ buildLDAobject <- function(LDAmodel,
 
 
 #' Function to get Hungarian sort pairs via clue::lsat
-#' 
+#'
 #' @description Finds best matches between cell-types that correlate between
 #'     beta or theta matrices that have been compared via `getCorrMtx`.
 #'     Each row is paired with a column in the output matrix from `getCorrMtx`.
 #'     If there are less rows than columns, then some columns will not be
 #'     matched and not part of the output.
-#' 
+#'
 #' @param mtx output correlation matrix from `getCorrMtx`. Must not have more rows
 #'     than columns
-#' 
+#'
 #' @return A list that contains
 #' \itemize{
 #' \item pairs: output of clue::solve_LSAP. A vectorized object where for each
@@ -510,7 +556,7 @@ buildLDAobject <- function(LDAmodel,
 #' \item rowix: the indices of the rows. Essentially seq_along(pairing)
 #' \item colsix: the indices of each column paired to each row
 #' }
-#' 
+#'
 #' @export
 lsatPairs <- function(mtx){
   # must have equal or more rows than columns

@@ -1,16 +1,17 @@
 #' Find Pearson's correlations between topics (cell-types) with respect to their
 #' proportions across documents (pixels), i.e. thetas, or gene probabilities,
 #' i.e. betas.
-#' 
+#'
 #' @param m1 first matrix
 #' @param m2 second matrix
 #' @param type must be either "t" (theta; cell-type proportions across pixels) or "b" (beta; cell-type gene expression profiles)
 #' @param thresh if comparing betas, use to compare genes above this probability (e.g., expression level).
 #'               NULL or 0 < numeric < 1.0 (default: NULL)
-#' 
+#' @param verbose control the verbosity (default: TRUE)
+#'
 #' @return matrix of Pearson's correlations; m1 (rows) by m2 (cols)
 #' @export
-getCorrMtx <- function(m1, m2, type, thresh = NULL) {
+getCorrMtx <- function(m1, m2, type, thresh = NULL, verbose = TRUE) {
   
   if (is.matrix(m1) == FALSE | is.matrix(m2) == FALSE){
     stop("`m1` and `m2` must be matrices")
@@ -89,7 +90,7 @@ getCorrMtx <- function(m1, m2, type, thresh = NULL) {
 
 #' Helper function to scale values to 0-1 range relative to each other. For use
 #' with `lsatPairs`
-#' 
+#'
 #' @param x vector or matrix
 #' @return vector or matrix with all values adjusted 0-1 scale relative to each other.
 #' @export
@@ -100,12 +101,12 @@ scale0_1 <- function(x) {
 
 
 #' Pre-process ST pixel gene count matrices to construct corpus for input into LDA
-#' 
+#'
 #' @description Takes pixel (row) x gene (columns) matrix and filters out poor genes
 #'              and pixels. Then selects for genes to be included in final corpus for input into LDA.
 #'              If the pixel IDs are made up of their positions in "XxY" these
 #'              can be extracted as the pixel position coordinates (a characteristic of Stahl datasets).
-#'              
+#'
 #'              Order of filtering options:
 #'              1. Selection to use specific genes only
 #'              2. `cleanCounts` to remove poor pixels and genes
@@ -115,7 +116,7 @@ scale0_1 <- function(x) {
 #'              6. Use the over dispersed genes computed from the remaining genes
 #'                 after filtering steps 1-5 (if selected)
 #'              7. Choice to use the top over dispersed genes based on -log10(p.adj)
-#'              
+#'
 #' @param dat pixel (row) x gene (columns) mtx with gene counts OR path to it
 #' @param alignFile path to 3x3 alignment file to adjust pixel coordinates
 #'     (optional).
@@ -148,14 +149,14 @@ scale0_1 <- function(x) {
 #'     of the "basis" functions in the GAM used to fit, higher = "smoother"
 #'     (default: 5)
 #' @param verbose control verbosity (default: TRUE)
-#' 
+#'
 #' @return A list that contains
 #' \itemize{
-#' \item corpus: (pixels x genes) matrix of the counts of the selected genes 
+#' \item corpus: (pixels x genes) matrix of the counts of the selected genes
 #' \item slm: slam::as.simple_triplet_matrix(corpus); required format for topicmodels::LDA input
 #' \item positions: matrix of x and y coordinates of pixels rownames = pixels, colnames = "x", "y"
 #' }
-#' 
+#'
 #' @export
 preprocess <- function(dat,
                        alignFile = NA,
@@ -205,9 +206,9 @@ preprocess <- function(dat,
     cat("- Removing poor pixels with <=", min.lib.size, "reads", "\n")
     cat("- Removing genes with <=", min.reads, "reads across pixels and detected in <=", min.detected, "pixels", "\n")
   }
-  countsClean <- cleanCounts(counts = t(counts), 
-                             min.reads = min.reads, 
-                             min.lib.size = min.lib.size, 
+  countsClean <- cleanCounts(counts = t(counts),
+                             min.reads = min.reads,
+                             min.lib.size = min.lib.size,
                              min.detected = min.detected,
                              plot=TRUE,
                              verbose=FALSE)
@@ -266,7 +267,7 @@ preprocess <- function(dat,
       # remove genes expressed in "numberSpots" or more pixels
       countsClean <- countsClean[which(rowSums(countsClean_) < numberSpots),]
       if(verbose){
-        cat("- Removed genes present in", 
+        cat("- Removed genes present in",
             as.character(removeAbove*100), "% or more of pixels", "\n",
             " Remaining genes:", dim(countsClean)[1], "\n")
       }
@@ -286,7 +287,7 @@ preprocess <- function(dat,
       # remove genes expressed in "numberSpots" or less pixels
       countsClean <- countsClean[which(rowSums(countsClean_) > numberSpots),]
       if(verbose){
-        cat("- Removed genes present in", 
+        cat("- Removed genes present in",
             as.character(removeBelow*100), "% or less of pixels", "\n",
             " Remaining genes:", dim(countsClean)[1], "\n")
       }
