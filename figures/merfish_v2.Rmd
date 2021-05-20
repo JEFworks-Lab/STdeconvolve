@@ -52,7 +52,7 @@ draft_fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeco
 
 ```{r}
 
-load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mpoa_merfish_clean.RData")
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mpoa_merfish_clean2.RData") # note that clean2 newest and 135 genes
 # has `annot.table`, `counts`, and `features` objects
 
 # annot.table: table of the individual cells and data like coordinates, cell types, bregma, animal
@@ -79,6 +79,12 @@ load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/mpoa_merfish_clean.R
 
 ```
 
+```{r}
+dim(counts)
+dim(counts[,!grepl("Blank", colnames(counts))])
+```
+
+
 171021_FN7_2_M22_M26 (anterior) and 171023_FN7_1_M22_M26 (posterior)
 
 generate `spatial_position_and_class_FN7` and `bregmaCellsGexpFN7`
@@ -98,10 +104,17 @@ spatial_position_and_class_FN7 <- na.omit(spatial_position_and_class_FN7)
 
 ```{r}
 
-# reduce set of major cell class labels. Convert OD types to "OD" and
+# reduce set of major cell class labels. Convert OD types to "OD Mature" and "OD Immature" so will be 9 cts total
 # "Endothelial types to "Endothelial"
-spatial_position_and_class_FN7[grep(pattern = "OD",
-                                x = spatial_position_and_class_FN7$Cell_class),]$Cell_class <- "OD"
+
+# spatial_position_and_class_FN7[grep(pattern = "OD",
+#                                 x = spatial_position_and_class_FN7$Cell_class),]$Cell_class <- "OD"
+
+spatial_position_and_class_FN7[grep(pattern = "OD Mature",
+                                x = spatial_position_and_class_FN7$Cell_class),]$Cell_class <- "OD Mature"
+
+spatial_position_and_class_FN7[grep(pattern = "OD Immature",
+                                x = spatial_position_and_class_FN7$Cell_class),]$Cell_class <- "OD Immature"
 
 spatial_position_and_class_FN7[grep(pattern = "Endothelial",
                                 x = spatial_position_and_class_FN7$Cell_class),]$Cell_class <- "Endothelial"
@@ -142,14 +155,14 @@ length(Cell_class_with_neuronal_FN7)
 
 ```
 
-## gexp ground truths
+Gexp ground truths:
 
 Let's make a gexp reference using all the cells across the bregmas.
 
 cell types
 ```{r}
 
-cellTypes <- Cell_class_major_FN7
+cellTypes <- spatial_position_and_class_FN7$Cell_class
 cells <- rownames(spatial_position_and_class_FN7)
 
 mat <- bregmaCellsGexpFN7[cells,]
@@ -183,6 +196,8 @@ dim(gtCtNeuronalGenesFN7)
 ```
 
 Next generate the simulated ST spots at different resolutions. Each simulation also record the ground truth pixel proprotions as well.
+
+# Simulations
 
 ## 100um Sim
 
@@ -429,6 +444,188 @@ simFN7_neuro <- list(sim = sim_N7_neuro,
 
 ```
 
+### ---------------
+### save simulations
+
+Simulations generated for the following combos:
+ clean_counts or clean_counts2: one ends up with 125 genes, and the other 135, which is actually more correct of the dataset
+ and combining oligodendrocytes into single cell-type for 8 cell types and 75 subtypes
+ or splitting into OD Mature and Immature for 9 cell types and 76 subtypes
+
+```{r}
+
+# simFN7_9ct_135genes <- simFN7
+# simFN7_9ct_125genes <- simFN7
+# simFN7_8ct_135genes <- simFN7
+# simFN7_8ct_125genes <- simFN7
+# simFN7_neuro_9ct_135genes <- simFN7_neuro
+# simFN7_neuro_9ct_125genes <- simFN7_neuro
+# simFN7_neuro_8ct_135genes <- simFN7_neuro
+# simFN7_neuro_8ct_125genes <- simFN7_neuro
+
+```
+
+```{r}
+
+print("135 genes and 9 cell-types")
+simFN7_9ct_135genes$sim
+dim(simFN7_9ct_135genes$gtSpotTopics)
+dim(simFN7_9ct_135genes$gtCtGenes)
+print(" ")
+print("135 genes and 8 cell-types")
+simFN7_8ct_135genes$sim
+dim(simFN7_8ct_135genes$gtSpotTopics)
+dim(simFN7_8ct_135genes$gtCtGenes)
+print(" ")
+print("125 genes and 9 cell-types")
+simFN7_9ct_125genes$sim
+dim(simFN7_9ct_125genes$gtSpotTopics)
+dim(simFN7_9ct_125genes$gtCtGenes)
+print(" ")
+print("125 genes and 8 cell-types")
+simFN7_8ct_125genes$sim
+dim(simFN7_8ct_125genes$gtSpotTopics)
+dim(simFN7_8ct_125genes$gtCtGenes)
+print(" ")
+print("Neuronal subtypes")
+print(" ")
+print("135 genes and 9 cell-types")
+simFN7_neuro_9ct_135genes$sim
+dim(simFN7_neuro_9ct_135genes$gtSpotTopics)
+dim(simFN7_neuro_9ct_135genes$gtCtGenes)
+print(" ")
+print("135 genes and 8 cell-types")
+simFN7_neuro_8ct_135genes$sim
+dim(simFN7_neuro_8ct_135genes$gtSpotTopics)
+dim(simFN7_neuro_8ct_135genes$gtCtGenes)
+print(" ")
+print("125 genes and 9 cell-types")
+simFN7_neuro_9ct_125genes$sim
+dim(simFN7_neuro_9ct_125genes$gtSpotTopics)
+dim(simFN7_neuro_9ct_125genes$gtCtGenes)
+print(" ")
+print("125 genes and 8 cell-types")
+simFN7_neuro_8ct_125genes$sim
+dim(simFN7_neuro_8ct_125genes$gtSpotTopics)
+dim(simFN7_neuro_8ct_125genes$gtCtGenes)
+```
+
+### seurat inputs
+
+```{r}
+
+## use filtered counts from `clean_counts`, which has the 135 genes and 59651 cells in the 12 bregmas after removing ambiguous cells
+dim(bregmaCellsGexpFN7)
+
+```
+
+8 cell-ypes and 125 genes:
+```{r}
+
+simulation <- simFN7_8ct_125genes
+
+# for equal comparison, use the same cells that were kept in the simulated spots
+bregmaCellsGexpFN7_filt <- bregmaCellsGexpFN7[rownames(simulation$annotDf),colnames(as.matrix(simulation$sim))]
+dim(bregmaCellsGexpFN7_filt)
+
+# "scRNAseq" reference using all the cells:
+bregmaFN7FullSeur_8ct_125genes <- Seurat::CreateSeuratObject(counts = t(bregmaCellsGexpFN7_filt), project = "FN7 8ct 125 genes")
+
+# add cell class labels to the meta.data for assigning clusters later
+bregmaFN7FullSeur_8ct_125genes[["Major_class"]] <- simulation$annotDf$Cell_class
+bregmaFN7FullSeur_8ct_125genes[["All_classes"]] <- simulation$annotDf$Cell_class
+
+```
+
+8 cell-ypes and 135 genes:
+```{r}
+
+simulation <- simFN7_8ct_135genes
+
+# for equal comparison, use the same cells that were kept in the simulated spots
+bregmaCellsGexpFN7_filt <- bregmaCellsGexpFN7[rownames(simulation$annotDf),colnames(as.matrix(simulation$sim))]
+dim(bregmaCellsGexpFN7_filt)
+
+# "scRNAseq" reference using all the cells:
+bregmaFN7FullSeur_8ct_135genes <- Seurat::CreateSeuratObject(counts = t(bregmaCellsGexpFN7_filt), project = "FN7 8ct 135 genes")
+
+# add cell class labels to the meta.data for assigning clusters later
+bregmaFN7FullSeur_8ct_135genes[["Major_class"]] <- simulation$annotDf$Cell_class
+bregmaFN7FullSeur_8ct_135genes[["All_classes"]] <- simulation$annotDf$Cell_class
+
+```
+
+9 cell-ypes and 125 genes:
+```{r}
+
+simulation <- simFN7_9ct_125genes
+
+# for equal comparison, use the same cells that were kept in the simulated spots
+bregmaCellsGexpFN7_filt <- bregmaCellsGexpFN7[rownames(simulation$annotDf),colnames(as.matrix(simulation$sim))]
+dim(bregmaCellsGexpFN7_filt)
+
+# "scRNAseq" reference using all the cells:
+bregmaFN7FullSeur_9ct_125genes <- Seurat::CreateSeuratObject(counts = t(bregmaCellsGexpFN7_filt), project = "FN7 9ct 125 genes")
+
+# add cell class labels to the meta.data for assigning clusters later
+bregmaFN7FullSeur_9ct_125genes[["Major_class"]] <- simulation$annotDf$Cell_class
+bregmaFN7FullSeur_9ct_125genes[["All_classes"]] <- simulation$annotDf$Cell_class
+
+```
+
+9 cell-ypes and 135 genes:
+```{r}
+
+simulation <- simFN7_9ct_135genes
+
+# for equal comparison, use the same cells that were kept in the simulated spots
+bregmaCellsGexpFN7_filt <- bregmaCellsGexpFN7[rownames(simulation$annotDf),colnames(as.matrix(simulation$sim))]
+dim(bregmaCellsGexpFN7_filt)
+
+# "scRNAseq" reference using all the cells:
+bregmaFN7FullSeur_9ct_135genes <- Seurat::CreateSeuratObject(counts = t(bregmaCellsGexpFN7_filt), project = "FN7 9ct 135 genes")
+
+# add cell class labels to the meta.data for assigning clusters later
+bregmaFN7FullSeur_9ct_135genes[["Major_class"]] <- simulation$annotDf$Cell_class
+bregmaFN7FullSeur_9ct_135genes[["All_classes"]] <- simulation$annotDf$Cell_class
+
+```
+
+### save
+
+```{r}
+
+save(simFN7_8ct_125genes, simFN7_8ct_135genes, simFN7_9ct_125genes, simFN7_9ct_135genes,
+     simFN7_neuro_8ct_125genes, simFN7_neuro_8ct_135genes, simFN7_neuro_9ct_125genes, simFN7_neuro_9ct_135genes,
+      bregmaFN7FullSeur_8ct_125genes, bregmaFN7FullSeur_8ct_135genes, bregmaFN7FullSeur_9ct_125genes, bregmaFN7FullSeur_9ct_135genes,
+      file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/merfish_v2-simFN7_8-9cts_125-135gene_combos.RData")
+
+```
+
+### ---------------
+
+### pixel overdispersed genes
+
+```{r}
+
+simulation <- simFN7_8ct_135genes
+
+counts <- t(as.matrix(simulation$sim)) # genes x pixels matrix
+odGenes <- getOverdispersedGenes(counts,
+                                 alpha = 0.05,
+                                 plot = TRUE,
+                                 details = TRUE,
+                                 verbose = TRUE)
+countsFilt <- counts[odGenes$ods,]
+
+```
+
+MERINGUE comparison
+
+
+
+
+## -----------------
 ## 10um Sim
 
 this generates the hash tables of simulates spots for each bregma separately
@@ -820,7 +1017,6 @@ bregmaFN7FullSeur[["All_classes"]] <- simFN7_neuro$annotDf$Cell_class
 
 ```
 
-# Simulations
 # ----------------------------------
 ## 10 um 8 major
 
@@ -1554,18 +1750,24 @@ ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = valu
 ## boxplot summary of correlations
 dat3 <- reshape2::melt(data.frame(
                                   transcriptional = diag(corMtx_txn_1),
-                                  proportional_txn = diag(corMtx_prop_1),
-                                  proportional_prop = diag(corMtx_prop_4)))
+                                  proportional = diag(corMtx_prop_1)
+                                  # proportional_prop = diag(corMtx_prop_4)
+                                  ))
 colnames(dat3) <- c("Comparison", "Correlation")
 ggplot2::ggplot(data = dat3, aes(x=Comparison, y=Correlation)) +
   ggplot2::geom_violin(trim=TRUE, fill="gray") +
   ggplot2::geom_boxplot(width=0.1) +
   ggplot2::ylim(c(-1,1)) +
   ggplot2::scale_fill_grey() +
-  ggplot2::labs(title = "Deconvolved and ground truth cell-type correlations, between pairs\n(20 micron pixels, 8 cell-types)",
+  ggplot2::labs(title = "Deconvolved and ground truth cell-type correlations\n(20 micron pixels, 8 cell-types)",
                 x = "Comparison",
                 y = "Correlation") +
-  ggplot2::theme_classic()
+  ggplot2::theme_classic() +
+  ggplot2::theme(axis.text.x=element_text(size=15),
+                 axis.text.y=element_text(size=15),
+                 axis.title.y=element_text(size=15),
+                 axis.title.x=element_blank(),
+                 plot.title=element_text(size=15))
 ggplot2::ggsave(filename = paste0("0_20um_8cts_heatmap_daig_corrs_after_filtering.png"),
          device = "png",
          path = fig_path,
@@ -1889,6 +2091,16 @@ classCols <- c("Astrocyte" = "#F8766D",
                "OD" = "#C77CFF",
                "Pericytes" = "#FF61CC")
 
+# classCols <- c("Astrocyte" = "#F8766D",
+#                "Endothelial" = "#D39200",
+#                "Ependymal" = "#93AA00",
+#                "Excitatory" = "#00BA38",
+#                "Inhibitory" = "#00C19F",
+#                "Microglia" = "#00B9E3",
+#                "OD Immature" = "#619CFF",
+#                "OD Mature" = "#DB72FB",
+#                "Pericytes" = "#FF61C3")
+
 for(ix in names(simBregmasFN7)[1]){
 # do.call(rbind, lapply(names(simBregmasFN7), function(ix){
   breg <- simFN7$annotDf[simFN7$annotDf$Bregma == ix,]
@@ -2095,7 +2307,9 @@ ggplot(data = reshape2::melt(simFN7_neuro$gtSpotTopics)) +
 ```{r}
 
 ks <- seq(from = 2, to = 20, by = 1)
-ks <- c(ks, seq(from = 25, to = 75, by = 10))
+ks <- c(ks, seq(from = 30, to = 70, by = 20))
+ks <- c(ks, 76)
+ks
 
 ```
 
@@ -2125,7 +2339,7 @@ ks <- seq(from = 2, to = 20, by = 1)
 ```{r}
 
 # pdf(file = paste0(fig_path, "Fig1_B-1_FN7_lda_fit.pdf"))
-FN7_LDAs_2to20 <- fitLDA(counts = as.matrix(simFN7$sim),
+FN7_LDAs_2to20_135genes <- fitLDA(counts = as.matrix(simFN7$sim),
                    Ks = ks,
                    testSize = NULL,
                    perc.rare.thresh = 0.025,
@@ -2140,18 +2354,25 @@ FN7_LDAs_2to20 <- fitLDA(counts = as.matrix(simFN7$sim),
 
 ```{r}
 
-FN7_K8 <- buildLDAobject(LDAmodel = optimalModel(FN7_LDAs, opt = 8),
+FN7_K9_135genes <- buildLDAobject(LDAmodel = optimalModel(FN7_LDAs_2to20_135genes, opt = 9),
                          corpus = as.matrix(simFN7$sim),
                          deepSplit = 4,
                          colorScheme = "rainbow")
 
 ```
 
+```{r}
+FN7_K8 ## 125 genes and 8 cts
+FN7_K8_135genes ## 135 genes and 8 cts
+FN7_K9_135genes ## 135 genes and 9 cts
+```
+
+
 In the actual corpus, the lowest non-zero proportion is 2.5%, so remove all proportions less than that
 
 ```{r}
 
-lda_k8_theta <- FN7_K8$theta
+lda_k8_theta <- FN7_K8_135genes$theta
 lda_k8_theta[lda_k8_theta < 0.025] <- 0
 
 # try just calling the unassigned proportions "ambiguous"
@@ -2204,10 +2425,10 @@ for(ix in names(simBregmasFN7)[1]){
                      group_cols = c("0" = "black"),
                      r = 40,
                      lwd = 0.4,
-                     showLegend = FALSE,
+                     showLegend = TRUE,
                      plotTitle = ix)
   print(p1)
-  ggplot2::ggsave(filename = paste0("0_8cts_STdev_bregma_", ix, ".png"),
+  ggplot2::ggsave(filename = paste0("0_8cts_135genes_STdev_bregma_", ix, ".png"),
          device = "png",
          path = fig_path,
          scale = 1.5,
@@ -2230,6 +2451,16 @@ classCols <- c("Astrocyte" = "#F8766D",
                "Microglia" = "#00A9FF",
                "OD" = "#C77CFF",
                "Pericytes" = "#FF61CC")
+
+# classCols <- c("Astrocyte" = "#F8766D",
+#                "Endothelial" = "#D39200",
+#                "Ependymal" = "#93AA00",
+#                "Excitatory" = "#00BA38",
+#                "Inhibitory" = "#00C19F",
+#                "Microglia" = "#00B9E3",
+#                "OD Immature" = "#619CFF",
+#                "OD Mature" = "#DB72FB",
+#                "Pericytes" = "#FF61C3")
 
 # matching up topics to gt cell-types for coloring
 corMtx <- getCorrMtx(m1 = lda_k8_theta, # rows
@@ -2270,7 +2501,7 @@ plts1_grid <- gridExtra::grid.arrange(
                   layout_matrix = layout
 )
 plts1_grid
-ggplot2::ggsave(filename = paste0("0_100um_8cts_separateCts_AllBregmas.png"),
+ggplot2::ggsave(filename = paste0("0_100um_8cts_135genes_separateCts_AllBregmas.png"),
                 plot = plts1_grid,
                 device = "png",
                 path = fig_path,
@@ -2315,7 +2546,7 @@ plts2_grid <- gridExtra::grid.arrange(
                   layout_matrix = layout
 )
 plts2_grid
-ggplot2::ggsave(filename = paste0("0_100um_8cts_grid_AllBregmas.png"),
+ggplot2::ggsave(filename = paste0("0_100um_8cts_135genes_grid_AllBregmas.png"),
                 plot = plts2_grid,
                 device = "png",
                 path = fig_path,
@@ -2352,7 +2583,7 @@ plts3_grid <- gridExtra::grid.arrange(
                   layout_matrix = layout
 )
 plts3_grid
-ggplot2::ggsave(filename = paste0("0_100um_8cts_simST_AllBregmas.png"),
+ggplot2::ggsave(filename = paste0("0_100um_8cts_135genes_simST_AllBregmas.png"),
                 plot = plts3_grid,
                 device = "png",
                 path = fig_path,
@@ -2393,7 +2624,7 @@ plts4_grid <- gridExtra::grid.arrange(
                   layout_matrix = layout
 )
 plts4_grid
-ggplot2::ggsave(filename = paste0("0_100um_8cts_STdeconvolve_AllBregmas.png"),
+ggplot2::ggsave(filename = paste0("0_100um_8cts_135genes_STdeconvolve_AllBregmas.png"),
                 plot = plts4_grid,
                 device = "png",
                 path = fig_path,
@@ -2412,7 +2643,63 @@ ggplot2::ggsave(filename = paste0("0_100um_8cts_STdeconvolve_AllBregmas.png"),
 ```{r}
 
 gt <- simFN7
-decon <- FN7_K8
+
+clust <- clusterTopics(beta = as.matrix(gt$gtCtGenes),
+                       clustering = "ward.D", ## ward.D
+                       dynamic = "hybrid",
+                       deepSplit = 4,
+                       plot = FALSE)
+ct_txn_order <- rownames(as.matrix(gt$gtCtGenes)[clust$order,])
+
+## rows are the ground truth in order of their transcriptional similarity
+corMtx_txn <- getCorrMtx(m1 = as.matrix(gt$gtCtGenes)[ct_txn_order,],
+                         m2 = as.matrix(gt$gtCtGenes)[ct_txn_order,],
+                         type = "b")
+pairs <- lsatPairs(corMtx_txn)
+## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
+## the properly ordered txn correlation matrix
+corMtx_txn_1 <- corMtx_txn[pairs$rowix, pairs$colsix]
+# colnames(corMtx_txn_1) <- paste0("Cell-type ", colnames(corMtx_txn_1))
+
+## plot the txn correlations
+dat <- reshape2::melt(corMtx_txn_1)
+ggplot2::ggplot(data = dat) +
+  ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1),
+                                guide = guide_colorbar(title = "correlation", ticks = FALSE, label = FALSE)) +
+  ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
+  # ggplot2::xlab("Ground truth cell-types") +
+  # ggplot2::ylab("Deconvolved cell-types") +
+  # ggplot2::ggtitle("Transcriptional profile correlation\n(100 micron pixels)") +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=10),
+                 axis.text.y=element_text(angle=0, size=10),
+                 axis.title.y=element_text(size=12),
+                 axis.title.x=element_text(size=12),
+                 plot.title = element_text(size=15),
+                 panel.grid = element_blank(),
+                 axis.line=element_blank(),
+                 axis.ticks=element_blank(),
+                 panel.background=element_blank()
+                 # legend.position = "bottom"
+                 ) +
+  # ggplot2::guides(color = guide_colourbar(nbin = 10, raster = F, direction = "horizontal", barwidth = 20, barheight = 0.8)) +
+  ggplot2::coord_fixed()
+ggplot2::ggsave(filename = paste0("0_8cts_135genes_gt_txn_profile_corr_heatmap.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+
+```{r}
+
+gt <- simFN7
+decon <- FN7_K8_135genes
 filt_theta <- lda_k8_theta
 
 ## cluster ground truth cell-types transcriptionally
@@ -2437,7 +2724,8 @@ colnames(corMtx_txn_1) <- paste0("Cell-type ", colnames(corMtx_txn_1))
 dat <- reshape2::melt(corMtx_txn_1)
 ggplot2::ggplot(data = dat) +
   ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
-  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1),
+                                guide = guide_colorbar(title = "correlation", ticks = FALSE, label = FALSE)) +
   ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
   ggplot2::xlab("Ground truth cell-types") +
   ggplot2::ylab("Deconvolved cell-types") +
@@ -2450,9 +2738,12 @@ ggplot2::ggplot(data = dat) +
                  panel.grid = element_blank(),
                  axis.line=element_blank(),
                  axis.ticks=element_blank(),
-                 panel.background=element_blank()) +
+                 panel.background=element_blank()
+                 # legend.position = "bottom"
+                 ) +
+  # ggplot2::guides(color = guide_colourbar(nbin = 10, raster = F, direction = "horizontal", barwidth = 20, barheight = 0.8)) +
   ggplot2::coord_fixed()
-ggplot2::ggsave(filename = paste0("0_100um_8cts_txn_corr_heatmap.png"),
+ggplot2::ggsave(filename = paste0("0_100um_8cts_135genes_txn_corr_heatmap.png"),
          device = "png",
          path = fig_path,
          scale = 1.5,
@@ -2487,7 +2778,8 @@ colnames(corMtx_prop_1) <- paste0("Cell-type ", colnames(corMtx_prop_1))
 dat <- reshape2::melt(corMtx_prop_1)
 ggplot2::ggplot(data = dat) +
   ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
-  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1),
+                                guide = guide_colorbar(title = "correlation", ticks = FALSE, label = FALSE)) +
   ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
   ggplot2::xlab("Ground truth cell-types") +
   ggplot2::ylab("Deconvolved cell-types") +
@@ -2502,7 +2794,7 @@ ggplot2::ggplot(data = dat) +
                  axis.ticks=element_blank(),
                  panel.background=element_blank()) +
   ggplot2::coord_fixed()
-ggplot2::ggsave(filename = paste0("0_100um_8cts_prop_corr_heatmap_txn_ordered_after_filtering.png"),
+ggplot2::ggsave(filename = paste0("0_100um_8cts_135genes_prop_corr_heatmap_txn_ordered_after_filtering.png"),
          device = "png",
          path = fig_path,
          scale = 1.5,
@@ -2692,7 +2984,8 @@ colnames(corMtx_prop_4) <- paste0("Cell-type ", colnames(corMtx_prop_4))
 dat <- reshape2::melt(corMtx_prop_4)
 ggplot2::ggplot(data = dat) +
   ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
-  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1)) +
+  ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1),
+                                guide = guide_colorbar(title = "correlation", ticks = FALSE, label = FALSE)) +
   ggplot2::scale_y_discrete(breaks=dat$Var2, labels=dat$Var2) +
   ggplot2::xlab("Ground truth cell-types") +
   ggplot2::ylab("Deconvolved cell-types") +
@@ -2707,7 +3000,7 @@ ggplot2::ggplot(data = dat) +
                  axis.ticks=element_blank(),
                  panel.background=element_blank()) +
   ggplot2::coord_fixed()
-ggplot2::ggsave(filename = paste0("0_100um_8cts_prop_corr_heatmap_after_filtering.png"),
+ggplot2::ggsave(filename = paste0("0_100um_8cts_135genes_prop_corr_heatmap_after_filtering.png"),
          device = "png",
          path = fig_path,
          scale = 1.5,
@@ -2767,7 +3060,7 @@ ggplot2::ggplot(data = dat3, aes(x=Comparison, y=Correlation)) +
                  axis.title.y=element_text(size=15),
                  axis.title.x=element_blank(),
                  plot.title=element_text(size=15))
-ggplot2::ggsave(filename = paste0("0_100um_8cts_heatmap_daig_corrs_after_filtering.png"),
+ggplot2::ggsave(filename = paste0("0_100um_8cts_135genes_heatmap_daig_corrs_after_filtering.png"),
          device = "png",
          path = fig_path,
          scale = 1.5,
@@ -2799,7 +3092,7 @@ difGenesMajor <- MERINGUE::getDifferentialGenes(cd = bregmaFN7FullSeur@assays$RN
 
 ```{r}
 
-m1 <- FN7_K8$beta
+m1 <- FN7_K8_135genes$beta
 m2 <- as.matrix(gtCtGenesFN7)
 
 sharedGenes <- intersect(colnames(m1), colnames(m2))
@@ -2867,7 +3160,7 @@ ggplot2::ggplot(data = summary_df) +
                        axis.title.y=element_text(size=15),
                        axis.title.x=element_text(size=15),
                        plot.title=element_text(size=15))
-ggplot2::ggsave(filename = paste0("0_100um_8cts_gene_ranks_hex.png"),
+ggplot2::ggsave(filename = paste0("0_100um_8cts_135genes_gene_ranks_hex.png"),
          device = "png",
          path = fig_path,
          scale = 1.5,

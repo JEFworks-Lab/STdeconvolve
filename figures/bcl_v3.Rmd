@@ -682,7 +682,7 @@ for(celltype in seq(15)){
                    groups = txn, # rep("0", nrows(m))
                    group_cols = bclTxnClustCols, # c("0" = "black")
                    r = 100,
-                   lwd = 0.5, # 0.1
+                   lwd = 0.2, # 0.1
                    showLegend = FALSE,
                    plotTitle = paste0("Section ", s),
                    overlay = NA)
@@ -985,7 +985,7 @@ for(celltype in seq(15)){
 n <- "15"
 celltype <- 15
 deconGexp <- bclLDAsDeconv[[n]]$beta*1000
-counts <- bclCPM
+counts <- bclClean
 
 vals <- sort(deconGexp[celltype,], decreasing = TRUE)
 
@@ -1040,7 +1040,7 @@ dat <- data.frame(values = as.vector(log2fc), genes = names(log2fc), order = seq
 # Hide all of the text labels.
 dat$selectedLabels1 <- ""
 # Let's just label these top items.
-ix_label <- seq(19)
+ix_label <- seq(10)
 dat$selectedLabels1[ix_label] <- dat$genes[ix_label]
 
 # dat$selectedLabels2 <- ""
@@ -1112,7 +1112,7 @@ for (s in unique(bclCorpus$slice)){
                           c(6, 7, 8))
   )
   print(plts_grid1)
-  ggplot2::ggsave(filename = paste0("4_k15_ct15_", s, "_top8_log2fc_markers_gexp_cpm.png"),
+  ggplot2::ggsave(filename = paste0("4_k15_ct15_", s, "_top8_log2fc_markers_gexp_counts.png"),
            device = "png",
            plot = plts_grid1,
            path = fig_path,
@@ -1523,6 +1523,214 @@ ggplot2::ggsave(filename = paste0("4_k15_ct15_with_txnClusters.png"), # 4_k15_ct
 
 n <- "15"
 celltype <- 13
+deconGexp <- bclLDAsDeconv[[n]]$beta*1000
+counts <- bclClean
+
+vals <- sort(deconGexp[celltype,], decreasing = TRUE)
+
+## ----------------------------------------------------
+## txn profile, normalized and scaled expression
+
+dat <- data.frame(values = as.vector(vals), genes = names(vals), order = seq(length(vals)))
+# Hide all of the text labels.
+dat$selectedLabels <- ""
+# Let's just label these items.
+ix_label <- seq(5)
+dat$selectedLabels[ix_label] <- dat$genes[ix_label]
+
+ggplot(data = dat) +
+  geom_col(aes(x = order, y = values)) +
+  labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
+       x = "Gene expression rank", y = "Normalized and scaled expression") +
+  # coord_cartesian(clip = "off") +
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = 10, direction = "y", hjust = "left",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 15),
+        axis.text.y = element_text(size=15),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_text(size=15),
+        axis.title.y = element_text(size=15),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        )
+ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_txnProfile_barplot.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+## ----------------------------------------------------
+## log2FC relative to other cell-types
+
+## highly expressed in cell-type of interest
+highgexp <- names(which(deconGexp[celltype,] > 5))
+## high log2(fold-change) compared to other deconvolved cell-types
+log2fc <- sort(log2(deconGexp[celltype,highgexp]/colMeans(deconGexp[-celltype,highgexp])), decreasing=TRUE)
+
+dat <- data.frame(values = as.vector(log2fc), genes = names(log2fc), order = seq(length(log2fc)))
+# Hide all of the text labels.
+dat$selectedLabels1 <- ""
+# Let's just label these top items.
+ix_label <- seq(5)
+dat$selectedLabels1[ix_label] <- dat$genes[ix_label]
+
+# dat$selectedLabels2 <- ""
+# # Let's label these bottom items
+# ix_label <- tail(seq(length(log2fc)), 5)
+# dat$selectedLabels2[ix_label] <- dat$genes[ix_label]
+
+ggplot(data = dat) +
+  geom_col(aes(x = order, y = values)) +
+  labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
+       x = "Gene expression rank", y = "log2FC Normalized and scaled expression") +
+  # coord_cartesian(clip = "off") +
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels1), size = 5, 
+                  min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                  # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                  nudge_x = 2, direction = "y", hjust = "left",
+                  # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  ) +
+  # ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels2), size = 5, 
+  #                 min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+  #                 # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+  #                 nudge_x = -10, direction = "y", hjust = "right",
+  #                 # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  # ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, size = 15),
+        axis.text.y = element_text(size=15),
+        # strip.text = element_text(size=15),
+        axis.title.x = element_text(size=15),
+        axis.title.y = element_text(size=12),
+        axis.title=element_text(size=15),
+        plot.title = element_text(size=15, face=NULL),
+        )
+ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_txnProfile_log2FC_barplot.png"),
+         device = "png",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 3,
+         units = c("in"),
+         dpi = 300)
+
+## ----------------------------------------------------
+## viz top markers
+
+markers <- names(log2fc)[1:8]
+## visualize
+
+for (s in unique(bclCorpus$slice)){
+  slice <- bclCorpus$slice == s
+  pos <- posScaleAll[slice,]
+  
+  df <- merge(as.data.frame(pos), 
+              as.data.frame(t(as.matrix(counts[markers,]))), 
+              by = 0)
+  ps <- lapply(markers, function(marker) {
+    plt <- vizGeneCounts(df = df,
+                gene = marker,
+                size = 1.5, stroke = 0.1,
+                plotTitle = marker,
+                winsorize = 0.0,
+                showLegend = FALSE)
+    ggplotGrob(plt)
+  })
+  plts_grid1 <- gridExtra::grid.arrange(
+    grobs = ps,
+    layout_matrix = rbind(c(1, 2, NA),
+                          c(3, 4, 5),
+                          c(6, 7, 8))
+  )
+  print(plts_grid1)
+  ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_", s, "_top8_log2fc_markers_gexp_counts.png"),
+           device = "png",
+           plot = plts_grid1,
+           path = fig_path,
+           scale = 1.5,
+           width = 4,
+           height = 3,
+           units = c("in"),
+           dpi = 300)
+}
+
+# df <- merge(as.data.frame(pos),
+#             as.data.frame(t(as.matrix(counts[markers,]))),
+#             by = 0)
+# ps <- lapply(markers, function(marker) {
+#   plt <- vizGeneCounts(df = df,
+#               gene = marker,
+#               size = 2.5, stroke = 0.1,
+#               plotTitle = marker,
+#               winsorize = 0.05,
+#               showLegend = FALSE)
+#   ggplotGrob(plt)
+# })
+# plts_grid1 <- gridExtra::grid.arrange(
+#   grobs = ps,
+#   layout_matrix = rbind(c(1, 2),
+#                         c(3, 4))
+# )
+# plts_grid1
+# ggplot2::ggsave(filename = paste0("3_MOB_k12_ct7_top4_log2fc_markers_gexp_cpm.png"),
+#          device = "png",
+#          plot = plts_grid1,
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 4,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
+
+## ----------------------------------------------------
+## viz bottom markers
+
+# markers <- tail(names(log2fc), 4)
+# ## visualize
+# df <- merge(as.data.frame(pos), 
+#             as.data.frame(t(as.matrix(counts[markers,]))), 
+#             by = 0)
+# ps <- lapply(markers, function(marker) {
+#   plt <- vizGeneCounts(df = df,
+#               gene = marker,
+#               size = 2.5, stroke = 0.1,
+#               plotTitle = marker,
+#               winsorize = 0.05,
+#               showLegend = FALSE)
+#   ggplotGrob(plt)
+# })
+# plts_grid2 <- gridExtra::grid.arrange(
+#   grobs = ps,
+#   layout_matrix = rbind(c(1, 2),
+#                         c(3, 4))
+# )
+# plts_grid2
+# ggplot2::ggsave(filename = paste0("3_MOB_k12_ct7_bottom4_log2fc_markers_gexp_cpm.png"),
+#          device = "png",
+#          plot = plts_grid2,
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 4,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
+
+```
+
+## cell-type 12 gexp
+
+```{r}
+
+n <- "15"
+celltype <- 12
 deconGexp <- bclLDAsDeconv[[n]]$beta*1000
 counts <- bclCPM
 
@@ -1995,7 +2203,7 @@ dat <- data.frame(values = as.vector(log2fc), genes = names(log2fc), order = seq
 # Hide all of the text labels.
 dat$selectedLabels1 <- ""
 # Let's just label these top items.
-ix_label <- seq(3)
+ix_label <- seq(5)
 dat$selectedLabels1[ix_label] <- dat$genes[ix_label]
 
 # dat$selectedLabels2 <- ""
@@ -2067,7 +2275,7 @@ for (s in unique(bclCorpus$slice)){
                           c(6, 7, 8))
   )
   print(plts_grid1)
-  ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_", s, "_top8_log2fc_markers_gexp_cpm.png"),
+  ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_", s, "_top8_log2fc_markers_gexp_counts.png"),
            device = "png",
            plot = plts_grid1,
            path = fig_path,
@@ -2077,6 +2285,7 @@ for (s in unique(bclCorpus$slice)){
            units = c("in"),
            dpi = 300)
 }
+
 
 # df <- merge(as.data.frame(pos),
 #             as.data.frame(t(as.matrix(counts[markers,]))),
@@ -2142,5 +2351,107 @@ for (s in unique(bclCorpus$slice)){
 ```
 
 KRT17 keratin
+
+
+## select genes for all sections
+
+```{r}
+
+n <- "15"
+counts <- bclClean
+
+markers <- c("KRT17", "PRSS23", "GBP5", "CD74", "CXCL10")
+for (marker in markers){
+  ps <- lapply(unique(bclCorpus$slice), function(s){
+    slice <- bclCorpus$slice == s
+    pos <- posScaleAll[slice,]
+    
+    df <- merge(as.data.frame(pos), 
+                as.data.frame(as.matrix(counts[marker,])), 
+                by = 0)
+    colnames(df)[4] <- marker
+    plt <- vizGeneCounts(df = df,
+                gene = marker,
+                size = 2.4, stroke = 0.1,
+                plotTitle = marker,
+                winsorize = 0.0,
+                showLegend = FALSE)
+    ggplotGrob(plt)
+  })
+  plts_grid1 <- gridExtra::grid.arrange(
+      grobs = ps,
+      layout_matrix = rbind(c(1, 2),
+                            c(3, 4) 
+                            )
+      )
+  print(plts_grid1)
+    ggplot2::ggsave(filename = paste0("4_k15", "_", marker, "_all_sections_gexp_counts.png"),
+             device = "png",
+             plot = plts_grid1,
+             path = fig_path,
+             scale = 1.5,
+             width = 4,
+             height = 3,
+             units = c("in"),
+             dpi = 300)
+}
+
+```
+
+
+
+
+
+
+```{r}
+
+purples <- c(
+    transparentCol(lighten('magenta4', factor = 0.3), percent = 0),
+    transparentCol(lighten('darkslateblue', factor = 0.3), percent = 0),
+    transparentCol(lighten('plum3', factor = 0.3), percent = 0))
+
+set.seed(1234)
+df <- data.frame(
+  cell=factor(rep(c("A", "B", "C"), each=200)),
+  weight=round(c(rnorm(200, mean=25, sd=15),
+                 rnorm(200, mean=35, sd=15),
+                 rnorm(200, mean=45, sd=15))
+               )
+  )
+
+ggplot(df, aes(x=weight, fill=cell)) +
+  geom_density() +
+  scale_fill_manual(values = purples) +
+  labs(x = "genes", y = "expression") +
+  theme_classic() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y=element_blank(),
+        axis.title.x = element_text(size=24),
+        axis.title.y = element_text(size=24),
+        )
+
+set.seed(1234)
+df <- data.frame(
+  cell=factor(rep(c("A", "A", "A"), each=200)),
+  weight=round(c(rnorm(200, mean=25, sd=15),
+                 rnorm(200, mean=35, sd=15),
+                 rnorm(200, mean=45, sd=15))
+               )
+  )
+
+ggplot(df, aes(x=weight, fill=cell)) +
+  geom_density() +
+  scale_fill_manual(values = "black") +
+  labs(x = "genes", y = "expression") +
+  theme_classic() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y=element_blank(),
+        axis.title.x = element_text(size=24),
+        axis.title.y = element_text(size=24),
+        )
+
+```
+
+
 
 
