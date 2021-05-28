@@ -15,7 +15,7 @@ load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/20210512-merfish_v2.
 
 ```{r}
 
-corpus <- as.matrix(simFN7$sim)
+corpus <- as.matrix(simFN7_9ct_135genes$sim)
 Ks <- seq(3,10)
 numDocs <- c(3,5,10,50,100,150)
 # numDocs <- c(3,10,50,100)
@@ -94,7 +94,7 @@ numPixelsBenchmark
 
 ```{r}
 
-tmp_df <- numPixelsBenchmark[numPixelsBenchmark$K %in% c(8),]
+tmp_df <- numPixelsBenchmark[numPixelsBenchmark$K %in% c(9),]
 tmp_df <- tmp_df[tmp_df$numDocs %in% c(5,10,50,100,150),]
 
 ## mean rmse for each replicate
@@ -130,8 +130,8 @@ ggplot() +
         panel.grid.minor = ggplot2::element_blank(),
         panel.grid.major = ggplot2::element_line(color = "black", size = 0.1)
         )
-ggplot2::ggsave(filename = paste0("2_100um_8cts_numPixels_benchmark.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S15-numPixels_benchmark-100um_k9_135genes.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,

@@ -16,6 +16,43 @@ draft_fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeco
 
 ```
 
+```{r}
+fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/figures/pdfs/"
+```
+
+```{r}
+
+data(BCL)
+
+BCL1.pos <- BCL$pos[BCL$pos$slice==1,][,c("x", "y")]
+BCL2.pos <- BCL$pos[BCL$pos$slice==2,][,c("x", "y")]
+BCL3.pos <- BCL$pos[BCL$pos$slice==3,][,c("x", "y")]
+BCL1.counts <- BCL$counts[,BCL$pos$slice==1]
+BCL2.counts <- BCL$counts[,BCL$pos$slice==2]
+BCL3.counts <- BCL$counts[,BCL$pos$slice==3]
+
+posList <- list(
+  BCL1.pos[colnames(BCL1.counts),],
+  BCL2.pos[colnames(BCL2.counts),],
+  BCL3.pos[colnames(BCL3.counts),]
+)
+
+```
+
+```{r}
+
+1:(length(posList) - 1)
+
+```
+
+
+```{r}
+
+cw <- MERINGUE::getCrossLayerNeighbors(posList, k=3)
+
+```
+
+
 # data and select genes
 
 ```{r}
@@ -124,29 +161,42 @@ set.seed(888)
 
 # use the CPM adjusted counts
 
-pcs.info <- prcomp(t(log10(as.matrix(bclCPM[unionBCLGenes,rownames(bclCorpus$pos)])+1)), center=TRUE)
+# pcs.info <- prcomp(t(log10(as.matrix(bclCPM[unionBCLGenes,rownames(bclCorpus$pos)])+1)), center=TRUE)
+pcs.info <- prcomp(t(log10(as.matrix(bclClean[unionBCLGenes,rownames(bclCorpus$pos)])+1)), center=TRUE)
 plot(pcs.info$sdev[1:30])
-nPcs <- 5
+nPcs <- 2
 pcs <- pcs.info$x[,1:nPcs]
-# 2D embedding by tSNE
-emb <- Rtsne::Rtsne(pcs,
-                    is_distance=FALSE,
-                    perplexity=30,
-                    num_threads=1,
-                    verbose=FALSE)$Y
-rownames(emb) <- rownames(pcs)
-# Graph-based cluster detection
-k <- 350
-bcl_com <- MERINGUE::getClusters(pcs, k, method=igraph::cluster_louvain)
+
+
+# # 2D embedding by tSNE
+# emb <- Rtsne::Rtsne(pcs,
+#                     is_distance=FALSE,
+#                     perplexity=30,
+#                     num_threads=1,
+#                     verbose=FALSE)$Y
+# rownames(emb) <- rownames(pcs)
+# # Graph-based cluster detection
+# k <- 350
+# bcl_com <- MERINGUE::getClusters(pcs, k, method=igraph::cluster_louvain) #  cluster_walktrap
+
+
+## hierarchical clustering of PCs
+d_ <- dist(pcs, method = "euclidean")
+hc_ <- stats::hclust(d_, method = "ward.D")
+bcl_com <- stats::cutree(hc_, 3)
+bcl_com <- as.factor(bcl_com)
+## use the first 2 PCS for viz and clustering
+emb <- pcs
+
 
 bcl_colors <- bcl_com
-levels(bcl_colors)[levels(bcl_colors) == "1"] <- "green" # non-malignant
-levels(bcl_colors)[levels(bcl_colors) == "2"] <- "blue" # ductal carcinoma in situ
-levels(bcl_colors)[levels(bcl_colors) == "3"] <- "red" # Invasive carcinoma 
+levels(bcl_colors)[levels(bcl_colors) == "1"] <- "#0a8007" # green non-malignant
+levels(bcl_colors)[levels(bcl_colors) == "2"] <- "#faa505" # yellow Invasive carcinoma 
+levels(bcl_colors)[levels(bcl_colors) == "3"] <- "#0d00fe" # blue ductal carcinoma in situ 
 bcl_colors <- as.vector(bcl_colors)
 names(bcl_colors) <- names(bcl_com)
 
-# pdf(file = paste0(draft_fig_path, "Fig_3_txn-clustering-union-ODs.pdf"),   # The directory you want to save the file in
+# pdf(file = paste0(fig_path, "Supplemental_Figure_S10-A-bcl_txn_clustering.pdf"),   # The directory you want to save the file in
 #   width = 6, # The width of the plot in inches
 #   height = 5) # The height of the plot in inches
 par(mfrow=c(2,2), mar=rep(1,4))
@@ -181,9 +231,14 @@ bclCorpus$txn <- bcl_com
 
 ```{r}
 
-bclTxnClustCols <- c('1' = lighten('green', factor = 0.4),
-                     '2' = lighten('blue', factor = 0.4),
-                     '3' = lighten('red', factor = 0.4))
+# bclTxnClustCols <- c('1' = lighten('green', factor = 0.4),
+#                      '2' = lighten('blue', factor = 0.4),
+#                      '3' = lighten('yellow', factor = 0.4))
+
+bclTxnClustCols <- c('1' = "#0a8007", # green
+                     '2' = "#faa505", # yellow
+                     '3' = "#0d00fe" # blue
+                     )
 
 ```
 
@@ -201,15 +256,15 @@ dim(bclProxyTheta)
 
 ```{r}
 # c(1 = "NonInvasive", 2 = "Invasive", 3 = "Ductal"
-names(bclTxnClustCols) <- c("NonInvasive", "Ductal", "Invasive")
-colnames(bclProxyTheta) <- c("NonInvasive", "Ductal", "Invasive")
+names(bclTxnClustCols) <- c("NonInvasive", "Invasive", "Ductal")
+colnames(bclProxyTheta) <- c("NonInvasive", "Invasive", "Ductal")
 ```
 
 ```{r}
 x <- bclCorpus$txn
 levels(x)[levels(x)=="1"] <- "NonInvasive"
-levels(x)[levels(x)=="2"] <- "Ductal"
-levels(x)[levels(x)=="3"] <- "Invasive"
+levels(x)[levels(x)=="2"] <- "Invasive"
+levels(x)[levels(x)=="3"] <- "Ductal"
 bclCorpus$txn <- x
 ```
 
@@ -414,7 +469,7 @@ plts <- lapply(unique(bclCorpus$slice), function(s){
                        topicCols=as.vector(bclTxnClustCols[colnames(m)]),
                        groups = bclCorpus$txn[slice],
                        group_cols = bclTxnClustCols,
-                       r = 100, # different size piecharts for mOB data sets
+                       r = 110, # different size piecharts for mOB data sets
                        lwd = 0.3,
                        showLegend = FALSE,
                        plotTitle = paste("Section", s))
@@ -428,8 +483,8 @@ plts_grid <- gridExtra::grid.arrange(
                         c(3, 4))
 )
 plts_grid
-ggplot2::ggsave(filename = paste0("4_txn_clusters.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S10-B-bcl_txn_clusters_each_section.pdf"),
+         device = "pdf",
          plot = plts_grid,
          path = fig_path,
          scale = 1.5,
@@ -457,6 +512,79 @@ bclLDAs <- fitLDA(counts = bclCorpus$corpus, # 372 genes 1029 spots
                         plot = TRUE)
 
 ```
+
+## viz k vs perplexity
+
+```{r}
+
+ks <- seq(from = 2, to = 20, by = 1)
+models <- bclLDAs
+corpus <- bclCorpus$corpus
+perc.rare.thresh <- 0.05
+
+## check number of predicted cell-types at low proportions
+out <- lapply(1:length(ks), function(i) {
+  apply(getBetaTheta(lda = models$models[[i]], corpus = corpus)$theta, 2, mean)
+})
+
+## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
+numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))
+
+pScores <- models$perplexities[1:length(ks)]
+
+dat <- data.frame(K = as.double(ks),
+                  rareCts = numrare,
+                  perplexity = pScores,
+                  rareCtsAdj = scale0_1(numrare),
+                  perplexAdj = scale0_1(pScores))
+
+prim_ax_labs <- seq(min(dat$rareCts), max(dat$rareCts))
+prim_ax_breaks <- scale0_1(prim_ax_labs)
+## if number rareCts stays constant, then only one break. scale0_1(prim_ax_labs) would be NaN so change to 0
+if(length(prim_ax_labs) == 1){
+  prim_ax_breaks <- 0
+  ## also the rareCtsAdj <- scale0_1(rareCts) would be NaN, so set to 0, so at same position as the tick,
+  ## and its label will still be set to the constant value of rareCts
+  dat$rareCtsAdj <- 0
+}
+if(max(dat$rareCts) < 1){
+  sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/1)
+} else {
+  sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/max(dat$rareCts))
+}
+sec_ax_breaks <- scale0_1(sec_ax_labs)
+
+plt <- ggplot2::ggplot(dat, aes(x=K)) +
+  ggplot2::geom_line(aes(y=rareCtsAdj), col="blue", lwd = 2) +
+  ggplot2::geom_line(aes(y=perplexAdj), col="red", lwd = 2) +
+  ggplot2::scale_y_continuous(name=paste0("# cell-types with mean proportion < ", round(perc.rare.thresh*100, 2), "%"), breaks = prim_ax_breaks, labels = prim_ax_labs,
+                              sec.axis=sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
+  ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
+  ggplot2::ggtitle("Fitted model K's vs deconvolved cell-types and perplexity") +
+  ggplot2::theme_classic() +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(size=15, face=NULL),
+    panel.grid.minor = ggplot2::element_blank(),
+    panel.grid.major = ggplot2::element_line(color = "black", size = 0.1),
+    axis.title.y.left = ggplot2::element_text(color="blue", size = 13),
+    axis.text.y.left = ggplot2::element_text(color="blue", size = 13),
+    axis.title.y.right = ggplot2::element_text(color="red", size = 15, vjust = 1.5),
+    axis.text.y.right = ggplot2::element_text(color="red", size = 13),
+    axis.text.x = ggplot2::element_text(angle = 0, size = 13),
+    axis.title.x = ggplot2::element_text(size=13)
+  )
+print(plt)
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S10-C-lda_perplex_rarect_05-bcl_372genes.pdf"),
+         device = "pdf",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+```
+
 
 # extract each model
 
@@ -526,7 +654,8 @@ gplots::heatmap.2(x = corMtx,
                   # lhei = c(1,3),
                   margins = c(7,10))
 
-pdf(file = paste0(fig_path, "4_bcl_k15_vs_txn_corr_heatmap.pdf"), width = 8, height = 4)
+pdf(file = paste0(fig_path, "Supplemental_Figure_S10-D-txn_corr-bcl_372genes_k15.pdf"),
+    width = 8, height = 4)
 gplots::heatmap.2(x = corMtx,
                   density.info = "none",
                   trace = "none",
@@ -548,30 +677,55 @@ dev.off()
 
 ```{r}
 
-green_ramp <- colorRampPalette(c(lighten('green', factor = 0.3), darken('green', factor = 1.5)))
-noninvasive_colors <- green_ramp(6)
+# green_ramp <- colorRampPalette(c(lighten('green', factor = 0.3), darken('green', factor = 1.5)))
+# noninvasive_colors <- green_ramp(6)
+# 
+# blue_ramp <- colorRampPalette(c(lighten('blue', factor = 0.3), darken('blue', factor = 1.5)))
+# ductal_colors <- blue_ramp(5)
+# 
+# red_ramp <- colorRampPalette(c(lighten('yellow', factor = 0.3), darken('yellow', factor = 1.5)))
+# invasive_colors <- red_ramp(4)
 
-blue_ramp <- colorRampPalette(c(lighten('blue', factor = 0.3), darken('blue', factor = 1.5)))
-ductal_colors <- blue_ramp(5)
+# bcl_k15_topicCols <- c("8" = noninvasive_colors[1],
+#                        "10" = noninvasive_colors[2],
+#                        "3" = noninvasive_colors[3],
+#                        "4" = noninvasive_colors[4],
+#                        "7" = noninvasive_colors[5],
+#                        "9" = noninvasive_colors[6],
+#                        "11" = invasive_colors[1],
+#                        "15" = invasive_colors[2],
+#                        "14" = invasive_colors[3],
+#                        "12" = invasive_colors[4],
+#                        "6" = ductal_colors[1],
+#                        "5" = ductal_colors[2],
+#                        "1" = ductal_colors[3],
+#                        "2" = ductal_colors[4],
+#                        "13" = ductal_colors[5])
 
-red_ramp <- colorRampPalette(c(lighten('red', factor = 0.3), darken('red', factor = 1.5)))
-invasive_colors <- red_ramp(4)
+green_ramp <- colorRampPalette(c(lighten('#0a8007', factor = 0.3), darken('#0a8007', factor = 1.5))) 
+noninvasive_colors <- green_ramp(8)
 
-bcl_k15_topicCols <- c("8" = noninvasive_colors[1],
+blue_ramp <- colorRampPalette(c(lighten('#0d00fe', factor = 0.3), darken('#0d00fe', factor = 1.5)))
+ductal_colors <- blue_ramp(4)
+
+yellow_ramp <- colorRampPalette(c(lighten('#faa505', factor = 0.3), darken('#faa505', factor = 1.5)))
+invasive_colors <- yellow_ramp(3)
+
+bcl_k15_topicCols <- c("11" = noninvasive_colors[1],
                        "10" = noninvasive_colors[2],
-                       "3" = noninvasive_colors[3],
-                       "4" = noninvasive_colors[4],
+                       "14" = noninvasive_colors[3],
+                       "9" = noninvasive_colors[4],
                        "7" = noninvasive_colors[5],
-                       "9" = noninvasive_colors[6],
-                       "11" = invasive_colors[1],
-                       "15" = invasive_colors[2],
-                       "14" = invasive_colors[3],
-                       "12" = invasive_colors[4],
+                       "3" = noninvasive_colors[6],
+                       "4" = noninvasive_colors[7],
+                       "8" = noninvasive_colors[8],
                        "6" = ductal_colors[1],
-                       "5" = ductal_colors[2],
+                       "2" = ductal_colors[2],
                        "1" = ductal_colors[3],
-                       "2" = ductal_colors[4],
-                       "13" = ductal_colors[5])
+                       "13" = ductal_colors[4],
+                       "12" = invasive_colors[1],
+                       "15" = invasive_colors[2],
+                       "5" = invasive_colors[3])
 
 ```
 
@@ -588,10 +742,22 @@ plts <- lapply(unique(bclCorpus$slice), function(s){
                        topicCols=as.vector(bcl_k15_topicCols[colnames(m)]),
                        groups = bclCorpus$txn[slice],
                        group_cols = bclTxnClustCols,
-                       r = 100,
-                       lwd = 0.01,
-                       showLegend = FALSE,
+                       r = 110,
+                       lwd = 0.2,
+                       showLegend = TRUE,
                        plotTitle = paste("Section", s))
+  plt <- plt + guides(fill=guide_legend(ncol=2))
+  print(plt)
+  ggplot2::ggsave(filename = paste0("Figure_3-A-topics_txn_shading-section_", s, "-bcl_372genes_k15-lgd.pdf"),
+         device = "pdf",
+         plot = plt,
+         path = fig_path,
+         scale = 1,
+         width = 8,
+         height = 6,
+         units = c("in"),
+         dpi = 300)
+  
   ggplotGrob(plt)
   # print(plt)
 })
@@ -602,13 +768,13 @@ plts_grid <- gridExtra::grid.arrange(
                         c(3, 4))
 )
 plts_grid
-ggplot2::ggsave(filename = paste0("4_k15_pixels_and_txn_clusters.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Figure_3-A-topics_txn_shading-bcl_372genes_k15-lgd.pdf"),
+         device = "pdf",
          plot = plts_grid,
          path = fig_path,
-         scale = 1.5,
-         width = 4,
-         height = 3,
+         scale = 1,
+         width = 8,
+         height = 6,
          units = c("in"),
          dpi = 300)
 
@@ -622,12 +788,25 @@ plts <- lapply(unique(bclCorpus$slice), function(s){
                        pos = p,
                        topicOrder=colnames(m),
                        topicCols=rainbow(15),
-                       groups = bclCorpus$txn[slice],
-                       group_cols = bclTxnClustCols,
-                       r = 100,
-                       lwd = 0.3,
-                       showLegend = FALSE,
+                       # groups = bclCorpus$txn[slice],
+                       # group_cols = bclTxnClustCols,
+                       groups = rep("0", length(bclCorpus$txn[slice])),
+                       group_cols = c("0" = "black"),
+                       r = 110,
+                       lwd = 0.2,
+                       showLegend = TRUE,
                        plotTitle = paste("Section", s))
+  plt <- plt + guides(fill=guide_legend(ncol=2))
+  print(plt)
+  ggplot2::ggsave(filename = paste0("Supplemental_Figure_S10-E-topics_pixels-section_", s, "-bcl_372genes_k15-lgd.pdf"),
+         device = "pdf",
+         plot = plt,
+         path = fig_path,
+         scale = 1,
+         width = 8,
+         height = 6,
+         units = c("in"),
+         dpi = 300)
   ggplotGrob(plt)
   # print(plt)
 })
@@ -638,13 +817,13 @@ plts_grid <- gridExtra::grid.arrange(
                         c(3, 4))
 )
 plts_grid
-ggplot2::ggsave(filename = paste0("4_k15_pixels.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S10-E-topics_pixels-bcl_372genes_k15-lgd.pdf"),
+         device = "pdf",
          plot = plts_grid,
          path = fig_path,
-         scale = 1.5,
-         width = 4,
-         height = 3,
+         scale = 1,
+         width = 8,
+         height = 6,
          units = c("in"),
          dpi = 300)
 
@@ -654,7 +833,7 @@ ggplot2::ggsave(filename = paste0("4_k15_pixels.png"),
 
 ```{r}
 
-for(celltype in seq(15)){
+for(celltype in c(3, 13, 5)){
   
   plts <- lapply(unique(bclCorpus$slice), function(s){
     slice <- bclCorpus$slice == s
@@ -674,16 +853,16 @@ for(celltype in seq(15)){
     # group_cc <- c("1" = transparentCol(bclUnionTxnClustCols["1"], percent = 30),
     #               "2" = transparentCol(bclUnionTxnClustCols["2"], percent = 30),
     #               "3" = transparentCol(bclUnionTxnClustCols["3"], percent = 30))
-  
+    
     plt <- vizAllTopics(theta = m,
                    pos = pos,
                    topicOrder=seq(ncol(m)),
                    topicCols=cc,
                    groups = txn, # rep("0", nrows(m))
                    group_cols = bclTxnClustCols, # c("0" = "black")
-                   r = 100,
+                   r = 110,
                    lwd = 0.2, # 0.1
-                   showLegend = FALSE,
+                   showLegend = TRUE,
                    plotTitle = paste0("Section ", s),
                    overlay = NA)
     ggplotGrob(plt)
@@ -695,8 +874,8 @@ for(celltype in seq(15)){
                           c(3, 4))
   )
   # plts_grid
-  ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_with_txnClusters.png"), # 4_k15_ct15_overlays.png
-           device = "png",
+  ggplot2::ggsave(filename = paste0("Supplemental_Figure_S11-celltype_", celltype, "_with_txn_pixels-bcl_372genes_k15.pdf"),
+           device = "pdf",
            plot = plts_grid,
            path = fig_path,
            scale = 1.5,
@@ -1000,7 +1179,8 @@ ix_label <- seq(5)
 dat$selectedLabels[ix_label] <- dat$genes[ix_label]
 
 ggplot(data = dat) +
-  geom_col(aes(x = order, y = values)) +
+  geom_col(aes(x = order, y = values, fill = " ")) +
+  scale_fill_manual(values = transparentCol("darkgray", percent = 70)) +
   labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
        x = "Gene expression rank", y = "Normalized and scaled expression") +
   # coord_cartesian(clip = "off") +
@@ -1018,9 +1198,10 @@ ggplot(data = dat) +
         axis.title.y = element_text(size=15),
         axis.title=element_text(size=15),
         plot.title = element_text(size=15, face=NULL),
+        legend.position = "none"
         )
-ggplot2::ggsave(filename = paste0("4_k15_ct15_txnProfile_barplot.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Figure_3-C-txn_profile-bcl_372genes_k15.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,
@@ -1049,7 +1230,8 @@ dat$selectedLabels1[ix_label] <- dat$genes[ix_label]
 # dat$selectedLabels2[ix_label] <- dat$genes[ix_label]
 
 ggplot(data = dat) +
-  geom_col(aes(x = order, y = values)) +
+  geom_col(aes(x = order, y = values, fill = " ")) +
+  scale_fill_manual(values = transparentCol("darkgray", percent = 70)) +
   labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
        x = "Gene expression rank", y = "log2FC Normalized and scaled expression") +
   # coord_cartesian(clip = "off") +
@@ -1073,9 +1255,10 @@ ggplot(data = dat) +
         axis.title.y = element_text(size=12),
         axis.title=element_text(size=15),
         plot.title = element_text(size=15, face=NULL),
+        legend.position = "none"
         )
-ggplot2::ggsave(filename = paste0("4_k15_ct15_txnProfile_log2FC_barplot.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Figure_3-C-log2fc_txn_profile-bcl_372genes_k15.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,
@@ -1112,15 +1295,15 @@ for (s in unique(bclCorpus$slice)){
                           c(6, 7, 8))
   )
   print(plts_grid1)
-  ggplot2::ggsave(filename = paste0("4_k15_ct15_", s, "_top8_log2fc_markers_gexp_counts.png"),
-           device = "png",
-           plot = plts_grid1,
-           path = fig_path,
-           scale = 1.5,
-           width = 4,
-           height = 3,
-           units = c("in"),
-           dpi = 300)
+  # ggplot2::ggsave(filename = paste0("4_k15_ct15_", s, "_top8_log2fc_markers_gexp_counts.png"),
+  #          device = "png",
+  #          plot = plts_grid1,
+  #          path = fig_path,
+  #          scale = 1.5,
+  #          width = 4,
+  #          height = 3,
+  #          units = c("in"),
+  #          dpi = 300)
 }
 
 # df <- merge(as.data.frame(pos), 
@@ -1224,14 +1407,18 @@ ggplot(data = gsea.sig, aes(x = reorder(term, log.q.val), y = log.q.val)) +
   theme(axis.text.y = element_text(colour = "black", size = 7) # axis.text.y = element_text(colour = highlights)
         ) +
   geom_hline(yintercept=-log10(0.05), color = "red", linetype = "dashed")
-ggplot2::ggsave(filename = paste0("4_k15_ct15_top_go_terms_barplot.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S13-celltype_15_top_go_terms_barplot-bcl_372genes_k15.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 8,
          height = 10,
          units = c("in"),
          dpi = 300)
+
+## to table:
+gsea.sig
+write.table(gsea.sig, file = "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/figures/pdfs/Supplemental_Figure_S13-celltype_15_top_go_terms_table-bcl_372genes_k15.csv", sep = ",")
 
 ```
 
@@ -1349,8 +1536,8 @@ for (s in unique(bclCorpus$slice)){
                           )
   )
   print(plts_grid)
-  ggplot2::ggsave(filename = paste0("4_k15_section_", s, "_immune_go_terms_gexp_counts.png"),
-           device = "png",
+  ggplot2::ggsave(filename = paste0("Supplemental_Figure_S12-gexp_countsClean_GO_terms-bcl_372genes_k15-section_", s, ".pdf"),
+           device = "pdf",
            plot = plts_grid,
            path = fig_path,
            scale = 1.5,
@@ -1374,6 +1561,38 @@ for(g in colnames(df)[4:7]){
                   plotTitle = g,
                   showLegend = TRUE)
 }
+
+```
+
+### gsea plots
+
+```{r}
+
+n <- "15"
+celltype <- 15
+deconGexp <- bclLDAsDeconv[[n]]$beta*1000
+vals <- sort(deconGexp[celltype,], decreasing = TRUE)
+
+gset <- filtGOsets
+
+
+g <- "GO:0042110 T cell activation"
+pdf(file = paste0(fig_path, "Figure_3-D-gsea_celltype_", celltype, "_t_cell_activation.pdf"),
+    width = 6,
+    height = 4)
+gsea(values=vals,
+     geneset=gset[[g]], plot=TRUE, rank=TRUE,
+     main = paste("Cell-type", celltype, "enriched with", g, "genes"))
+dev.off()
+
+g <- "GO:0002757 immune response-activating signal transduction"
+pdf(file = paste0(fig_path, "Figure_3-D-gsea_celltype_", celltype, "_immune_response_signal.pdf"),
+    width = 6,
+    height = 4)
+gsea(values=vals,
+     geneset=gset[[g]], plot=TRUE, rank=TRUE,
+     main = paste("Cell-type", celltype, "enriched with", g, "genes"))
+dev.off()
 
 ```
 
@@ -1409,6 +1628,12 @@ overlays <- list(he1_gray, he2_gray, he3_gray, he4_gray)
 
 ```{r}
 
+overlays_colored <- list(he1, he2, he3, he4)
+
+```
+
+```{r}
+
 celltype <- 15
 plts <- lapply(unique(bclCorpus$slice), function(s){
   slice <- bclCorpus$slice == s
@@ -1435,11 +1660,11 @@ plts <- lapply(unique(bclCorpus$slice), function(s){
                  topicCols=cc,
                  groups = txn, # rep("0", nrows(m))
                  group_cols = bclTxnClustCols, # c("0" = "black")
-                 r = 100,
+                 r = 110,
                  lwd = 0.3, # 0.1
-                 showLegend = FALSE,
+                 showLegend = TRUE,
                  plotTitle = paste0("Section ", s),
-                 overlay = overlays[[s]])
+                 overlay = overlays_colored[[s]])
   ggplotGrob(plt)
 })
 
@@ -1449,8 +1674,8 @@ plts_grid <- gridExtra::grid.arrange(
                         c(3, 4))
 )
 # plts_grid
-ggplot2::ggsave(filename = paste0("4_k15_ct15_overlays_with_txnClusters.png"), # 4_k15_ct15_overlays.png
-         device = "png",
+ggplot2::ggsave(filename = paste0("Figure_3-B-celltype_15_txn_clusters_and_tissue-bcl_372genes_k15.pdf"),
+         device = "pdf",
          plot = plts_grid,
          path = fig_path,
          scale = 1.5,
@@ -1558,14 +1783,14 @@ ggplot(data = dat) +
         axis.title=element_text(size=15),
         plot.title = element_text(size=15, face=NULL),
         )
-ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_txnProfile_barplot.png"),
-         device = "png",
-         path = fig_path,
-         scale = 1.5,
-         width = 5,
-         height = 3,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_txnProfile_barplot.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
 
 ## ----------------------------------------------------
 ## log2FC relative to other cell-types
@@ -1588,7 +1813,8 @@ dat$selectedLabels1[ix_label] <- dat$genes[ix_label]
 # dat$selectedLabels2[ix_label] <- dat$genes[ix_label]
 
 ggplot(data = dat) +
-  geom_col(aes(x = order, y = values)) +
+  geom_col(aes(x = order, y = values, fill = " ")) +
+  scale_fill_manual(values = transparentCol("darkgray", percent = 70)) +
   labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
        x = "Gene expression rank", y = "log2FC Normalized and scaled expression") +
   # coord_cartesian(clip = "off") +
@@ -1612,9 +1838,10 @@ ggplot(data = dat) +
         axis.title.y = element_text(size=12),
         axis.title=element_text(size=15),
         plot.title = element_text(size=15, face=NULL),
+        legend.position = "none"
         )
-ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_txnProfile_log2FC_barplot.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S11-celltype_13_log2fc_txn_profile-bcl_372genes_k15.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,
@@ -1651,15 +1878,15 @@ for (s in unique(bclCorpus$slice)){
                           c(6, 7, 8))
   )
   print(plts_grid1)
-  ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_", s, "_top8_log2fc_markers_gexp_counts.png"),
-           device = "png",
-           plot = plts_grid1,
-           path = fig_path,
-           scale = 1.5,
-           width = 4,
-           height = 3,
-           units = c("in"),
-           dpi = 300)
+  # ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_", s, "_top8_log2fc_markers_gexp_counts.png"),
+  #          device = "png",
+  #          plot = plts_grid1,
+  #          path = fig_path,
+  #          scale = 1.5,
+  #          width = 4,
+  #          height = 3,
+  #          units = c("in"),
+  #          dpi = 300)
 }
 
 # df <- merge(as.data.frame(pos),
@@ -2182,14 +2409,14 @@ ggplot(data = dat) +
         axis.title=element_text(size=15),
         plot.title = element_text(size=15, face=NULL),
         )
-ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_txnProfile_barplot.png"),
-         device = "png",
-         path = fig_path,
-         scale = 1.5,
-         width = 5,
-         height = 3,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_txnProfile_barplot.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
 
 ## ----------------------------------------------------
 ## log2FC relative to other cell-types
@@ -2212,7 +2439,8 @@ dat$selectedLabels1[ix_label] <- dat$genes[ix_label]
 # dat$selectedLabels2[ix_label] <- dat$genes[ix_label]
 
 ggplot(data = dat) +
-  geom_col(aes(x = order, y = values)) +
+  geom_col(aes(x = order, y = values, fill = " ")) +
+  scale_fill_manual(values = transparentCol("darkgray", percent = 70)) +
   labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
        x = "Gene expression rank", y = "log2FC Normalized and scaled expression") +
   # coord_cartesian(clip = "off") +
@@ -2236,9 +2464,10 @@ ggplot(data = dat) +
         axis.title.y = element_text(size=12),
         axis.title=element_text(size=15),
         plot.title = element_text(size=15, face=NULL),
+        legend.position = "none"
         )
-ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_txnProfile_log2FC_barplot.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S11-celltype_3_log2fc_txn_profile-bcl_372genes_k15.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,
@@ -2275,15 +2504,15 @@ for (s in unique(bclCorpus$slice)){
                           c(6, 7, 8))
   )
   print(plts_grid1)
-  ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_", s, "_top8_log2fc_markers_gexp_counts.png"),
-           device = "png",
-           plot = plts_grid1,
-           path = fig_path,
-           scale = 1.5,
-           width = 4,
-           height = 3,
-           units = c("in"),
-           dpi = 300)
+  # ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_", s, "_top8_log2fc_markers_gexp_counts.png"),
+  #          device = "png",
+  #          plot = plts_grid1,
+  #          path = fig_path,
+  #          scale = 1.5,
+  #          width = 4,
+  #          height = 3,
+  #          units = c("in"),
+  #          dpi = 300)
 }
 
 
@@ -2360,7 +2589,7 @@ KRT17 keratin
 n <- "15"
 counts <- bclClean
 
-markers <- c("KRT17", "PRSS23", "GBP5", "CD74", "CXCL10")
+markers <- c("KRT17", "PRSS23", "GBP5", "CD74", "CXCL10", "CXCL9")
 for (marker in markers){
   ps <- lapply(unique(bclCorpus$slice), function(s){
     slice <- bclCorpus$slice == s
@@ -2375,7 +2604,8 @@ for (marker in markers){
                 size = 2.4, stroke = 0.1,
                 plotTitle = marker,
                 winsorize = 0.0,
-                showLegend = FALSE)
+                showLegend = TRUE)
+    plt <- plt + guides(color = FALSE)
     ggplotGrob(plt)
   })
   plts_grid1 <- gridExtra::grid.arrange(
@@ -2385,8 +2615,8 @@ for (marker in markers){
                             )
       )
   print(plts_grid1)
-    ggplot2::ggsave(filename = paste0("4_k15", "_", marker, "_all_sections_gexp_counts.png"),
-             device = "png",
+    ggplot2::ggsave(filename = paste0("Supplemental_Figure_S11-S12-gexp_countsClean_", marker, ".pdf"),
+             device = "pdf",
              plot = plts_grid1,
              path = fig_path,
              scale = 1.5,

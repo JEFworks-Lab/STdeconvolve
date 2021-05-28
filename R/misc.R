@@ -285,6 +285,8 @@ SPOTlightPredict <- function(nmfRef, stCounts, min_cont = 0.0) {
   ct_topic_profiles <- topic_profile_per_cluster_nmf(h = h,
                                                      train_cell_clust = nmfRef[[2]])
 
+  ## these are weights (not proportions), and needed for `nnls` step in `mixture_deconvolution_nmf`
+
   # convert to topic proportions for each cell type
   ct_topic_profiles_r <- round(ct_topic_profiles, 4)
   ct_topics <- do.call(cbind, lapply(seq(ncol(ct_topic_profiles_r)), function(i){
@@ -345,7 +347,7 @@ SPOTlightPredict <- function(nmfRef, stCounts, min_cont = 0.0) {
   ct_in_spots <- mixture_deconvolution_nmf(nmf_mod = nmfRef[[1]],
                                            mixture_transcriptome = stCounts,
                                            transf = "uv",
-                                           reference_profiles = ct_topics,
+                                           reference_profiles = ct_topic_profiles, ## use the weights not proportions
                                            min_cont = min_cont) # only keep topics if 9% or more in a spot
   # note that last column is an additional columns for the residual error
   # cleanup to get actual spot-celltype predictions:
@@ -356,7 +358,7 @@ SPOTlightPredict <- function(nmfRef, stCounts, min_cont = 0.0) {
 
   return(list(betaTopics = t(w), # topic x gene weights that sum to 1 (all genes and topics)
               betaCt = ct_beta, # CellType x gene weights that sum to 1 (all genes and topics)
-              ctTopicProps = ct_topics, # topic proportion for each cell type
+              ctTopicProps = ct_topics, # topic proportions for each cell type
               thetaTopics = t(topics_in_spots_norm), # proportion of each topic in each spot (all topics)
               thetaCt = ct_in_spots_clean)) # spot x celltype proportions (all spots and cell types)
 

@@ -16,6 +16,10 @@ draft_fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeco
 
 ```
 
+```{r}
+fig_path <- "/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/figures/pdfs/"
+```
+
 # mOB dataset rep 8
 
 mOB dataset. Get the cleaned data set, CPM normalized, and build corpus using the cleaned dataset and over dispered genes.
@@ -89,7 +93,9 @@ mob_annot[com==3] <- 'Olfactory Nerve Layer'
 mob_annot <- as.factor(mob_annot)
 
 # Plot
-pdf(file = paste0(fig_path, "3_MOB_rep8_txn_clust_tsne.pdf"))
+pdf(file = paste0(fig_path, "Supplemental_Figure_S6-A-mob_rep8_txn_clust_tsne.pdf"),
+    width = 6,
+    height = 6)
 par(mfrow=c(1,1), mar=rep(1,4))
 MERINGUE::plotEmbedding(emb, groups=mob_annot, alpha = 0.8, cex = 1.0,
                         show.legend=TRUE, xlab=NA, ylab=NA,
@@ -142,8 +148,8 @@ vizAllTopics(theta = m,
                      lwd = 0.3,
                      showLegend = TRUE,
                      plotTitle = "Txn clusters")
-ggplot2::ggsave(filename = paste0("3_MOB_8_txn_grouped_pixels.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S6-B-mob_8_txn_grouped_pixels.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,
@@ -193,11 +199,26 @@ mobLDAs <- fitLDA(counts = mobCorpus$corpus,
 
 ```{r}
 
-dat <- data.frame(K = as.double(names(mobLDAs$perplexities)),
-                  rareCts = mobLDAs$numRare,
-                  perplexity = mobLDAs$perplexities,
-                  rareCtsAdj = scale0_1(mobLDAs$numRare),
-                  perplexAdj = scale0_1(mobLDAs$perplexities))
+ks <- seq(from = 2, to = 20, by = 1)
+models <- mobLDAs
+corpus <- mobCorpus$corpus
+perc.rare.thresh <- 0.05
+
+## check number of predicted cell-types at low proportions
+out <- lapply(1:length(ks), function(i) {
+  apply(getBetaTheta(lda = models$models[[i]], corpus = corpus)$theta, 2, mean)
+})
+
+## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
+numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))
+
+pScores <- models$perplexities[1:length(ks)]
+
+dat <- data.frame(K = as.double(ks),
+                  rareCts = numrare,
+                  perplexity = pScores,
+                  rareCtsAdj = scale0_1(numrare),
+                  perplexAdj = scale0_1(pScores))
 
 prim_ax_labs <- seq(min(dat$rareCts), max(dat$rareCts))
 prim_ax_breaks <- scale0_1(prim_ax_labs)
@@ -215,11 +236,11 @@ if(max(dat$rareCts) < 1){
 }
 sec_ax_breaks <- scale0_1(sec_ax_labs)
 
-ggplot2::ggplot(dat, aes(x=K)) +
+plt <- ggplot2::ggplot(dat, aes(x=K)) +
   ggplot2::geom_line(aes(y=rareCtsAdj), col="blue", lwd = 2) +
   ggplot2::geom_line(aes(y=perplexAdj), col="red", lwd = 2) +
-  ggplot2::scale_y_continuous(name="# cell-types with mean proportion < 5%", breaks = prim_ax_breaks, labels = prim_ax_labs,
-                     sec.axis=sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
+  ggplot2::scale_y_continuous(name=paste0("# cell-types with mean proportion < ", round(perc.rare.thresh*100, 2), "%"), breaks = prim_ax_breaks, labels = prim_ax_labs,
+                              sec.axis=sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
   ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
   ggplot2::ggtitle("Fitted model K's vs deconvolved cell-types and perplexity") +
   ggplot2::theme_classic() +
@@ -234,12 +255,13 @@ ggplot2::ggplot(dat, aes(x=K)) +
     axis.text.x = ggplot2::element_text(angle = 0, size = 13),
     axis.title.x = ggplot2::element_text(size=13)
   )
-ggplot2::ggsave(filename = paste0("3_MOB_rep8_lda_fitting_lineplot.png"),
-         device = "png",
+print(plt)
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S6-C-lda_perplex_rarect_05-mob_rep8.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,
-         height = 3,
+         height = 4,
          units = c("in"),
          dpi = 300)
 
@@ -688,7 +710,9 @@ gplots::heatmap.2(x = corMtx,
                   # lhei = c(1,3),
                   margins = c(7,10))
 
-pdf(file = paste0(fig_path, "3_MOB_k12_vs_txn_corr_heatmap.pdf"), width = 8, height = 4)
+pdf(file = paste0(fig_path, "Supplemental_Figure_S6-D-mob_rep8_k12_vs_txn_corr_heatmap.pdf"),
+    width = 8,
+    height = 4)
 gplots::heatmap.2(x = corMtx,
                   density.info = "none",
                   trace = "none",
@@ -758,12 +782,12 @@ plt <- vizAllTopics(theta = m,
                      r = 0.4, # different size piecharts for mOB data sets
                      lwd = 0.3,
                      showLegend = TRUE,
-                     plotTitle = "MOB rep 8, 12 deconvolved cell-types")
+                     plotTitle = NA)
 
 plt <- plt + guides(fill=guide_legend(ncol=2))
 print(plt)
-ggplot2::ggsave(filename = paste0("3_MOB_k12_pixels.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Figure_2-G-mob_rep8_k12_txn_cluster_shading.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,
@@ -800,14 +824,16 @@ for(i in c(3,4,5,7,11,12)){
                      showLegend = TRUE,
                      plotTitle = i)
   print(plt)
-  # ggplot2::ggsave(filename = paste0("3_MOB_k12_pixels_ct11_innerCore.png"),
-  #          device = "png",
-  #          path = fig_path,
-  #          scale = 1.5,
-  #          width = 5,
-  #          height = 3,
-  #          units = c("in"),
-  #          dpi = 300)
+  if (i == 7){
+    ggplot2::ggsave(filename = paste0("Figure_2-H-mob_rep8_k12_celltype_7.pdf"),
+             device = "pdf",
+             path = fig_path,
+             scale = 1.5,
+             width = 5,
+             height = 3,
+             units = c("in"),
+             dpi = 300)
+  }
 }
 
 # m <- as.matrix(mobProxyTheta)
@@ -887,14 +913,14 @@ ggplot(data = dat) +
         axis.title=element_text(size=15),
         plot.title = element_text(size=15, face=NULL),
         )
-ggplot2::ggsave(filename = paste0("3_MOB_k12_ct7_txnProfile_barplot.png"),
-         device = "png",
-         path = fig_path,
-         scale = 1.5,
-         width = 5,
-         height = 3,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("3_MOB_k12_ct7_txnProfile_barplot.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
 
 ## ----------------------------------------------------
 ## log2FC relative to other cell-types
@@ -917,7 +943,8 @@ ix_label <- tail(seq(length(log2fc)), 5)
 dat$selectedLabels2[ix_label] <- dat$genes[ix_label]
 
 ggplot(data = dat) +
-  geom_col(aes(x = order, y = values)) +
+  geom_col(aes(x = order, y = values, fill = " ")) +
+  scale_fill_manual(values = transparentCol("darkgray", percent = 70)) +
   labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
        x = "Gene expression rank", y = "log2FC Normalized and scaled expression") +
   # coord_cartesian(clip = "off") +
@@ -941,9 +968,10 @@ ggplot(data = dat) +
         axis.title.y = element_text(size=12),
         axis.title=element_text(size=15),
         plot.title = element_text(size=15, face=NULL),
+        legend.position = "none"
         )
-ggplot2::ggsave(filename = paste0("3_MOB_k12_ct7_txnProfile_log2FC_barplot.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S6-E-log2fc_txn-mob_rep8_k12_ct7.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,
@@ -966,7 +994,8 @@ ps <- lapply(markers, function(marker) {
               size = 2.5, stroke = 0.1,
               plotTitle = marker,
               winsorize = 0.05,
-              showLegend = FALSE)
+              showLegend = TRUE)
+  plt <- plt + guides(color = FALSE)
   ggplotGrob(plt)
 })
 plts_grid1 <- gridExtra::grid.arrange(
@@ -975,12 +1004,12 @@ plts_grid1 <- gridExtra::grid.arrange(
                         c(4, 5, 6))
 )
 plts_grid1
-ggplot2::ggsave(filename = paste0("3_MOB_k12_ct7_top4_log2fc_markers_gexp_counts.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Figure_2-I-top_log2fc_markers_gexp-countsClean-mob_rep8_k12_ct7.pdf"),
+         device = "pdf",
          plot = plts_grid1,
          path = fig_path,
          scale = 1.5,
-         width = 4.5,
+         width = 6,
          height = 3,
          units = c("in"),
          dpi = 300)
@@ -1008,15 +1037,15 @@ plts_grid2 <- gridExtra::grid.arrange(
                         c(3, 4))
 )
 plts_grid2
-ggplot2::ggsave(filename = paste0("3_MOB_k12_ct7_bottom4_log2fc_markers_gexp_counts.png"),
-         device = "png",
-         plot = plts_grid2,
-         path = fig_path,
-         scale = 1.5,
-         width = 4,
-         height = 3,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("3_MOB_k12_ct7_bottom4_log2fc_markers_gexp_counts.png"),
+#          device = "png",
+#          plot = plts_grid2,
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 4,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
 
 ```
 
@@ -1391,14 +1420,16 @@ gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct cl
                   col = correlation_palette,
                   breaks = correlation_breaks,
                   key.xlab = "Correlation",
-                  xlab = "SPOTlight deconvolved cell-types",
-                  ylab = "STdevonvolve deconvolved cell-types",
+                  xlab = "SPOTlight reference cell-types",
+                  ylab = "STdevonvolve cell-types",
                   key.title = NA,
                   cexRow = 0.9,
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(5,10))
-pdf(file = paste0(fig_path, "3_MOB_k12_vs_SL_paired_corr_heatmap.pdf"), width = 6, height = 4)
+
+pdf(file = paste0(fig_path, "Supplemental_Figure_S7-C-spotlight_vs_stdecon_k12_ct_proportion_cor-mob_rep8.pdf"),
+    width = 6, height = 4)
 gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
                   Rowv = NA,
                   Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
@@ -1407,8 +1438,8 @@ gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct cl
                   col = correlation_palette,
                   breaks = correlation_breaks,
                   key.xlab = "Correlation",
-                  xlab = "SPOTlight deconvolved cell-types",
-                  ylab = "STdevonvolve deconvolved cell-types",
+                  xlab = "SPOTlight reference cell-types",
+                  ylab = "STdevonvolve cell-types",
                   key.title = NA,
                   cexRow = 0.9,
                   cexCol = 0.9,
@@ -1451,14 +1482,15 @@ gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct cl
                   col = correlation_palette,
                   breaks = correlation_breaks,
                   key.xlab = "Correlation",
-                  xlab = "SPOTlight deconvolved cell-types",
-                  ylab = "RCTD deconvolved cell-types",
+                  xlab = "SPOTlight reference cell-types",
+                  ylab = "RCTD reference cell-types",
                   key.title = NA,
                   cexRow = 0.7,
                   cexCol = 0.7,
                   # lhei = c(1,3),
                   margins = c(5,10))
-pdf(file = paste0(fig_path, "3_MOB_rctd_vs_SL_paired_corr_heatmap.pdf"), width = 6, height = 4)
+pdf(file = paste0(fig_path, "Supplemental_Figure_S7-A-spotlight_vs_rctd_ct_proportion_cor-mob_rep8.pdf"),
+    width = 6, height = 4)
 gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
                   Rowv = NA,
                   Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
@@ -1467,8 +1499,8 @@ gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct cl
                   col = correlation_palette,
                   breaks = correlation_breaks,
                   key.xlab = "Correlation",
-                  xlab = "SPOTlight deconvolved cell-types",
-                  ylab = "RCTD deconvolved cell-types",
+                  xlab = "SPOTlight reference cell-types",
+                  ylab = "RCTD reference cell-types",
                   key.title = NA,
                   cexRow = 0.7,
                   cexCol = 0.7,
@@ -1511,14 +1543,15 @@ gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct cl
                   col = correlation_palette,
                   breaks = correlation_breaks,
                   key.xlab = "Correlation",
-                  xlab = "RCTD deconvolved cell-types",
-                  ylab = "STdevonvolve deconvolved cell-types",
+                  xlab = "RCTD reference cell-types",
+                  ylab = "STdevonvolve cell-types",
                   key.title = NA,
                   cexRow = 0.9,
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(5,10))
-pdf(file = paste0(fig_path, "3_MOB_k12_vs_rctd_paired_corr_heatmap.pdf"), width = 6, height = 4)
+pdf(file = paste0(fig_path, "Supplemental_Figure_S7-B-rctd_vs_stdecon_k12_ct_proportion_cor-mob_rep8.pdf"),
+    width = 6, height = 4)
 gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
                   Rowv = NA,
                   Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
@@ -1527,8 +1560,8 @@ gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct cl
                   col = correlation_palette,
                   breaks = correlation_breaks,
                   key.xlab = "Correlation",
-                  xlab = "RCTD deconvolved cell-types",
-                  ylab = "STdevonvolve deconvolved cell-types",
+                  xlab = "RCTD reference cell-types",
+                  ylab = "STdevonvolve cell-types",
                   key.title = NA,
                   cexRow = 0.9,
                   cexCol = 0.9,
@@ -1567,8 +1600,8 @@ ggplot(data = reshape2::melt(plyr::ldply(cor_mob_summary, rbind)),
         # axis.title=element_text(size=15),
         plot.title = element_text(size=15, face=NULL),
         legend.position = "none")
-ggplot2::ggsave(filename = paste0("3_correlations_between_methods_boxplots.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S7-D-compare_method_ct_proportions_boxplots.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,
@@ -1883,8 +1916,8 @@ ggplot(data = dat, aes(x = reorder(group, group), y = value, color = color)) +
         axis.title.y = element_text(size=12),
         plot.title = element_text(size=15, face=NULL),
         legend.position = "none")
-ggsave(filename = "3_N2_pixel_proportions_sl_rctd_noOEC_scatter.png",
-       device = "png",
+ggsave(filename = "Supplemental_Figure_S8-A-N2_pixel_proportions_sl_rctd_noOEC_scatter.pdf",
+       device = "pdf",
        path = fig_path,
        scale = 1.5,
        width = 3.5,
@@ -1972,8 +2005,8 @@ plts_grid <- gridExtra::grid.arrange(
                         c(3, 4))
 )
 plts_grid
-ggplot2::ggsave(filename = paste0("3_MOB_sl_rctd_noOECs_N2_pixels.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S8-B-mob_rep8_sl_rctd_noOECs_N2_pixels.pdf"),
+         device = "pdf",
          plot = plts_grid,
          path = fig_path,
          scale = 1.5,
@@ -2159,8 +2192,8 @@ plts_grid <- gridExtra::grid.arrange(
   layout_matrix = rbind(c(1, 2))
 )
 plts_grid
-ggplot2::ggsave(filename = paste0("3_MOB_sl_rctd_cortex_VLMC_pixels.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S9-A-cortex_vlmc_pixels-mob_rep8.pdf"),
+         device = "pdf",
          plot = plts_grid,
          path = fig_path,
          scale = 1.5,
@@ -2222,7 +2255,7 @@ markers <- dplyr::arrange(vlmc_markers, p_val_adj)$gene[1:4] # look at top 4
 markers <- c(markers, c("Pdgfra", "Lum")) ## note that Lum is not in the mobClean/cleanCounts used for training, but all the other genes are
 
 pos <- mobCorpus$pos
-counts <- mOB$countsCPM ## CPM normalized counts
+counts <- mOB$counts #mOB$countsCPM ## CPM normalized counts
 
 ## visualize
 df <- merge(as.data.frame(pos), 
@@ -2234,7 +2267,8 @@ ps <- lapply(markers, function(marker) {
               size = 2.5, stroke = 0.1,
               plotTitle = marker,
               winsorize = 0.05,
-              showLegend = FALSE)
+              showLegend = TRUE)
+  plt <- plt + guides(color = FALSE)
   ggplotGrob(plt)
 })
 plts_grid1 <- gridExtra::grid.arrange(
@@ -2243,12 +2277,12 @@ plts_grid1 <- gridExtra::grid.arrange(
                         c(3, 4, 6))
 )
 plts_grid1
-ggplot2::ggsave(filename = paste0("3_VLMC_top_marker_genes_cpm.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S9-B-vlmc_marker_genes_counts-mob_rep8.pdf"),
+         device = "pdf",
          plot = plts_grid1,
          path = fig_path,
          scale = 1.5,
-         width = 6,
+         width = 7,
          height = 3,
          units = c("in"),
          dpi = 300)
@@ -2284,7 +2318,8 @@ ix_label <- seq(5)
 dat$selectedLabels[ix_label] <- dat$genes[ix_label]
 
 ggplot(data = dat) +
-  geom_col(aes(x = order, y = values)) +
+  geom_col(aes(x = order, y = values, fill = " ")) +
+  scale_fill_manual(values = transparentCol("darkgray", percent = 70)) +
   labs(title = paste0("Deconvolved cell-type ", celltype, " transcriptional profile"),
        x = "Gene expression rank", y = "Normalized and scaled expression") +
   # coord_cartesian(clip = "off") +
@@ -2302,9 +2337,10 @@ ggplot(data = dat) +
         axis.title.y = element_text(size=15),
         axis.title=element_text(size=15),
         plot.title = element_text(size=15, face=NULL),
+        legend.position = "none"
         )
-ggplot2::ggsave(filename = paste0("3_MOB_k12_ct8_txnProfile_barplot.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S8-C-txn_profile_celltype_8-mob_rep8_k12.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,
@@ -2358,14 +2394,14 @@ ggplot(data = dat) +
         axis.title=element_text(size=15),
         plot.title = element_text(size=15, face=NULL),
         )
-ggplot2::ggsave(filename = paste0("3_MOB_k12_ct8_txnProfile_log2FC_barplot.png"),
-         device = "png",
-         path = fig_path,
-         scale = 1.5,
-         width = 5,
-         height = 3,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("3_MOB_k12_ct8_txnProfile_log2FC_barplot.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
 
 ## ----------------------------------------------------
 ## viz top markers
@@ -2390,15 +2426,15 @@ plts_grid1 <- gridExtra::grid.arrange(
                         c(3, 4))
 )
 plts_grid1
-ggplot2::ggsave(filename = paste0("3_MOB_k12_ct8_top4_log2fc_markers_gexp_counts.png"),
-         device = "png",
-         plot = plts_grid1,
-         path = fig_path,
-         scale = 1.5,
-         width = 4,
-         height = 3,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("3_MOB_k12_ct8_top4_log2fc_markers_gexp_counts.png"),
+#          device = "png",
+#          plot = plts_grid1,
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 4,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
 
 ## ----------------------------------------------------
 ## viz bottom markers
@@ -2423,15 +2459,15 @@ plts_grid2 <- gridExtra::grid.arrange(
                         c(3, 4))
 )
 plts_grid2
-ggplot2::ggsave(filename = paste0("3_MOB_k12_ct8_bottom4_log2fc_markers_gexp_counts.png"),
-         device = "png",
-         plot = plts_grid2,
-         path = fig_path,
-         scale = 1.5,
-         width = 4,
-         height = 3,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("3_MOB_k12_ct8_bottom4_log2fc_markers_gexp_counts.png"),
+#          device = "png",
+#          plot = plts_grid2,
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 4,
+#          height = 3,
+#          units = c("in"),
+#          dpi = 300)
 
 ```
 
@@ -2449,7 +2485,7 @@ oec1_markers <- oec1_markers[oec1_markers$gene %in% rownames(mobClean),]
 markers <- dplyr::arrange(oec1_markers, p_val_adj)$gene[1:4] # look at top 4
 
 pos <- mobCorpus$pos
-counts <- mobCPM ## CPM normalized counts
+counts <- mobClean ## CPM normalized counts
 
 ## visualize
 df <- merge(as.data.frame(pos), 
@@ -2461,7 +2497,8 @@ ps <- lapply(markers, function(marker) {
               size = 2.5, stroke = 0.1,
               plotTitle = marker,
               winsorize = 0.05,
-              showLegend = FALSE)
+              showLegend = TRUE)
+  plt <- plt + guides(color = FALSE)
   ggplotGrob(plt)
 })
 plts_grid1 <- gridExtra::grid.arrange(
@@ -2470,12 +2507,12 @@ plts_grid1 <- gridExtra::grid.arrange(
                         c(3, 4))
 )
 plts_grid1
-ggplot2::ggsave(filename = paste0("3_OEC1_top_marker_genes_cpm.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S8-C2-oec1_marker_genes_countsClean-mob_rep8.pdf"),
+         device = "pdf",
          plot = plts_grid1,
          path = fig_path,
          scale = 1.5,
-         width = 4,
+         width = 5,
          height = 3,
          units = c("in"),
          dpi = 300)
@@ -2535,11 +2572,16 @@ markers <- dplyr::arrange(oec1_markers, p_val_adj)$gene
 n <- "12"
 deconGexp <- mobLDAsDeconv[[n]]$beta*1000
 
-for (i in seq(12)){
+# for (i in seq(12)){
+
+pdf(file = paste0(fig_path, "Supplemental_Figure_S8-D-gsea_oec_celltype_8-mob_rep8_k12.pdf"),
+    width = 6,
+    height = 6)
+for (i in c(8)){
   vals <- sort(deconGexp[i,], decreasing = TRUE)
   gsea(values=vals, geneset=markers, plot=TRUE, rank=TRUE, main = paste0("Cell-type ", i, " enrichment with OEC1 cluster genes"))
 }
-
+dev.off()
 ```
 
 ## OEC2 genes
@@ -2863,6 +2905,77 @@ names(mobLDAsRep5Deconv) <- as.character(seq(3,20))
 
 ```
 
+```{r}
+
+ks <- seq(from = 2, to = 20, by = 1)
+models <- mobLDAsRep5
+corpus <- mobCorpusReps$Rep5$corpus
+perc.rare.thresh <- 0.05
+
+## check number of predicted cell-types at low proportions
+out <- lapply(1:length(ks), function(i) {
+  apply(getBetaTheta(lda = models$models[[i]], corpus = corpus)$theta, 2, mean)
+})
+
+## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
+numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))
+
+pScores <- models$perplexities[1:length(ks)]
+
+dat <- data.frame(K = as.double(ks),
+                  rareCts = numrare,
+                  perplexity = pScores,
+                  rareCtsAdj = scale0_1(numrare),
+                  perplexAdj = scale0_1(pScores))
+
+prim_ax_labs <- seq(min(dat$rareCts), max(dat$rareCts))
+prim_ax_breaks <- scale0_1(prim_ax_labs)
+## if number rareCts stays constant, then only one break. scale0_1(prim_ax_labs) would be NaN so change to 0
+if(length(prim_ax_labs) == 1){
+  prim_ax_breaks <- 0
+  ## also the rareCtsAdj <- scale0_1(rareCts) would be NaN, so set to 0, so at same position as the tick,
+  ## and its label will still be set to the constant value of rareCts
+  dat$rareCtsAdj <- 0
+}
+if(max(dat$rareCts) < 1){
+  sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/1)
+} else {
+  sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/max(dat$rareCts))
+}
+sec_ax_breaks <- scale0_1(sec_ax_labs)
+
+plt <- ggplot2::ggplot(dat, aes(x=K)) +
+  ggplot2::geom_line(aes(y=rareCtsAdj), col="blue", lwd = 2) +
+  ggplot2::geom_line(aes(y=perplexAdj), col="red", lwd = 2) +
+  ggplot2::scale_y_continuous(name=paste0("# cell-types with mean proportion < ", round(perc.rare.thresh*100, 2), "%"), breaks = prim_ax_breaks, labels = prim_ax_labs,
+                              sec.axis=sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
+  ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
+  ggplot2::ggtitle("Fitted model K's vs deconvolved cell-types and perplexity") +
+  ggplot2::theme_classic() +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(size=15, face=NULL),
+    panel.grid.minor = ggplot2::element_blank(),
+    panel.grid.major = ggplot2::element_line(color = "black", size = 0.1),
+    axis.title.y.left = ggplot2::element_text(color="blue", size = 13),
+    axis.text.y.left = ggplot2::element_text(color="blue", size = 13),
+    axis.title.y.right = ggplot2::element_text(color="red", size = 15, vjust = 1.5),
+    axis.text.y.right = ggplot2::element_text(color="red", size = 13),
+    axis.text.x = ggplot2::element_text(angle = 0, size = 13),
+    axis.title.x = ggplot2::element_text(size=13)
+  )
+print(plt)
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S16-A-lda_perplex_rarect_05-mob_rep5.pdf"),
+         device = "pdf",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+```
+
+
 ## Rep 12
 
 ```{r}
@@ -2897,6 +3010,76 @@ mobLDAsRep12Deconv <- lapply(seq(3,20), function(l) {
 })
 
 names(mobLDAsRep12Deconv) <- as.character(seq(3,20))
+
+```
+
+```{r}
+
+ks <- seq(from = 2, to = 20, by = 1)
+models <- mobLDAsRep12
+corpus <- mobCorpusReps$Rep12$corpus
+perc.rare.thresh <- 0.05
+
+## check number of predicted cell-types at low proportions
+out <- lapply(1:length(ks), function(i) {
+  apply(getBetaTheta(lda = models$models[[i]], corpus = corpus)$theta, 2, mean)
+})
+
+## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
+numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))
+
+pScores <- models$perplexities[1:length(ks)]
+
+dat <- data.frame(K = as.double(ks),
+                  rareCts = numrare,
+                  perplexity = pScores,
+                  rareCtsAdj = scale0_1(numrare),
+                  perplexAdj = scale0_1(pScores))
+
+prim_ax_labs <- seq(min(dat$rareCts), max(dat$rareCts))
+prim_ax_breaks <- scale0_1(prim_ax_labs)
+## if number rareCts stays constant, then only one break. scale0_1(prim_ax_labs) would be NaN so change to 0
+if(length(prim_ax_labs) == 1){
+  prim_ax_breaks <- 0
+  ## also the rareCtsAdj <- scale0_1(rareCts) would be NaN, so set to 0, so at same position as the tick,
+  ## and its label will still be set to the constant value of rareCts
+  dat$rareCtsAdj <- 0
+}
+if(max(dat$rareCts) < 1){
+  sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/1)
+} else {
+  sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/max(dat$rareCts))
+}
+sec_ax_breaks <- scale0_1(sec_ax_labs)
+
+plt <- ggplot2::ggplot(dat, aes(x=K)) +
+  ggplot2::geom_line(aes(y=rareCtsAdj), col="blue", lwd = 2) +
+  ggplot2::geom_line(aes(y=perplexAdj), col="red", lwd = 2) +
+  ggplot2::scale_y_continuous(name=paste0("# cell-types with mean proportion < ", round(perc.rare.thresh*100, 2), "%"), breaks = prim_ax_breaks, labels = prim_ax_labs,
+                              sec.axis=sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
+  ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
+  ggplot2::ggtitle("Fitted model K's vs deconvolved cell-types and perplexity") +
+  ggplot2::theme_classic() +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(size=15, face=NULL),
+    panel.grid.minor = ggplot2::element_blank(),
+    panel.grid.major = ggplot2::element_line(color = "black", size = 0.1),
+    axis.title.y.left = ggplot2::element_text(color="blue", size = 13),
+    axis.text.y.left = ggplot2::element_text(color="blue", size = 13),
+    axis.title.y.right = ggplot2::element_text(color="red", size = 15, vjust = 1.5),
+    axis.text.y.right = ggplot2::element_text(color="red", size = 13),
+    axis.text.x = ggplot2::element_text(angle = 0, size = 13),
+    axis.title.x = ggplot2::element_text(size=13)
+  )
+print(plt)
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S16-B-lda_perplex_rarect_05-mob_rep12.pdf"),
+         device = "pdf",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
 
 ```
 
@@ -2939,6 +3122,76 @@ names(mobLDAsRep2Deconv) <- as.character(seq(3,20))
 
 ```
 
+```{r}
+
+ks <- seq(from = 2, to = 20, by = 1)
+models <- mobLDAsRep2
+corpus <- mobCorpusReps$Rep2$corpus
+perc.rare.thresh <- 0.05
+
+## check number of predicted cell-types at low proportions
+out <- lapply(1:length(ks), function(i) {
+  apply(getBetaTheta(lda = models$models[[i]], corpus = corpus)$theta, 2, mean)
+})
+
+## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
+numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))
+
+pScores <- models$perplexities[1:length(ks)]
+
+dat <- data.frame(K = as.double(ks),
+                  rareCts = numrare,
+                  perplexity = pScores,
+                  rareCtsAdj = scale0_1(numrare),
+                  perplexAdj = scale0_1(pScores))
+
+prim_ax_labs <- seq(min(dat$rareCts), max(dat$rareCts))
+prim_ax_breaks <- scale0_1(prim_ax_labs)
+## if number rareCts stays constant, then only one break. scale0_1(prim_ax_labs) would be NaN so change to 0
+if(length(prim_ax_labs) == 1){
+  prim_ax_breaks <- 0
+  ## also the rareCtsAdj <- scale0_1(rareCts) would be NaN, so set to 0, so at same position as the tick,
+  ## and its label will still be set to the constant value of rareCts
+  dat$rareCtsAdj <- 0
+}
+if(max(dat$rareCts) < 1){
+  sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/1)
+} else {
+  sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/max(dat$rareCts))
+}
+sec_ax_breaks <- scale0_1(sec_ax_labs)
+
+plt <- ggplot2::ggplot(dat, aes(x=K)) +
+  ggplot2::geom_line(aes(y=rareCtsAdj), col="blue", lwd = 2) +
+  ggplot2::geom_line(aes(y=perplexAdj), col="red", lwd = 2) +
+  ggplot2::scale_y_continuous(name=paste0("# cell-types with mean proportion < ", round(perc.rare.thresh*100, 2), "%"), breaks = prim_ax_breaks, labels = prim_ax_labs,
+                              sec.axis=sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
+  ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
+  ggplot2::ggtitle("Fitted model K's vs deconvolved cell-types and perplexity") +
+  ggplot2::theme_classic() +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(size=15, face=NULL),
+    panel.grid.minor = ggplot2::element_blank(),
+    panel.grid.major = ggplot2::element_line(color = "black", size = 0.1),
+    axis.title.y.left = ggplot2::element_text(color="blue", size = 13),
+    axis.text.y.left = ggplot2::element_text(color="blue", size = 13),
+    axis.title.y.right = ggplot2::element_text(color="red", size = 15, vjust = 1.5),
+    axis.text.y.right = ggplot2::element_text(color="red", size = 13),
+    axis.text.x = ggplot2::element_text(angle = 0, size = 13),
+    axis.title.x = ggplot2::element_text(size=13)
+  )
+print(plt)
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S16-C-lda_perplex_rarect_05-mob_rep2.pdf"),
+         device = "pdf",
+         path = fig_path,
+         scale = 1.5,
+         width = 5,
+         height = 4,
+         units = c("in"),
+         dpi = 300)
+
+```
+
 # Comparisons
 
 ## inter
@@ -2971,18 +3224,20 @@ ggplot2::ggplot(data = dat) +
   ggplot2::xlab("MOB replicate 8") + # corr mat rows
   ggplot2::ylab("MOB replicate 2") + # corr mat columns
   ggplot2::ggtitle("Cell-type transcriptional profile correlation") +
-  ggplot2::theme(axis.text.x=element_text(angle=-90, size=8),
-                panel.grid = element_blank(),
-                axis.line=element_blank(),
-                # axis.text.x=element_blank(),
-                axis.text.y=element_text(size=8),
-                axis.ticks=element_blank(),
-                # axis.title.x=element_blank(),
-                # axis.title.y=element_blank(),
-                panel.background=element_blank()) +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=10),
+                 axis.text.y=element_text(angle=0, size=10),
+                 axis.title.y=element_text(size=12),
+                 axis.title.x=element_text(size=12),
+                 plot.title = element_text(size=15),
+                 panel.grid = element_blank(),
+                 axis.line=element_blank(),
+                 axis.ticks=element_blank(),
+                 panel.background=element_blank()
+                 # legend.position = "bottom"
+                 ) +
   ggplot2::coord_fixed()
-ggplot2::ggsave(filename = paste0("3_mob_k12_rep8_rep2_txn_corr_heatmap.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S16-D-txn_corr_heatmap-mob_rep8_vs_mob_rep2-k12.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,
@@ -3014,18 +3269,20 @@ ggplot2::ggplot(data = dat) +
   ggplot2::xlab("MOB replicate 8") + # corr mat rows
   ggplot2::ylab("MOB replicate 12") + # corr mat columns
   ggplot2::ggtitle("Cell-type transcriptional profile correlation") +
-  ggplot2::theme(axis.text.x=element_text(angle=-90, size=8),
-                panel.grid = element_blank(),
-                axis.line=element_blank(),
-                # axis.text.x=element_blank(),
-                axis.text.y=element_text(size=8),
-                axis.ticks=element_blank(),
-                # axis.title.x=element_blank(),
-                # axis.title.y=element_blank(),
-                panel.background=element_blank()) +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=10),
+                 axis.text.y=element_text(angle=0, size=10),
+                 axis.title.y=element_text(size=12),
+                 axis.title.x=element_text(size=12),
+                 plot.title = element_text(size=15),
+                 panel.grid = element_blank(),
+                 axis.line=element_blank(),
+                 axis.ticks=element_blank(),
+                 panel.background=element_blank()
+                 # legend.position = "bottom"
+                 ) +
   ggplot2::coord_fixed()
-ggplot2::ggsave(filename = paste0("3_mob_k12_rep8_rep12_txn_corr_heatmap.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S16-E-txn_corr_heatmap-mob_rep8_vs_mob_rep12-k12.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,
@@ -3057,18 +3314,20 @@ ggplot2::ggplot(data = dat) +
   ggplot2::xlab("MOB replicate 8") + # corr mat rows
   ggplot2::ylab("MOB replicate 5") + # corr mat columns
   ggplot2::ggtitle("Cell-type transcriptional profile correlation") +
-  ggplot2::theme(axis.text.x=element_text(angle=-90, size=8),
-                panel.grid = element_blank(),
-                axis.line=element_blank(),
-                # axis.text.x=element_blank(),
-                axis.text.y=element_text(size=8),
-                axis.ticks=element_blank(),
-                # axis.title.x=element_blank(),
-                # axis.title.y=element_blank(),
-                panel.background=element_blank()) +
+  ggplot2::theme(axis.text.x=element_text(angle=-90, size=10),
+                 axis.text.y=element_text(angle=0, size=10),
+                 axis.title.y=element_text(size=12),
+                 axis.title.x=element_text(size=12),
+                 plot.title = element_text(size=15),
+                 panel.grid = element_blank(),
+                 axis.line=element_blank(),
+                 axis.ticks=element_blank(),
+                 panel.background=element_blank()
+                 # legend.position = "bottom"
+                 ) +
   ggplot2::coord_fixed()
-ggplot2::ggsave(filename = paste0("3_mob_k12_rep8_rep5_txn_corr_heatmap.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S16-F-txn_corr_heatmap-mob_rep8_vs_mob_rep5-k12.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,
@@ -3086,9 +3345,9 @@ cor_mob_summary <- list("Rep8 vs Rep2" = rep8_rep2,
 ggplot(data = reshape2::melt(plyr::ldply(cor_mob_summary, rbind)), 
        aes(x=.id, y=value, fill=.id)) +
   # geom_boxplot(outlier.shape=NA) +
-  # geom_point(position = position_jitterdodge(), alpha = 0.3, size = 0.1) +
   ggplot2::geom_violin(trim=TRUE, fill="gray") +
   ggplot2::geom_boxplot(width=0.1, outlier.shape=NA, fill="white") +
+  geom_point(position = position_jitterdodge(jitter.width = 0.1), size = 1) +
   labs(title = "Correlations between cell-types deconvolved from different datasets\n(each model K=12)",
        x = "Method", y = "Pearson's correlation") +
   theme_classic() +
@@ -3101,8 +3360,8 @@ ggplot(data = reshape2::melt(plyr::ldply(cor_mob_summary, rbind)),
         # axis.title=element_text(size=15),
         plot.title = element_text(size=15, face=NULL),
         legend.position = "none")
-ggplot2::ggsave(filename = paste0("3_correlations_between_mob_reps_k12_boxplots.png"),
-         device = "png",
+ggplot2::ggsave(filename = paste0("Supplemental_Figure_S16-G-corr_boxplots-mob8_vs_reps-k12.pdf"),
+         device = "pdf",
          path = fig_path,
          scale = 1.5,
          width = 5,
@@ -3118,6 +3377,229 @@ What if I extracted beta theta from a different dataset than what was used to fi
 Compare extracted beta theta from same dataset and then from different dataset?
 
 
+# -----------------------------------
+# overdispersed vs spatial
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/repos/STdeconvolve/data/mOB.rda")
+
+mobClean <- cleanCounts(mOB$counts,
+                        min.lib.size = 100,
+                        max.lib.size = Inf,
+                        min.reads = 100,
+                        min.detected = 1,
+                        verbose = TRUE,
+                        plot=TRUE)
+
+mobCPM <- MERINGUE::normalizeCounts(counts = mobClean, 
+                       log=FALSE,
+                       verbose=TRUE)
+
+mobCorpus <- preprocess(t(mOB$counts),
+                       alignFile = NA,
+                       extractPos = FALSE,
+                       selected.genes = NA,
+                       nTopGenes = NA,
+                       genes.to.remove = NA,
+                       removeAbove = NA,
+                       removeBelow = NA,
+                       min.reads = 100,
+                       min.lib.size = 100,
+                       min.detected = 1,
+                       ODgenes = TRUE,
+                       nTopOD = NA,
+                       od.genes.alpha = 0.05,
+                       gam.k = 5,
+                       verbose = TRUE)
+mobCorpus$pos <- mOB$pos[rownames(mobCorpus$corpus), ]
+
+```
+
+starting from: `mobClean` (7365 filtered genes and 260 pixels)
+
+overdispersed genes:
+
+```{r}
+
+odGenes <- getOverdispersedGenes(mobClean,
+                                 alpha = 0.05,
+                                 plot = TRUE,
+                                 details = TRUE,
+                                 verbose = TRUE)
+countsFilt <- mobClean[odGenes$ods,]
+
+```
+
+Spatial genes:
+
+```{r}
+
+# Get neighbor-relationships
+w <- MERINGUE::getSpatialNeighbors(mobCorpus$pos, filterDist = 2.5)
+plotNetwork(mobCorpus$pos, w)
+
+I <- MERINGUE::getSpatialPatterns(mobClean, w)
+
+results.filter <- MERINGUE::filterSpatialPatterns(mat = mobClean,
+                                                  I = I,
+                                                  w = w,
+                                                  adjustPv = TRUE,
+                                                  alpha = 0.01, # conservative to reduce the list of genes to a reasonable size.
+                                                  minPercentCells = 0.05,
+                                                  verbose = TRUE)
+
+mobSpatialGenes <- list(I=I, sig.genes=results.filter)
+
+```
+
+1858 spatial genes using alpha = 0.01 driven by 5% pixels (> 13 pixels)
+632 spatial genes using alpha = 0.001 driven by 5% pixels (> 13 pixels)
+
+
+```{r}
+
+mobCleanSpatial <- mobClean[mobSpatialGenes$sig.genes,]
+dim(mobCleanSpatial)
+```
+
+
+intersection of overdispersed and spatial:
+
+```{r}
+
+intersect(mobSpatialGenes$sig.genes, odGenes$ods)
+
+```
+
+174 genes shared between 255 overdispered genes and 1858 spatial genes
+132 genes shared between 255 overdispered genes and 632 spatial genes
+
+
+```{r}
+
+mobCorpusSpatial <- preprocess(as.matrix(t(mobCleanSpatial)),
+                       alignFile = NA,
+                       extractPos = FALSE,
+                       selected.genes = NA,
+                       nTopGenes = NA,
+                       genes.to.remove = NA,
+                       removeAbove = 0.7, # remove genes that are in 50% or more of the pixels
+                       removeBelow = NA, # already selected for spatial genes driven by 10% or more of pixels, so this isnt relevant
+                       min.reads = 100,
+                       min.lib.size = 100,
+                       min.detected = 1,
+                       ODgenes = FALSE,
+                       # nTopOD = NA,
+                       # od.genes.alpha = 0.05,
+                       # gam.k = 5,
+                       verbose = TRUE)
+mobCorpusSpatial$pos <- mOB$pos[rownames(mobCorpusSpatial$corpus), ]
+
+
+```
+
+367 spatial genes in no more than 70% of pixels
+
+```{r}
+
+intersect(colnames(mobCorpusSpatial$corpus), odGenes$ods)
+
+```
+
+38 shared genes now (70% filter from the 1858 genes)
+
+88 genes shared now
+
+
+```{r}
+
+ks <- seq(from = 2, to = 20, by = 1)
+
+```
+
+```{r}
+
+mobLDAsSpatial <- fitLDA(counts = mobCorpusSpatial$corpus,
+                        Ks = ks,
+                        testSize = NULL,
+                        perc.rare.thresh = 0.05,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+
+```
+
+```{r}
+
+# first do the Stahl data because can get positional information from the spot IDs
+mobLDAsSpatialDeconv <- lapply(seq(3,20), function(l) {
+  lda <- buildLDAobject(LDAmodel = optimalModel(mobLDAsSpatial, opt = l),
+                        corpus = mobCorpusSpatial$corpus,
+                        deepSplit = 4,
+                        colorScheme = "rainbow")
+  lda
+})
+names(mobLDAsSpatialDeconv) <- as.character(seq(3,20))
+
+```
+
+```{r}
+
+for (k in seq(3,20)){
+  
+  m <- mobLDAsSpatialDeconv[[as.character(k)]]$theta
+  p <- mobCorpusSpatial$pos
+  
+  plt <- vizAllTopics(theta = m,
+                       pos = p,
+                       topicOrder=seq(ncol(m)),
+                       topicCols=rainbow(ncol(m)),
+                       groups = rep("0", 260),
+                       group_cols = c("0" = "black"),
+                       r = 0.4, # different size piecharts for mOB data sets
+                       lwd = 0.3,
+                       showLegend = TRUE,
+                       plotTitle = k)
+  print(plt)
+}
 
 
 
+
+```
+
+
+```{r}
+
+mobLDAsDeconv 
+
+```
+
+
+```{r}
+
+lda_k15_theta <- mobLDAsDeconv$`15`$theta
+lda_k15_theta[lda_k15_theta < 0.05] <- 0
+
+# try just calling the unassigned proportions "ambiguous"
+# ambig <- 1 - rowSums(lda_k8_theta)
+# lda_k8_theta2 <- cbind(lda_k8_theta, ambig)
+
+# readjust proportions
+lda_k15_theta <- lda_k15_theta/rowSums(lda_k15_theta)
+# if NAs because all cts are 0 in a spot, replace with 0
+lda_k15_theta[is.na(lda_k15_theta)] <- 0
+
+summary(lda_k15_theta)
+
+ggplot(data = reshape2::melt(lda_k15_theta), aes(x = reorder(Var2, -value), y = value)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(cex=0.1)
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+# drop any cts that are 0 for all pixels
+lda_k15_theta <- lda_k15_theta[,which(colSums(lda_k15_theta) > 0)]
+# lda_k8_theta2 <- lda_k8_theta2[,which(colSums(lda_k8_theta2) > 0)]
+
+```
