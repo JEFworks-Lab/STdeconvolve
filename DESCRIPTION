@@ -12,12 +12,8 @@ Authors@R:
                   family = "Fan",
                   role = c("aut"),
                   email = "jeanfan@jhu.edu",
-                  comment = c(ORCID = "0000-0002-0212-5451")),
-           person(given = "Feiyang",
-                  family = "Huang",
-                  role = c("aut"),
-                  email = "fhuang15@jhu.edu",
-                  comment = c(ORCID = "")))
+                  comment = c(ORCID = "0000-0002-0212-5451"))
+    )
 Description: STdeconvolve uses latent Dirichlet allocation to infer latent cell-type proportions and transcriptional profiles within multi-cellular spatially-resolved pixels from spatial transcriptomics datasets.  
 biocViews: Transcriptomics, Visualization, Deconvolution, RNASeq, TopicModels, Spatial
 License: GPL-3
