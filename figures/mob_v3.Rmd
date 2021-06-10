@@ -710,9 +710,9 @@ gplots::heatmap.2(x = corMtx,
                   # lhei = c(1,3),
                   margins = c(7,10))
 
-pdf(file = paste0(fig_path, "Supplemental_Figure_S6-D-mob_rep8_k12_vs_txn_corr_heatmap.pdf"),
-    width = 8,
-    height = 4)
+# pdf(file = paste0(fig_path, "Supplemental_Figure_S6-D-mob_rep8_k12_vs_txn_corr_heatmap.pdf"),
+#     width = 8,
+#     height = 4)
 gplots::heatmap.2(x = corMtx,
                   density.info = "none",
                   trace = "none",
@@ -726,7 +726,7 @@ gplots::heatmap.2(x = corMtx,
                   cexCol = 0.9,
                   # lhei = c(1,3),
                   margins = c(7,10))
-dev.off()
+# dev.off()
 
 ```
 
@@ -1390,315 +1390,6 @@ dim(sl_theta)
 
 # -------------------------------------
 
-# LDA vs SL
-
-note that pairing done based on pixel proportion correlation, but clustering in heatmap based on gexp similarity of cell-types
-
-```{r}
-
-corMtx <- getCorrMtx(m1 = lda_k12_theta, #  rows, nrows must be less or equal to ncols for pairing
-                     m2 = sl_theta, # cols
-                     type = "t")
-
-pdf(file = paste0(fig_path, "Supplemental_Figure_S7-C-spotlight_vs_stdecon_k12_ct_proportion_cor-mob_rep8.pdf"),
-    width = 6, height = 4)
-gplots::heatmap.2(x = corMtx, # rearrange rows based on ct clustering
-                  # Rowv = NA,
-                  # Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "SPOTlight deconvolved cell-types",
-                  ylab = "STdevonvolve cell-types",
-                  key.title = NA,
-                  cexRow = 0.7,
-                  cexCol = 0.7,
-                  # lhei = c(1,3),
-                  margins = c(5,10))
-dev.off()
-
-gplots::heatmap.2(x = corMtx, # rearrange rows based on ct clustering
-                  # Rowv = NA,
-                  # Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "SPOTlight deconvolved cell-type clusters",
-                  ylab = "STdevonvolve cell-types",
-                  key.title = NA,
-                  cexRow = 0.7,
-                  cexCol = 0.7,
-                  # lhei = c(1,3),
-                  margins = c(5,10))
-
-
-
-## pair up best matching cell class to a predicted topic
-pairs <- lsatPairs(corMtx)
-## new mtx where rows and cols in order in which they are paired
-corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
-
-## cluster the cell-types based on the average gexp from the reference (this is really just for viz purposes)
-## use the significant genes for each cluster
-mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
-beta <- mobWtCellProxyBetaRaw[colnames(corMtx_paired), mob_sig_marker_genes]
-## cluster cell-types based on ave gene exp of selected genes
-d_ <- as.dist(1-cor(t(beta)))
-hc_ <- stats::hclust(d_, method = "ward.D")
-
-gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
-                  Rowv = NA,
-                  Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "SPOTlight deconvolved cell-types",
-                  ylab = "STdevonvolve cell-types",
-                  key.title = NA,
-                  cexRow = 0.9,
-                  cexCol = 0.9,
-                  # lhei = c(1,3),
-                  margins = c(5,10))
-
-# pdf(file = paste0(fig_path, "Supplemental_Figure_S7-C-spotlight_vs_stdecon_k12_ct_proportion_cor-mob_rep8.pdf"),
-#     width = 6, height = 4)
-# gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
-#                   Rowv = NA,
-#                   Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
-#                   density.info = "none",
-#                   trace = "none",
-#                   col = correlation_palette,
-#                   breaks = correlation_breaks,
-#                   key.xlab = "Correlation",
-#                   xlab = "SPOTlight deconvolved cell-types",
-#                   ylab = "STdevonvolve cell-types",
-#                   key.title = NA,
-#                   cexRow = 0.9,
-#                   cexCol = 0.9,
-#                   # lhei = c(1,3),
-#                   margins = c(5,10))
-# dev.off()
-
-## get the correlations across the diagonal
-lda_vs_sl_theta_filt <- diag(corMtx_paired)
-
-
-## match all 26 SL cell-types to the STdeconvolve cell-type they correlate strongest with:
-lda_vs_sl_theta_filt_all <- apply(corMtx, 2, max)
-
-```
-
-# RCTD vs SL
-
-note that pairing done based on pixel proportion correlation, but clustering in heatmap based on gexp similarity of cell-types
-
-```{r}
-
-corMtx <- getCorrMtx(m1 = rctd_theta,
-                     m2 = sl_theta,
-                     type = "t")
-
-pdf(file = paste0(fig_path, "Supplemental_Figure_S7-A-spotlight_vs_rctd_ct_proportion_cor-mob_rep8.pdf"),
-    width = 6, height = 4)
-gplots::heatmap.2(x = corMtx, # rearrange rows based on ct clustering
-                  # Rowv = NA,
-                  # Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "SPOTlight deconvolved cell-types",
-                  ylab = "RCTD deconvolved cell-types",
-                  key.title = NA,
-                  cexRow = 0.7,
-                  cexCol = 0.7,
-                  # lhei = c(1,3),
-                  margins = c(5,10))
-dev.off()
-
-gplots::heatmap.2(x = corMtx, # rearrange rows based on ct clustering
-                  # Rowv = NA,
-                  # Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "SPOTlight deconvolved cell-types",
-                  ylab = "RCTD deconvolved cell-types",
-                  key.title = NA,
-                  cexRow = 0.7,
-                  cexCol = 0.7,
-                  # lhei = c(1,3),
-                  margins = c(5,10))
-
-
-
-## pair up best matching cell class to a predicted topic
-pairs <- lsatPairs(corMtx)
-## new mtx where rows and cols in order in which they are paired
-corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
-
-## cluster the cell-types based on the average gexp from the reference (this is really just for viz purposes)
-## use the significant genes for each cluster
-mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
-beta <- mobWtCellProxyBetaRaw[colnames(corMtx_paired), mob_sig_marker_genes]
-## cluster cell-types based on ave gene exp of selected genes
-d_ <- as.dist(1-cor(t(beta)))
-hc_ <- stats::hclust(d_, method = "ward.D")
-
-gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
-                  Rowv = NA,
-                  Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "SPOTlight deconvolved cell-types",
-                  ylab = "RCTD deconvolved cell-types",
-                  key.title = NA,
-                  cexRow = 0.7,
-                  cexCol = 0.7,
-                  # lhei = c(1,3),
-                  margins = c(5,10))
-# pdf(file = paste0(fig_path, "Supplemental_Figure_S7-A-spotlight_vs_rctd_ct_proportion_cor-mob_rep8.pdf"),
-#     width = 6, height = 4)
-# gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
-#                   Rowv = NA,
-#                   Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
-#                   density.info = "none",
-#                   trace = "none",
-#                   col = correlation_palette,
-#                   breaks = correlation_breaks,
-#                   key.xlab = "Correlation",
-#                   xlab = "SPOTlight deconvolved cell-types",
-#                   ylab = "RCTD deconvolved cell-types",
-#                   key.title = NA,
-#                   cexRow = 0.7,
-#                   cexCol = 0.7,
-#                   # lhei = c(1,3),
-#                   margins = c(5,10))
-# dev.off()
-
-## get the correlations across the diagonal
-rctd_vs_sl_theta_filt <- diag(corMtx_paired)
-
-## match all 26 SL cell-types to the RCTD cell-type they correlate strongest with:
-rctd_vs_sl_theta_filt_all <- apply(corMtx, 2, max)
-
-```
-
-# RCTD vs LDA
-
-note that pairing done based on pixel proportion correlation, but clustering in heatmap based on gexp similarity of cell-types
-
-```{r}
-
-corMtx <- getCorrMtx(m1 = lda_k12_theta, #  rows, nrows must be less or equal to ncols for pairing
-                     m2 = rctd_theta, # cols
-                     type = "t")
-
-pdf(file = paste0(fig_path, "Supplemental_Figure_S7-B-rctd_vs_stdecon_k12_ct_proportion_cor-mob_rep8.pdf"),
-    width = 6, height = 4)
-gplots::heatmap.2(x = corMtx, # rearrange rows based on ct clustering
-                  # Rowv = NA,
-                  # Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "RCTD deconvolved cell-types",
-                  ylab = "STdevonvolve cell-types",
-                  key.title = NA,
-                  cexRow = 0.7,
-                  cexCol = 0.7,
-                  # lhei = c(1,3),
-                  margins = c(5,10))
-dev.off()
-
-gplots::heatmap.2(x = corMtx, # rearrange rows based on ct clustering
-                  # Rowv = NA,
-                  # Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "RCTD deconvolved cell-types",
-                  ylab = "STdevonvolve deconvolved cell-types",
-                  key.title = NA,
-                  cexRow = 0.7,
-                  cexCol = 0.7,
-                  # lhei = c(1,3),
-                  margins = c(5,10))
-
-
-## pair up best matching cell class to a predicted topic
-pairs <- lsatPairs(corMtx)
-## new mtx where rows and cols in order in which they are paired
-corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
-
-## cluster the cell-types based on the average gexp from the reference (this is really just for viz purposes)
-## use the significant genes for each cluster
-mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
-beta <- mobWtCellProxyBetaRaw[colnames(corMtx_paired), mob_sig_marker_genes]
-## cluster cell-types based on ave gene exp of selected genes
-d_ <- as.dist(1-cor(t(beta)))
-hc_ <- stats::hclust(d_, method = "ward.D")
-
-gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
-                  Rowv = NA,
-                  Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
-                  density.info = "none",
-                  trace = "none",
-                  col = correlation_palette,
-                  breaks = correlation_breaks,
-                  key.xlab = "Correlation",
-                  xlab = "RCTD reference cell-types",
-                  ylab = "STdevonvolve deconvolved cell-types",
-                  key.title = NA,
-                  cexRow = 0.9,
-                  cexCol = 0.9,
-                  # lhei = c(1,3),
-                  margins = c(5,10))
-# pdf(file = paste0(fig_path, "Supplemental_Figure_S7-B-rctd_vs_stdecon_k12_ct_proportion_cor-mob_rep8.pdf"),
-#     width = 6, height = 4)
-# gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
-#                   Rowv = NA,
-#                   Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
-#                   density.info = "none",
-#                   trace = "none",
-#                   col = correlation_palette,
-#                   breaks = correlation_breaks,
-#                   key.xlab = "Correlation",
-#                   xlab = "RCTD deconvolved cell-types",
-#                   ylab = "STdevonvolve deconvolved cell-types",
-#                   key.title = NA,
-#                   cexRow = 0.9,
-#                   cexCol = 0.9,
-#                   # lhei = c(1,3),
-#                   margins = c(5,10))
-# dev.off()
-
-## get the correlations across the diagonal
-rctd_vs_lda_theta_filt <- diag(corMtx_paired)
-
-## match all 22 RCTD cell-types to the STdeconvolve cell-type they correlate strongest with:
-rctd_vs_lda_theta_filt_all <- apply(corMtx, 2, max)
-
-```
-
-# LDA vs gt txn
-
 ```{r}
 
 shared_genes <- which(rownames(mob_se_wt_raw) %in% colnames(mobLDAsDeconv$`12`$beta))
@@ -1729,6 +1420,169 @@ dim(mobWtCellProxyBetaRaw_sharedGenes)
 
 ```
 
+# reference marker gene sets
+
+```{r}
+
+deconGexp <- mobWtCellProxyBetaRaw_sharedGenes*1000
+# counts <- as.matrix(simFN7_9ct_135genes$sim)
+
+## for list of markers
+mob_gt_gene_set <- list()
+
+for (i in seq(nrow(deconGexp) - 1)){
+  celltype <- i
+  vals <- sort(deconGexp[celltype,], decreasing = TRUE)
+  
+  ## ----------------------------------------------------
+  ## txn profile, normalized and scaled expression
+  
+  dat <- data.frame(values = as.vector(vals), genes = names(vals), order = seq(length(vals)))
+  # Hide all of the text labels.
+  dat$selectedLabels <- ""
+  # Let's just label these items.
+  ix_label <- seq(20)
+  dat$selectedLabels[ix_label] <- dat$genes[ix_label]
+  
+  p1 <- ggplot(data = dat) +
+    geom_col(aes(x = order, y = values, fill = " ")) +
+    scale_fill_manual(values = transparentCol("darkgray", percent = 70)) +
+    labs(title = paste0(rownames(deconGexp)[celltype], " transcriptional profile"),
+         x = "Gene expression rank", y = "Normalized and scaled expression") +
+    # coord_cartesian(clip = "off") +
+    ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels), size = 3, 
+                    min.segment.length = 0.01, seed = 42, box.padding = 0.01, max.overlaps = Inf, point.padding = 0.01,
+                    # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                    nudge_x = 2.5, direction = "y", hjust = "left",
+                    # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+    ) +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle = 0, size = 15),
+          axis.text.y = element_text(size=15),
+          # strip.text = element_text(size=15),
+          axis.title.x = element_text(size=15),
+          axis.title.y = element_text(size=15),
+          axis.title=element_text(size=15),
+          plot.title = element_text(size=15, face=NULL),
+          )
+  print(p1)
+  # ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_txnProfile_barplot.png"),
+  #          device = "png",
+  #          path = fig_path,
+  #          scale = 1.5,
+  #          width = 5,
+  #          height = 3,
+  #          units = c("in"),
+  #          dpi = 300)
+  
+  ## ----------------------------------------------------
+  ## log2FC relative to other cell-types
+  
+  ## highly expressed in cell-type of interest
+  highgexp <- names(which(deconGexp[celltype,] > 5))
+  ## high log2(fold-change) compared to other deconvolved cell-types
+  log2fc <- sort(log2(deconGexp[celltype,highgexp]/colMeans(deconGexp[-celltype,highgexp])), decreasing=TRUE)
+  
+  ## for gene set of the ground truth cell-type, get the genes
+  ## with log2FC > 1 (so FC > 2 over the mean exp of the other cell-types)
+  markers <- names(log2fc[log2fc > 1])
+  mob_gt_gene_set[[ rownames(deconGexp)[celltype] ]] <- markers
+  
+  dat <- data.frame(values = as.vector(log2fc), genes = names(log2fc), order = seq(length(log2fc)))
+  # Hide all of the text labels.
+  dat$selectedLabels1 <- ""
+  # Let's just label these top items.
+  ix_label <- seq(5)
+  dat$selectedLabels1[ix_label] <- dat$genes[ix_label]
+  
+  # dat$selectedLabels2 <- ""
+  # # Let's label these bottom items
+  # ix_label <- tail(seq(length(log2fc)), 5)
+  # dat$selectedLabels2[ix_label] <- dat$genes[ix_label]
+  
+  p2 <- ggplot(data = dat) +
+    geom_col(aes(x = order, y = values, fill = " ")) +
+    scale_fill_manual(values = transparentCol("darkgray", percent = 70)) +
+    labs(title = paste0(rownames(deconGexp)[celltype], " transcriptional profile"),
+         x = "Gene expression rank", y = "log2FC Normalized and scaled expression") +
+    # coord_cartesian(clip = "off") +
+    ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels1), size = 3, 
+                    min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+                    # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+                    nudge_x = 2.5, direction = "both", hjust = "left",
+                    # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+    ) +
+    # ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels2), size = 5, 
+    #                 min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+    #                 # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+    #                 nudge_x = -10, direction = "y", hjust = "right",
+    #                 # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+    # ) +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle = 0, size = 15),
+          axis.text.y = element_text(size=15),
+          # strip.text = element_text(size=15),
+          axis.title.x = element_text(size=15),
+          axis.title.y = element_text(size=12),
+          axis.title=element_text(size=15),
+          plot.title = element_text(size=15, face=NULL),
+          legend.position = "none"
+          )
+  print(p2)
+  
+  # if (rownames(gtCtGenesFN7)[celltype] %in% c("Excitatory", "Inhibitory")){
+  #   ggplot2::ggsave(filename = paste0("Supplemental_Figure_S3-C-log2fc_txn_", rownames(gtCtGenesFN7)[celltype], ".pdf"),
+  #                 plot = p2,
+  #                 device = "pdf",
+  #                 path = fig_path,
+  #                 scale = 1.5,
+  #                 width = 5,
+  #                 height = 3,
+  #                 units = c("in"),
+  #                 dpi = 300)
+  # }
+  
+  
+}
+```
+
+## gsea
+
+```{r}
+
+deconGexp <- mobLDAsDeconv$`12`$beta*1000
+gset <- mob_gt_gene_set
+
+for (i in seq(nrow(deconGexp))){
+  celltype <- i
+  vals <- sort(deconGexp[celltype,], decreasing = TRUE)
+  
+  ## highly expressed in cell-type of interest
+  highgexp <- names(which(deconGexp[celltype,] > 5))
+  ## high log2(fold-change) compared to other deconvolved cell-types
+  log2fc <- sort(log2(deconGexp[celltype,highgexp]/colMeans(deconGexp[-celltype,highgexp])), decreasing=TRUE)
+  
+  gsea.results <- liger::iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
+  # print(gsea.results[order(gsea.results$p.val),])
+  
+  # filter for top hits
+  gsea.sig <- gsea.results[gsea.results$q.val < 0.1,]
+  gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
+  # print(gsea.sig)
+  
+  ## order of selection:
+  ## 1. q-val
+  ## 2. sscore
+  gsea.sig <- gsea.sig %>%
+    arrange(q.val, -sscore, -edge)
+  print(gsea.sig)
+  
+}
+
+```
+
+# LDA vs gt txn
+
 ```{r}
 
 ## cluster the cell-types based on the average gexp from the reference (this is really just for viz purposes)
@@ -1738,6 +1592,9 @@ beta <- mobWtCellProxyBetaRaw[, mob_sig_marker_genes]
 ## cluster cell-types based on ave gene exp of selected genes
 d_ <- as.dist(1-cor(t(beta)))
 hc_ <- stats::hclust(d_, method = "ward.D")
+
+rownames(beta)[hc_$order]
+
 
 corMtx <- getCorrMtx(m1 = mobLDAsDeconv$`12`$beta, #  rows, nrows must be less or equal to ncols for pairing
                      m2 = mobWtCellProxyBetaRaw_sharedGenes, # cols
@@ -1872,6 +1729,446 @@ gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct cl
 
 
 ```
+
+# order of gt cell-types
+
+```{r}
+
+## cluster the cell-types based on the average gexp from the reference (this is really just for viz purposes)
+## use the significant genes for each cluster
+mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
+beta <- mobWtCellProxyBetaRaw[, mob_sig_marker_genes]
+## cluster cell-types based on ave gene exp of selected genes
+d_ <- as.dist(1-cor(t(beta)))
+hc_ <- stats::hclust(d_, method = "ward.D")
+
+gt_order <- rownames(beta)[hc_$order]
+
+```
+
+```{r}
+
+## adjust gt order:
+gt_order <- c(
+  "N15",
+  "N14",
+  "N16",
+  "N12",
+  "N13",
+  "N7",
+  "N10",
+  "N8",
+  "N11",
+  "N4",
+  "N3",
+  "N2",
+  "N1",
+  "N9",
+  "N6",
+  "OPC",
+  "RBCs",
+  "MyOligo",
+  "EC1",
+  "Mural1",
+  "Mural2",
+  "EC2",
+  "Mes2",
+  "Mes1",
+  "MicroG3",
+  "MicroG1",
+  "MicroG2",
+  "Astro2",
+  "Astro1",
+  "Astro3",
+  "Mono",
+  "Mφ",
+  "OEC1",
+  "OEC2",
+  "OEC4",
+  "OEC5",
+  "OEC3",
+  "N5"
+  )
+
+```
+
+
+```{r}
+
+
+d_ <- as.dist(1-cor(t(mobLDAsDeconv$`12`$beta)))
+hc_ <- stats::hclust(d_, method = "ward.D")
+pred_order <- rownames(mobLDAsDeconv$`12`$beta)[hc_$order]
+
+```
+
+
+# LDA vs SL
+
+```{r}
+
+gt_present <- which(gt_order %in% colnames(sl_theta))
+
+corMtx <- getCorrMtx(m1 = lda_k12_theta[,pred_order], #  rows, nrows must be less or equal to ncols for pairing
+                     m2 = sl_theta[,gt_order[gt_present]], # cols
+                     type = "t")
+
+rownames(corMtx) <- paste0("X", rownames(corMtx))
+
+## sort the deconvolved cell-type rows in order of the highest correlation wrt the txn ordering of the gt cell-types
+decon_order_sl <- names(sort(apply(corMtx, 1, which.max)))
+corMtx <- corMtx[decon_order_sl,]
+
+pdf(file = paste0(fig_path, "Supplemental_Figure_S7-C-spotlight_vs_stdecon_k12_ct_proportion_cor-mob_rep8.pdf"),
+    width = 6, height = 4)
+gplots::heatmap.2(x = corMtx, # rearrange rows based on ct clustering
+                  Rowv = NA,
+                  Colv = NA, # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "SPOTlight deconvolved cell-types",
+                  ylab = "STdevonvolve cell-types",
+                  key.title = NA,
+                  cexRow = 0.7,
+                  cexCol = 0.7,
+                  # lhei = c(1,3),
+                  margins = c(5,10))
+dev.off()
+
+pairings <- rownames(corMtx)[as.vector(apply(corMtx, 2, which.max))]
+lda_vs_sl_theta_filt_all <- apply(corMtx, 2, max) # correlations
+
+print(pairings)
+
+
+# gplots::heatmap.2(x = corMtx, # rearrange rows based on ct clustering
+#                   # Rowv = NA,
+#                   # Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+#                   density.info = "none",
+#                   trace = "none",
+#                   col = correlation_palette,
+#                   breaks = correlation_breaks,
+#                   key.xlab = "Correlation",
+#                   xlab = "SPOTlight deconvolved cell-type clusters",
+#                   ylab = "STdevonvolve cell-types",
+#                   key.title = NA,
+#                   cexRow = 0.7,
+#                   cexCol = 0.7,
+#                   # lhei = c(1,3),
+#                   margins = c(5,10))
+# 
+# 
+# 
+# ## pair up best matching cell class to a predicted topic
+# pairs <- lsatPairs(corMtx)
+# ## new mtx where rows and cols in order in which they are paired
+# corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+# 
+# ## cluster the cell-types based on the average gexp from the reference (this is really just for viz purposes)
+# ## use the significant genes for each cluster
+# mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
+# beta <- mobWtCellProxyBetaRaw[colnames(corMtx_paired), mob_sig_marker_genes]
+# ## cluster cell-types based on ave gene exp of selected genes
+# d_ <- as.dist(1-cor(t(beta)))
+# hc_ <- stats::hclust(d_, method = "ward.D")
+# 
+# gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+#                   Rowv = NA,
+#                   Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+#                   density.info = "none",
+#                   trace = "none",
+#                   col = correlation_palette,
+#                   breaks = correlation_breaks,
+#                   key.xlab = "Correlation",
+#                   xlab = "SPOTlight deconvolved cell-types",
+#                   ylab = "STdevonvolve cell-types",
+#                   key.title = NA,
+#                   cexRow = 0.9,
+#                   cexCol = 0.9,
+#                   # lhei = c(1,3),
+#                   margins = c(5,10))
+# 
+# # pdf(file = paste0(fig_path, "Supplemental_Figure_S7-C-spotlight_vs_stdecon_k12_ct_proportion_cor-mob_rep8.pdf"),
+# #     width = 6, height = 4)
+# # gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+# #                   Rowv = NA,
+# #                   Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+# #                   density.info = "none",
+# #                   trace = "none",
+# #                   col = correlation_palette,
+# #                   breaks = correlation_breaks,
+# #                   key.xlab = "Correlation",
+# #                   xlab = "SPOTlight deconvolved cell-types",
+# #                   ylab = "STdevonvolve cell-types",
+# #                   key.title = NA,
+# #                   cexRow = 0.9,
+# #                   cexCol = 0.9,
+# #                   # lhei = c(1,3),
+# #                   margins = c(5,10))
+# # dev.off()
+# 
+# ## get the correlations across the diagonal
+# lda_vs_sl_theta_filt <- diag(corMtx_paired)
+# 
+# 
+# ## match all 26 SL cell-types to the STdeconvolve cell-type they correlate strongest with:
+# lda_vs_sl_theta_filt_all <- apply(corMtx, 2, max)
+
+```
+
+# RCTD vs SL
+
+note that pairing done based on pixel proportion correlation, but clustering in heatmap based on gexp similarity of cell-types
+
+```{r}
+
+gt_present_sl <- which(gt_order %in% colnames(sl_theta))
+gt_present_rctd <- which(gt_order %in% colnames(rctd_theta))
+
+corMtx <- getCorrMtx(m1 = rctd_theta[,gt_order[gt_present_rctd]],
+                     m2 = sl_theta[,gt_order[gt_present_sl]],
+                     type = "t")
+
+pdf(file = paste0(fig_path, "Supplemental_Figure_S7-A-spotlight_vs_rctd_ct_proportion_cor-mob_rep8.pdf"),
+    width = 6, height = 4)
+gplots::heatmap.2(x = corMtx, # rearrange rows based on ct clustering
+                  Rowv = NA,
+                  Colv = NA, # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "SPOTlight deconvolved cell-types",
+                  ylab = "RCTD deconvolved cell-types",
+                  key.title = NA,
+                  cexRow = 0.7,
+                  cexCol = 0.7,
+                  # lhei = c(1,3),
+                  margins = c(5,10))
+dev.off()
+
+pairings <- rownames(corMtx)[as.vector(apply(corMtx, 2, which.max))]
+rctd_vs_sl_theta_filt_all <- apply(corMtx, 2, max) # correlations
+
+print(pairings)
+
+# gplots::heatmap.2(x = corMtx, # rearrange rows based on ct clustering
+#                   # Rowv = NA,
+#                   # Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+#                   density.info = "none",
+#                   trace = "none",
+#                   col = correlation_palette,
+#                   breaks = correlation_breaks,
+#                   key.xlab = "Correlation",
+#                   xlab = "SPOTlight deconvolved cell-types",
+#                   ylab = "RCTD deconvolved cell-types",
+#                   key.title = NA,
+#                   cexRow = 0.7,
+#                   cexCol = 0.7,
+#                   # lhei = c(1,3),
+#                   margins = c(5,10))
+# 
+# 
+# 
+# ## pair up best matching cell class to a predicted topic
+# pairs <- lsatPairs(corMtx)
+# ## new mtx where rows and cols in order in which they are paired
+# corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+# 
+# ## cluster the cell-types based on the average gexp from the reference (this is really just for viz purposes)
+# ## use the significant genes for each cluster
+# mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
+# beta <- mobWtCellProxyBetaRaw[colnames(corMtx_paired), mob_sig_marker_genes]
+# ## cluster cell-types based on ave gene exp of selected genes
+# d_ <- as.dist(1-cor(t(beta)))
+# hc_ <- stats::hclust(d_, method = "ward.D")
+# 
+# gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+#                   Rowv = NA,
+#                   Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+#                   density.info = "none",
+#                   trace = "none",
+#                   col = correlation_palette,
+#                   breaks = correlation_breaks,
+#                   key.xlab = "Correlation",
+#                   xlab = "SPOTlight deconvolved cell-types",
+#                   ylab = "RCTD deconvolved cell-types",
+#                   key.title = NA,
+#                   cexRow = 0.7,
+#                   cexCol = 0.7,
+#                   # lhei = c(1,3),
+#                   margins = c(5,10))
+# # pdf(file = paste0(fig_path, "Supplemental_Figure_S7-A-spotlight_vs_rctd_ct_proportion_cor-mob_rep8.pdf"),
+# #     width = 6, height = 4)
+# # gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+# #                   Rowv = NA,
+# #                   Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+# #                   density.info = "none",
+# #                   trace = "none",
+# #                   col = correlation_palette,
+# #                   breaks = correlation_breaks,
+# #                   key.xlab = "Correlation",
+# #                   xlab = "SPOTlight deconvolved cell-types",
+# #                   ylab = "RCTD deconvolved cell-types",
+# #                   key.title = NA,
+# #                   cexRow = 0.7,
+# #                   cexCol = 0.7,
+# #                   # lhei = c(1,3),
+# #                   margins = c(5,10))
+# # dev.off()
+# 
+# ## get the correlations across the diagonal
+# rctd_vs_sl_theta_filt <- diag(corMtx_paired)
+# 
+# ## match all 26 SL cell-types to the RCTD cell-type they correlate strongest with:
+# rctd_vs_sl_theta_filt_all <- apply(corMtx, 2, max)
+
+```
+
+# RCTD vs LDA
+
+note that pairing done based on pixel proportion correlation, but clustering in heatmap based on gexp similarity of cell-types
+
+```{r}
+
+gt_present <- which(gt_order %in% colnames(rctd_theta))
+
+corMtx <- getCorrMtx(m1 = lda_k12_theta[,pred_order], #  rows, nrows must be less or equal to ncols for pairing
+                     m2 = rctd_theta[,gt_order[gt_present]], # cols
+                     type = "t")
+
+rownames(corMtx) <- paste0("X", rownames(corMtx))
+
+## sort the deconvolved cell-type rows in order of the highest correlation wrt the txn ordering of the gt cell-types
+decon_order_rctd <- names(sort(apply(corMtx, 1, which.max)))
+corMtx <- corMtx[decon_order_sl,]
+
+pdf(file = paste0(fig_path, "Supplemental_Figure_S7-B-rctd_vs_stdecon_k12_ct_proportion_cor-mob_rep8.pdf"),
+    width = 6, height = 4)
+gplots::heatmap.2(x = corMtx, # rearrange rows based on ct clustering
+                  Rowv = NA,
+                  Colv = NA, # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+                  density.info = "none",
+                  trace = "none",
+                  col = correlation_palette,
+                  breaks = correlation_breaks,
+                  key.xlab = "Correlation",
+                  xlab = "RCTD deconvolved cell-types",
+                  ylab = "STdevonvolve cell-types",
+                  key.title = NA,
+                  cexRow = 0.7,
+                  cexCol = 0.7,
+                  # lhei = c(1,3),
+                  margins = c(5,10))
+dev.off()
+
+pairings <- rownames(corMtx)[as.vector(apply(corMtx, 2, which.max))]
+rctd_vs_lda_theta_filt_all <- apply(corMtx, 2, max) # correlations
+
+print(pairings)
+
+
+
+# corMtx <- getCorrMtx(m1 = lda_k12_theta, #  rows, nrows must be less or equal to ncols for pairing
+#                      m2 = rctd_theta, # cols
+#                      type = "t")
+# 
+# pdf(file = paste0(fig_path, "Supplemental_Figure_S7-B-rctd_vs_stdecon_k12_ct_proportion_cor-mob_rep8.pdf"),
+#     width = 6, height = 4)
+# gplots::heatmap.2(x = corMtx, # rearrange rows based on ct clustering
+#                   # Rowv = NA,
+#                   # Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+#                   density.info = "none",
+#                   trace = "none",
+#                   col = correlation_palette,
+#                   breaks = correlation_breaks,
+#                   key.xlab = "Correlation",
+#                   xlab = "RCTD deconvolved cell-types",
+#                   ylab = "STdevonvolve cell-types",
+#                   key.title = NA,
+#                   cexRow = 0.7,
+#                   cexCol = 0.7,
+#                   # lhei = c(1,3),
+#                   margins = c(5,10))
+# dev.off()
+# 
+# gplots::heatmap.2(x = corMtx, # rearrange rows based on ct clustering
+#                   # Rowv = NA,
+#                   # Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+#                   density.info = "none",
+#                   trace = "none",
+#                   col = correlation_palette,
+#                   breaks = correlation_breaks,
+#                   key.xlab = "Correlation",
+#                   xlab = "RCTD deconvolved cell-types",
+#                   ylab = "STdevonvolve deconvolved cell-types",
+#                   key.title = NA,
+#                   cexRow = 0.7,
+#                   cexCol = 0.7,
+#                   # lhei = c(1,3),
+#                   margins = c(5,10))
+# 
+# 
+# ## pair up best matching cell class to a predicted topic
+# pairs <- lsatPairs(corMtx)
+# ## new mtx where rows and cols in order in which they are paired
+# corMtx_paired <- corMtx[pairs$rowix, pairs$colsix]
+# 
+# ## cluster the cell-types based on the average gexp from the reference (this is really just for viz purposes)
+# ## use the significant genes for each cluster
+# mob_sig_marker_genes <- unique(cluster_markers_mob_se_wt_raw[cluster_markers_mob_se_wt_raw$p_val_adj < 0.05,]$gene)
+# beta <- mobWtCellProxyBetaRaw[colnames(corMtx_paired), mob_sig_marker_genes]
+# ## cluster cell-types based on ave gene exp of selected genes
+# d_ <- as.dist(1-cor(t(beta)))
+# hc_ <- stats::hclust(d_, method = "ward.D")
+# 
+# gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+#                   Rowv = NA,
+#                   Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+#                   density.info = "none",
+#                   trace = "none",
+#                   col = correlation_palette,
+#                   breaks = correlation_breaks,
+#                   key.xlab = "Correlation",
+#                   xlab = "RCTD reference cell-types",
+#                   ylab = "STdevonvolve deconvolved cell-types",
+#                   key.title = NA,
+#                   cexRow = 0.9,
+#                   cexCol = 0.9,
+#                   # lhei = c(1,3),
+#                   margins = c(5,10))
+# # pdf(file = paste0(fig_path, "Supplemental_Figure_S7-B-rctd_vs_stdecon_k12_ct_proportion_cor-mob_rep8.pdf"),
+# #     width = 6, height = 4)
+# # gplots::heatmap.2(x = corMtx_paired[hc_$order,], # rearrange rows based on ct clustering
+# #                   Rowv = NA,
+# #                   Colv = as.dendrogram(hc_), # dendrogram also rearranges columns just like the rows and thus pairing is maintained
+# #                   density.info = "none",
+# #                   trace = "none",
+# #                   col = correlation_palette,
+# #                   breaks = correlation_breaks,
+# #                   key.xlab = "Correlation",
+# #                   xlab = "RCTD deconvolved cell-types",
+# #                   ylab = "STdevonvolve deconvolved cell-types",
+# #                   key.title = NA,
+# #                   cexRow = 0.9,
+# #                   cexCol = 0.9,
+# #                   # lhei = c(1,3),
+# #                   margins = c(5,10))
+# # dev.off()
+# 
+# ## get the correlations across the diagonal
+# rctd_vs_lda_theta_filt <- diag(corMtx_paired)
+# 
+# ## match all 22 RCTD cell-types to the STdeconvolve cell-type they correlate strongest with:
+# rctd_vs_lda_theta_filt_all <- apply(corMtx, 2, max)
+
+```
+
+
 
 
 # summarize
@@ -2885,14 +3182,14 @@ deconGexp <- mobLDAsDeconv[[n]]$beta*1000
 
 # for (i in seq(12)){
 
-pdf(file = paste0(fig_path, "Supplemental_Figure_S8-D-gsea_oec_celltype_8-mob_rep8_k12.pdf"),
-    width = 6,
-    height = 6)
+# pdf(file = paste0(fig_path, "Supplemental_Figure_S8-D-gsea_oec_celltype_8-mob_rep8_k12.pdf"),
+#     width = 6,
+#     height = 6)
 for (i in c(8)){
   vals <- sort(deconGexp[i,], decreasing = TRUE)
   gsea(values=vals, geneset=markers, plot=TRUE, rank=TRUE, main = paste0("Cell-type ", i, " enrichment with OEC1 cluster genes"))
 }
-dev.off()
+# dev.off()
 ```
 
 ## OEC2 genes
@@ -3675,7 +3972,7 @@ ggplot2::ggsave(filename = paste0("Supplemental_Figure_S16-G-corr_boxplots-mob8_
          device = "pdf",
          path = fig_path,
          scale = 1.5,
-         width = 5,
+         width = 2,
          height = 3.5,
          units = c("in"),
          dpi = 300)

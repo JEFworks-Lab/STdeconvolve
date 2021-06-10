@@ -838,7 +838,6 @@ ggplot2::ggsave(filename = paste0("Supplemental_Figure_S3-A-lda_perplex_rarect_0
 
 ```
 
-
 ```{r}
 
 FN7_K9_135genes <- buildLDAobject(LDAmodel = optimalModel(FN7_LDAs_135genes, opt = 9),
@@ -846,8 +845,13 @@ FN7_K9_135genes <- buildLDAobject(LDAmodel = optimalModel(FN7_LDAs_135genes, opt
                          deepSplit = 4,
                          colorScheme = "rainbow")
 
+```
+
+
+```{r}
+
 lda_k9_135genes_theta <- FN7_K9_135genes$theta
-lda_k9_135genes_theta[lda_k9_135genes_theta < 0.025] <- 0
+lda_k9_135genes_theta[lda_k9_135genes_theta < 0.05] <- 0
 
 # readjust proportions
 lda_k9_135genes_theta <- lda_k9_135genes_theta/rowSums(lda_k9_135genes_theta)
@@ -865,27 +869,27 @@ lda_k9_135genes_theta <- lda_k9_135genes_theta[,which(colSums(lda_k9_135genes_th
 
 
 # ---------------------------------------------------------------------------
-FN7_K9_105spatialgenes <- buildLDAobject(LDAmodel = optimalModel(FN7_LDAs_105spatialgenes, opt = 9),
-                         corpus = as.matrix(simFN7_8ct_135genes$sim)[,spatialGenes],
-                         deepSplit = 4,
-                         colorScheme = "rainbow")
-
-lda_k9_105spatialgenes_theta <- FN7_K9_105spatialgenes$theta
-lda_k9_105spatialgenes_theta[lda_k9_105spatialgenes_theta < 0.025] <- 0
-
-# readjust proportions
-lda_k9_105spatialgenes_theta <- lda_k9_105spatialgenes_theta/rowSums(lda_k9_105spatialgenes_theta)
-# if NAs because all cts are 0 in a spot, replace with 0
-lda_k9_105spatialgenes_theta[is.na(lda_k9_105spatialgenes_theta)] <- 0
-
-summary(lda_k9_105spatialgenes_theta)
-
-ggplot(data = reshape2::melt(lda_k9_105spatialgenes_theta)) +
-  geom_boxplot(aes(x = reorder(Var2, -value), y = value)) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-
-# drop any cts that are 0 for all pixels
-lda_k9_105spatialgenes_theta <- lda_k9_105spatialgenes_theta[,which(colSums(lda_k9_105spatialgenes_theta) > 0)]
+# FN7_K9_105spatialgenes <- buildLDAobject(LDAmodel = optimalModel(FN7_LDAs_105spatialgenes, opt = 9),
+#                          corpus = as.matrix(simFN7_8ct_135genes$sim)[,spatialGenes],
+#                          deepSplit = 4,
+#                          colorScheme = "rainbow")
+# 
+# lda_k9_105spatialgenes_theta <- FN7_K9_105spatialgenes$theta
+# lda_k9_105spatialgenes_theta[lda_k9_105spatialgenes_theta < 0.025] <- 0
+# 
+# # readjust proportions
+# lda_k9_105spatialgenes_theta <- lda_k9_105spatialgenes_theta/rowSums(lda_k9_105spatialgenes_theta)
+# # if NAs because all cts are 0 in a spot, replace with 0
+# lda_k9_105spatialgenes_theta[is.na(lda_k9_105spatialgenes_theta)] <- 0
+# 
+# summary(lda_k9_105spatialgenes_theta)
+# 
+# ggplot(data = reshape2::melt(lda_k9_105spatialgenes_theta)) +
+#   geom_boxplot(aes(x = reorder(Var2, -value), y = value)) +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# 
+# # drop any cts that are 0 for all pixels
+# lda_k9_105spatialgenes_theta <- lda_k9_105spatialgenes_theta[,which(colSums(lda_k9_105spatialgenes_theta) > 0)]
 
 
 ```
@@ -1348,16 +1352,15 @@ for (i in seq(nrow(deconGexp))){
   # print(gsea.results[order(gsea.results$p.val),])
   
   # filter for top hits
-  gsea.sig <- gsea.results[gsea.results$q.val < 0.1,]
+  gsea.sig <- gsea.results[gsea.results$q.val < 0.05,]
   gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
   # print(gsea.sig)
   
   ## order of selection:
   ## 1. q-val
-  ## 2. edge score
-  ## 3. sscore
+  ## 2. sscore
   gsea.sig <- gsea.sig %>%
-    arrange(q.val, -edge, -sscore)
+    arrange(q.val, -sscore, -edge)
   print(gsea.sig)
   
 }
@@ -1474,16 +1477,27 @@ gsea(values=sort(deconGexp[i,], decreasing = TRUE),
 
 ```{r, fig.height=4, fig.width=4}
 
+## final figure illustrator colors
+classCols <- c("Astrocyte" = "#9F7D56",
+               "Endothelial" = "#F4E95B",
+               "Ependymal" = "#0022F2",
+               "Excitatory" = "#4AA6F5",
+               "Inhibitory" = "#D73931",
+               "Microglia" = "#D63487",
+               "OD Immature" = "#9D257B",
+               "OD Mature" = "#60AE58",
+               "Pericytes" = "#EDAF56")
+
 ## reverse rainbow
-classCols <- c("Astrocyte" = "#FF00AA",
-               "Endothelial" = "#AA00FF",
-               "Ependymal" = "#0000FF",
-               "Excitatory" = "#00AAFF",
-               "Inhibitory" = "#00FFAA",
-               "Microglia" = "#00FF00",
-               "OD Immature" = "#AAFF00",
-               "OD Mature" = "#FFAA00",
-               "Pericytes" = "#FF0000")
+# classCols <- c("Astrocyte" = "#FF00AA",
+#                "Endothelial" = "#AA00FF",
+#                "Ependymal" = "#0000FF",
+#                "Excitatory" = "#00AAFF",
+#                "Inhibitory" = "#00FFAA",
+#                "Microglia" = "#00FF00",
+#                "OD Immature" = "#AAFF00",
+#                "OD Mature" = "#FFAA00",
+#                "Pericytes" = "#FF0000")
 
 ## rainbow
 # classCols <- c("Astrocyte" = "#FF0000",
@@ -1555,15 +1569,15 @@ for(ix in names(simBregmasFN7)[1]){
                      showLegend = TRUE,
                      plotTitle = ix)
   print(p1)
-  ggplot2::ggsave(filename = paste0("Figure_2-C-bregma_", ix, "_stdecon_allTopics_9cts_135genes.pdf"),
-         device = "pdf",
-         plot = p1,
-         path = fig_path,
-         scale = 1.5,
-         width = 5,
-         height = 4,
-         units = c("in"),
-         dpi = 300)
+  # ggplot2::ggsave(filename = paste0("Figure_2-C-bregma_", ix, "_stdecon_allTopics_9cts_135genes.pdf"),
+  #        device = "pdf",
+  #        plot = p1,
+  #        path = fig_path,
+  #        scale = 1.5,
+  #        width = 5,
+  #        height = 4,
+  #        units = c("in"),
+  #        dpi = 300)
   
   # -------------------------------------------------------------
   ## STdeconvolve each cell-type separately:
@@ -1592,15 +1606,15 @@ for(ix in names(simBregmasFN7)[1]){
                     layout_matrix = layout
   )
   plts1_grid
-  ggplot2::ggsave(filename = paste0("Figure_2-C-bregma_", ix, "_stdecon_9cts_135genes.pdf"),
-                  plot = plts1_grid,
-                  device = "pdf",
-                  path = fig_path,
-                  scale = 1,
-                  width = 6,
-                  height = 6,
-                  units = c("in"),
-                  dpi = 300)
+  # ggplot2::ggsave(filename = paste0("Figure_2-C-bregma_", ix, "_stdecon_9cts_135genes.pdf"),
+  #                 plot = plts1_grid,
+  #                 device = "pdf",
+  #                 path = fig_path,
+  #                 scale = 1,
+  #                 width = 6,
+  #                 height = 6,
+  #                 units = c("in"),
+  #                 dpi = 300)
   
   # -------------------------------------------------------------
   ## ground truth cell-types
@@ -1751,16 +1765,27 @@ for(ix in names(simBregmasFN7)[1]){
 
 ```{r, fig.height=48, fig.width=4}
 
+## final figure illustrator colors
+classCols <- c("Astrocyte" = "#9F7D56",
+               "Endothelial" = "#F4E95B",
+               "Ependymal" = "#0022F2",
+               "Excitatory" = "#4AA6F5",
+               "Inhibitory" = "#D73931",
+               "Microglia" = "#D63487",
+               "OD Immature" = "#9D257B",
+               "OD Mature" = "#60AE58",
+               "Pericytes" = "#EDAF56")
+
 ## reverse rainbow
-classCols <- c("Astrocyte" = "#FF00AA",
-               "Endothelial" = "#AA00FF",
-               "Ependymal" = "#0000FF",
-               "Excitatory" = "#00AAFF",
-               "Inhibitory" = "#00FFAA",
-               "Microglia" = "#00FF00",
-               "OD Immature" = "#AAFF00",
-               "OD Mature" = "#FFAA00",
-               "Pericytes" = "#FF0000")
+# classCols <- c("Astrocyte" = "#FF00AA",
+#                "Endothelial" = "#AA00FF",
+#                "Ependymal" = "#0000FF",
+#                "Excitatory" = "#00AAFF",
+#                "Inhibitory" = "#00FFAA",
+#                "Microglia" = "#00FF00",
+#                "OD Immature" = "#AAFF00",
+#                "OD Mature" = "#FFAA00",
+#                "Pericytes" = "#FF0000")
 
 ## rainbow
 # classCols <- c("Astrocyte" = "#FF0000",
@@ -1849,13 +1874,13 @@ plts1_grid <- gridExtra::grid.arrange(
                   layout_matrix = layout
 )
 plts1_grid
-ggplot2::ggsave(filename = paste0("Supplementary_Figure_S1-C-bregma_All_stdecon_9cts_135genes.pdf"),
+ggplot2::ggsave(filename = paste0("Supplementary_Figure_S1-C-bregma_All_stdecon_9cts_135genes.png"),
                   plot = plts1_grid,
-                  device = "pdf",
+                  device = "png",
                   path = fig_path,
                   scale = 1,
-                  width = 4,
-                  height = 48,
+                  width = 3,
+                  height = 11,
                   units = c("in"),
                   dpi = 300)
 
@@ -2017,18 +2042,39 @@ ggplot2::ggsave(filename = paste0("Supplemental_Figure_S1-A-bregma_All_gt_grid_9
 
 ### all bregmas combined cts
 
-```{r, fig.height=48, fig.width=5}
+```{r, fig.height=11, fig.width=1.2}
+
+## final figure illustrator colors
+classCols <- c("Astrocyte" = "#9F7D56",
+               "Endothelial" = "#F4E95B",
+               "Ependymal" = "#0022F2",
+               "Excitatory" = "#4AA6F5",
+               "Inhibitory" = "#D73931",
+               "Microglia" = "#D63487",
+               "OD Immature" = "#9D257B",
+               "OD Mature" = "#60AE58",
+               "Pericytes" = "#EDAF56")
+
+classColsSTdev <- c("1" = "#9D257B",
+                    "2" = "#3875B4",
+                    "3" = "#0022F2",
+                    "4" = "#D73931",
+                    "5" = "#60AE58",
+                    "6" = "#F4E95B",
+                    "7" = "#E95C54",
+                    "8" = "#4AA6F5",
+                    "9" = "#A4A6A9")
 
 ## reverse rainbow
-classCols <- c("Astrocyte" = "#FF00AA",
-               "Endothelial" = "#AA00FF",
-               "Ependymal" = "#0000FF",
-               "Excitatory" = "#00AAFF",
-               "Inhibitory" = "#00FFAA",
-               "Microglia" = "#00FF00",
-               "OD Immature" = "#AAFF00",
-               "OD Mature" = "#FFAA00",
-               "Pericytes" = "#FF0000")
+# classCols <- c("Astrocyte" = "#FF00AA",
+#                "Endothelial" = "#AA00FF",
+#                "Ependymal" = "#0000FF",
+#                "Excitatory" = "#00AAFF",
+#                "Inhibitory" = "#00FFAA",
+#                "Microglia" = "#00FF00",
+#                "OD Immature" = "#AAFF00",
+#                "OD Mature" = "#FFAA00",
+#                "Pericytes" = "#FF0000")
 
 ## rainbow
 # classCols <- c("Astrocyte" = "#FF0000",
@@ -2062,48 +2108,6 @@ pairs <- lsatPairs(corMtx) # reorder cols (gt cell-types) by best matches to the
 
 
 ## -------------------------------------------------------------
-## each cell type separately
-plts1 <- lapply(names(simBregmasFN7), function(ix){
-  breg <- gt$annotDf[gt$annotDf$Bregma == ix,]
-  cellCounts <- gt$cellCounts[which(rownames(gt$cellCounts) %in% breg$patch_id),]
-  
-  p1 <- ggplot() +
-    geom_point(data = breg,
-               aes(x = Centroid_X, y = Centroid_Y, color = Cell_class), size=0.3) +
-    facet_wrap(~Cell_class) +
-    scale_fill_manual(values = classCols[breg$Cell_class]) +
-    theme(
-          #panel.background = element_rect(fill = "white"),
-          panel.grid = element_blank(),
-          axis.line=element_blank(),
-          axis.text.x=element_blank(),
-          axis.text.y=element_blank(),
-          axis.ticks=element_blank(),
-          axis.title.x=element_blank(),
-          axis.title.y=element_blank(),
-          panel.background=element_blank(),
-          legend.position = "none") +
-    ggtitle(ix)
-  ggplotGrob(p1)
-})
-
-layout <- matrix(seq(12))
-plts1_grid <- gridExtra::grid.arrange(
-                  grobs = plts1,
-                  layout_matrix = layout
-)
-plts1_grid
-ggplot2::ggsave(filename = paste0("0_100um_9cts_135genes_separateCts_AllBregmas.png"),
-                plot = plts1_grid,
-                device = "png",
-                path = fig_path,
-                scale = 1,
-                width = 5,
-                height = 48,
-                units = c("in"),
-                dpi = 300)
-
-## -------------------------------------------------------------
 ## all cells with grid showing
 plts2 <- lapply(names(simBregmasFN7), function(ix){
   breg <- gt$annotDf[gt$annotDf$Bregma == ix,]
@@ -2111,12 +2115,13 @@ plts2 <- lapply(names(simBregmasFN7), function(ix){
   
   p2 <- ggplot() +
     geom_point(data = breg,
-               aes(x = Centroid_X, y = Centroid_Y, color = Cell_class), size=0.4) +
+               aes(x = Centroid_X, y = Centroid_Y, color = Cell_class), size=0.001, shape = 21) +
     scale_fill_manual(values = classCols[breg$Cell_class]) +
+    scale_color_manual(values = classCols[breg$Cell_class]) +
     geom_rect(data = cellCounts,
               aes(xmin = x - 0, xmax = x + 100,
                   ymin = y - 0, ymax = y + 100),
-              fill = NA, color = "black", linetype = "dashed") +
+              fill = NA, color = "black", linetype = "solid", size = 0.1) +
     theme(
           #panel.background = element_rect(fill = "white"),
           panel.grid = element_blank(),
@@ -2138,15 +2143,15 @@ plts2_grid <- gridExtra::grid.arrange(
                   layout_matrix = layout
 )
 plts2_grid
-ggplot2::ggsave(filename = paste0("0_100um_9cts_135genes_grid_AllBregmas.png"),
+ggplot2::ggsave(filename = paste0("Supplementary_Figure_S1-A-bregma_All_gt_grid_9cts_135genes.png"),
                 plot = plts2_grid,
                 device = "png",
                 path = fig_path,
                 scale = 1,
-                width = 5,
-                height = 48,
+                width = 1.2,
+                height = 11,
                 units = c("in"),
-                dpi = 300)
+                dpi = 2400)
   
 ## -------------------------------------------------------------
 ## ground truth proportions
@@ -2159,11 +2164,12 @@ plts3 <- lapply(names(simBregmasFN7), function(ix){
   p3 <- vizAllTopics(theta = m,
                pos = pos,
                topicOrder=seq(ncol(m)),
-               topicCols=as.vector(classCols[colnames(m)[colSums(m) > 0]]),
+               topicCols=as.vector(classCols[colnames(m)[colSums(m) > 0]]), # some bregmas may not have all of the cell-types
+               # topicCols=as.vector(classCols[colnames(m)]),
                groups = rep("0", dim(m)[1]),
                group_cols = c("0" = "black"),
                r = 40, # different size piecharts for mOB data sets
-               lwd = 0.4,
+               lwd = 0.01,
                showLegend = FALSE,
                plotTitle = NA)
   ggplotGrob(p3)
@@ -2175,15 +2181,15 @@ plts3_grid <- gridExtra::grid.arrange(
                   layout_matrix = layout
 )
 plts3_grid
-ggplot2::ggsave(filename = paste0("0_100um_9cts_135genes_simST_AllBregmas.png"),
+ggplot2::ggsave(filename = paste0("Supplementary_Figure_S1-B-bregma_All_simulated_9cts_135genes.png"),
                 plot = plts3_grid,
                 device = "png",
                 path = fig_path,
                 scale = 1,
-                width = 5,
-                height = 48,
+                width = 1.2,
+                height = 11,
                 units = c("in"),
-                dpi = 300)
+                dpi = 600)
   
 ## -------------------------------------------------------------
 ## STdeconvolve proportions
@@ -2200,11 +2206,12 @@ plts4 <- lapply(names(simBregmasFN7), function(ix){
   p4 <- vizAllTopics(theta = m,
                      pos = p,
                      topicOrder=seq(ncol(m)),
-                     topicCols=as.vector(classCols[pairs$colsix]),
+                     # topicCols=as.vector(classCols[pairs$colsix]),
+                     topicCols=as.vector(classColsSTdev),
                      groups = rep("0", dim(m)[1]),
                      group_cols = c("0" = "black"),
                      r = 40,
-                     lwd = 0.4,
+                     lwd = 0.01,
                      showLegend = FALSE,
                      plotTitle = NA)
   ggplotGrob(p4)
@@ -2216,15 +2223,15 @@ plts4_grid <- gridExtra::grid.arrange(
                   layout_matrix = layout
 )
 plts4_grid
-ggplot2::ggsave(filename = paste0("0_100um_9cts_135genes_STdeconvolve_AllBregmas.png"),
+ggplot2::ggsave(filename = paste0("Supplementary_Figure_S1-C-bregma_All_stdecon_9cts_135genes.png"),
                 plot = plts4_grid,
                 device = "png",
                 path = fig_path,
                 scale = 1,
-                width = 5,
-                height = 48,
+                width = 1.2,
+                height = 11,
                 units = c("in"),
-                dpi = 300)
+                dpi = 600)
 
 # layout <- t(matrix(seq(length((simBregmasFN7))*4), nrow=4))
 
@@ -2452,14 +2459,14 @@ ggplot2::ggplot(data = dat) +
                  axis.ticks=element_blank(),
                  panel.background=element_blank()) +
   ggplot2::coord_fixed()
-ggplot2::ggsave(filename = paste0("Figure_2-E-proportion_corr-100um_k9_ct9_135genes.pdf"),
-         device = "pdf",
-         path = fig_path,
-         scale = 1.5,
-         width = 5,
-         height = 4,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("Figure_2-E-proportion_corr-100um_k9_ct9_135genes.pdf"),
+#          device = "pdf",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 4,
+#          units = c("in"),
+#          dpi = 300)
 
 cat("mean proportional corr (txn order, after filtering) across diag:", mean(diag(corMtx_prop_1)), "\n")
 cat("median proportional corr (txn order, after filtering) across diag:", median(diag(corMtx_prop_1)), "\n")
@@ -2567,11 +2574,11 @@ ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = valu
 ## cell-type 2 excitatory based on marker genes
 transcriptional <- diag(corMtx_txn_1)
 transcriptional[7] <- corMtx_txn_1["Inhibitory", "Cell-type 7"]
-transcriptional[8] <- corMtx_txn_1["Inhibitory", "Cell-type 2"]
+transcriptional[8] <- corMtx_txn_1["Excitatory", "Cell-type 2"]
 
 proportional <- diag(corMtx_prop_4)
 proportional[7] <- corMtx_prop_4["Inhibitory", "Cell-type 7"]
-proportional[8] <- corMtx_prop_4["Inhibitory", "Cell-type 2"]
+proportional[8] <- corMtx_prop_4["Excitatory", "Cell-type 2"]
 
 ## boxplot summary of correlations
 dat3 <- reshape2::melt(data.frame(
@@ -2596,14 +2603,14 @@ ggplot2::ggplot(data = dat3, aes(x=Comparison, y=Correlation)) +
                  axis.title.y=element_text(size=15),
                  axis.title.x=element_blank(),
                  plot.title=element_text(size=15))
-ggplot2::ggsave(filename = paste0("Figure_2-F-matched_ct_corrs_boxplots-100um_k9_ct9_135genes.pdf"),
-         device = "pdf",
-         path = fig_path,
-         scale = 1.5,
-         width = 2.5,
-         height = 4,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("Figure_2-F-matched_ct_corrs_boxplots-100um_k9_ct9_135genes.pdf"),
+#          device = "pdf",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 2.5,
+#          height = 4,
+#          units = c("in"),
+#          dpi = 300)
 
 
 ## record final matches:
@@ -2611,7 +2618,7 @@ gt_matches <- rownames(corMtx_txn_1)
 ct_matches <- colnames(corMtx_txn_1)
 names(gt_matches) <- ct_matches
 gt_matches[7] <- "Inhibitory"
-gt_matches[8] <- "Inhibitory"
+gt_matches[8] <- "Excitatory"
 
 ## adjust the deconvolved pixel proportions based on the new match assignment of cell-types
 
@@ -4336,8 +4343,13 @@ FN7_K76_135genes <- buildLDAobject(LDAmodel = optimalModel(FN7_LDAs_135genes, op
                          deepSplit = 4,
                          colorScheme = "rainbow")
 
+```
+
+
+```{r}
+
 lda_k76_135genes_theta <- FN7_K76_135genes$theta
-lda_k76_135genes_theta[lda_k76_135genes_theta < 0.025] <- 0
+lda_k76_135genes_theta[lda_k76_135genes_theta < 0.05] <- 0
 
 # readjust proportions
 lda_k76_135genes_theta <- lda_k76_135genes_theta/rowSums(lda_k76_135genes_theta)
@@ -4354,6 +4366,133 @@ ggplot(data = reshape2::melt(lda_k76_135genes_theta)) +
 lda_k76_135genes_theta <- lda_k76_135genes_theta[,which(colSums(lda_k76_135genes_theta) > 0)]
 
 ```
+
+## gt top genes
+
+```{r}
+
+deconGexp <- gtCtNeuronalGenesFN7*1000
+# counts <- as.matrix(simFN7_9ct_135genes$sim)
+
+## for list of markers
+gt_gene_set_neuro <- list()
+
+for (i in seq(nrow(gtCtNeuronalGenesFN7))){
+  celltype <- i
+  vals <- sort(deconGexp[celltype,], decreasing = TRUE)
+  
+  ## ----------------------------------------------------
+  ## txn profile, normalized and scaled expression
+  
+  # dat <- data.frame(values = as.vector(vals), genes = names(vals), order = seq(length(vals)))
+  # # Hide all of the text labels.
+  # dat$selectedLabels <- ""
+  # # Let's just label these items.
+  # ix_label <- seq(20)
+  # dat$selectedLabels[ix_label] <- dat$genes[ix_label]
+  
+  # p1 <- ggplot(data = dat) +
+  #   geom_col(aes(x = order, y = values, fill = " ")) +
+  #   scale_fill_manual(values = transparentCol("darkgray", percent = 70)) +
+  #   labs(title = paste0(rownames(gtCtGenesFN7)[celltype], " transcriptional profile"),
+  #        x = "Gene expression rank", y = "Normalized and scaled expression") +
+  #   # coord_cartesian(clip = "off") +
+  #   ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels), size = 3, 
+  #                   min.segment.length = 0.01, seed = 42, box.padding = 0.01, max.overlaps = Inf, point.padding = 0.01,
+  #                   # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+  #                   nudge_x = 2.5, direction = "y", hjust = "left",
+  #                   # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  #   ) +
+  #   theme_classic() +
+  #   theme(axis.text.x = element_text(angle = 0, size = 15),
+  #         axis.text.y = element_text(size=15),
+  #         # strip.text = element_text(size=15),
+  #         axis.title.x = element_text(size=15),
+  #         axis.title.y = element_text(size=15),
+  #         axis.title=element_text(size=15),
+  #         plot.title = element_text(size=15, face=NULL),
+  #         )
+  # print(p1)
+  # ggplot2::ggsave(filename = paste0("4_k15_ct", celltype, "_txnProfile_barplot.png"),
+  #          device = "png",
+  #          path = fig_path,
+  #          scale = 1.5,
+  #          width = 5,
+  #          height = 3,
+  #          units = c("in"),
+  #          dpi = 300)
+  
+  ## ----------------------------------------------------
+  ## log2FC relative to other cell-types
+  
+  ## highly expressed in cell-type of interest
+  highgexp <- names(which(deconGexp[celltype,] > 5))
+  ## high log2(fold-change) compared to other deconvolved cell-types
+  log2fc <- sort(log2(deconGexp[celltype,highgexp]/colMeans(deconGexp[-celltype,highgexp])), decreasing=TRUE)
+  
+  ## for gene set of the ground truth cell-type, get the genes
+  ## with log2FC > 1 (so FC > 2 over the mean exp of the other cell-types)
+  markers <- names(log2fc[log2fc > 1])
+  gt_gene_set_neuro[[ rownames(deconGexp)[celltype] ]] <- markers
+  
+  # dat <- data.frame(values = as.vector(log2fc), genes = names(log2fc), order = seq(length(log2fc)))
+  # # Hide all of the text labels.
+  # dat$selectedLabels1 <- ""
+  # # Let's just label these top items.
+  # ix_label <- seq(15)
+  # dat$selectedLabels1[ix_label] <- dat$genes[ix_label]
+  
+  # dat$selectedLabels2 <- ""
+  # # Let's label these bottom items
+  # ix_label <- tail(seq(length(log2fc)), 5)
+  # dat$selectedLabels2[ix_label] <- dat$genes[ix_label]
+  
+  # p2 <- ggplot(data = dat) +
+  #   geom_col(aes(x = order, y = values, fill = " ")) +
+  #   scale_fill_manual(values = transparentCol("darkgray", percent = 70)) +
+  #   labs(title = paste0(rownames(gtCtGenesFN7)[celltype], " transcriptional profile"),
+  #        x = "Gene expression rank", y = "log2FC Normalized and scaled expression") +
+  #   # coord_cartesian(clip = "off") +
+  #   ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels1), size = 3, 
+  #                   min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+  #                   # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+  #                   nudge_x = 2.5, direction = "both", hjust = "left",
+  #                   # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  #   ) +
+  #   # ggrepel::geom_text_repel(data = dat, mapping = aes(x = order, y = values, label = selectedLabels2), size = 5, 
+  #   #                 min.segment.length = 0.01, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
+  #   #                 # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
+  #   #                 nudge_x = -10, direction = "y", hjust = "right",
+  #   #                 # segment.curvature = -0.1, segment.ncp = 3, segment.angle = 20)
+  #   # ) +
+  #   theme_classic() +
+  #   theme(axis.text.x = element_text(angle = 0, size = 15),
+  #         axis.text.y = element_text(size=15),
+  #         # strip.text = element_text(size=15),
+  #         axis.title.x = element_text(size=15),
+  #         axis.title.y = element_text(size=12),
+  #         axis.title=element_text(size=15),
+  #         plot.title = element_text(size=15, face=NULL),
+  #         legend.position = "none"
+  #         )
+  # print(p2)
+  
+  # if (rownames(gtCtGenesFN7)[celltype] %in% c("Excitatory", "Inhibitory")){
+  #   ggplot2::ggsave(filename = paste0("Supplemental_Figure_S3-C-log2fc_txn_", rownames(gtCtGenesFN7)[celltype], ".pdf"),
+  #                 plot = p2,
+  #                 device = "pdf",
+  #                 path = fig_path,
+  #                 scale = 1.5,
+  #                 width = 5,
+  #                 height = 3,
+  #                 units = c("in"),
+  #                 dpi = 300)
+  # }
+  
+  
+}
+```
+
 
 ## deepsplit 1
 
@@ -7031,6 +7170,41 @@ for (i in seq(nrow(deconGexp))){
 }
 ```
 
+### gsea
+
+```{r}
+
+deconGexp <- FN7_LDAs_20um_k9_135genes$beta*1000
+gset <- gt_gene_set
+
+for (i in seq(nrow(deconGexp))){
+  celltype <- i
+  vals <- sort(deconGexp[celltype,], decreasing = TRUE)
+  
+  ## highly expressed in cell-type of interest
+  highgexp <- names(which(deconGexp[celltype,] > 5))
+  ## high log2(fold-change) compared to other deconvolved cell-types
+  log2fc <- sort(log2(deconGexp[celltype,highgexp]/colMeans(deconGexp[-celltype,highgexp])), decreasing=TRUE)
+  
+  gsea.results <- liger::iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
+  # print(gsea.results[order(gsea.results$p.val),])
+  
+  # filter for top hits
+  gsea.sig <- gsea.results[gsea.results$q.val < 0.1,]
+  gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
+  # print(gsea.sig)
+  
+  ## order of selection:
+  ## 1. q-val
+  ## 2. sscore
+  gsea.sig <- gsea.sig %>%
+    arrange(q.val, -sscore, -edge)
+  print(gsea.sig)
+  
+}
+
+```
+
 ### Correlations 
 
 ```{r}
@@ -7078,7 +7252,7 @@ pairs <- lsatPairs(corMtx_txn)
 ## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
 ## the properly ordered txn correlation matrix
 corMtx_txn_1 <- corMtx_txn[pairs$rowix, pairs$colsix]
-colnames(corMtx_txn_1) <- paste0("Cell-type ", colnames(corMtx_txn_1))
+colnames(corMtx_txn_1) <- paste0("X", colnames(corMtx_txn_1))
 
 ## scale mtx:
 corMtx_txn_rs <- apply(corMtx_txn_1, 1, scale) # subtract row mean and divide by sd; essentially z-scores
@@ -7089,8 +7263,29 @@ corMtx_txn_cs <- apply(corMtx_txn_rs, 2, scale)
 rownames(corMtx_txn_cs) <- rownames(corMtx_txn_1)
 
 
+## orders:
+gt_order <- c("Pericytes",
+              "Microglia",
+              "Ependymal",
+              "OD Immature",
+              "Endothelial",
+              "OD Mature",
+              "Astrocyte",
+              "Excitatory",
+              "Inhibitory")
+
+pred_order <- c("X1",
+                "X9",
+                "X3",
+                "X5",
+                "X6",
+                "X8",
+                "X7",
+                "X2",
+                "X4")
+
 ## plot the txn correlations
-dat <- reshape2::melt(corMtx_txn_1) #  corMtx_txn_cs
+dat <- reshape2::melt(corMtx_txn_1[gt_order, pred_order]) #  corMtx_txn_cs
 ggplot2::ggplot(data = dat) +
   ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
   ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1),
@@ -7143,7 +7338,7 @@ pairs <- lsatPairs(corMtx_txn)
 corMtx_prop_1 <- getCorrMtx(m1 = as.matrix(gt$gtSpotTopics)[,ct_txn_order],
                           m2 = filt_theta[,pairs$colsix],
                           type = "t")
-colnames(corMtx_prop_1) <- paste0("Cell-type ", colnames(corMtx_prop_1))
+colnames(corMtx_prop_1) <- paste0("X", colnames(corMtx_prop_1))
 
 ## scale mtx:
 corMtx_prop_rs <- apply(corMtx_prop_1, 1, scale) # subtract row mean and divide by sd; essentially z-scores
@@ -7154,7 +7349,7 @@ corMtx_prop_cs <- apply(corMtx_prop_rs, 2, scale)
 rownames(corMtx_prop_cs) <- rownames(corMtx_prop_1)
 
 # plot the proportion correlations, cell-types ordered based on transcriptional pairing
-dat <- reshape2::melt(corMtx_prop_1) #  corMtx_prop_cs
+dat <- reshape2::melt(corMtx_prop_1[gt_order, pred_order]) #  corMtx_prop_cs
 ggplot2::ggplot(data = dat) +
   ggplot2::geom_tile(aes(x = Var1, y = Var2, fill=value)) +
   ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1),
@@ -7222,7 +7417,7 @@ pairs <- lsatPairs(corMtx_prop_4)
 ## pairs$colsix are now how the deconvolved cell-types pair with the ground truths
 ## the properly ordered proportional correlation matrix
 corMtx_prop_4 <- corMtx_prop_4[pairs$rowix, pairs$colsix]
-colnames(corMtx_prop_4) <- paste0("Cell-type ", colnames(corMtx_prop_4))
+colnames(corMtx_prop_4) <- paste0("X", colnames(corMtx_prop_4))
 
 # plot the proportion correlations
 dat <- reshape2::melt(corMtx_prop_4)
@@ -7288,12 +7483,12 @@ ggplot(data = reshape2::melt(dat2), aes(x = reorder(Cell.Type, -value), y = valu
 ## cell-type 7 inhibitory based on marker genes
 ## cell-type 2 inhibitory based on marker genes
 transcriptional <- diag(corMtx_txn_1)
-transcriptional[7] <- corMtx_txn_1["Inhibitory", "Cell-type 7"]
-transcriptional[8] <- corMtx_txn_1["Inhibitory", "Cell-type 2"]
+transcriptional[7] <- corMtx_txn_1["Inhibitory", "X7"]
+transcriptional[8] <- corMtx_txn_1["Inhibitory", "X2"]
 
 proportional <- diag(corMtx_prop_4)
-proportional[7] <- corMtx_prop_4["Inhibitory", "Cell-type 7"]
-proportional[8] <- corMtx_prop_4["Inhibitory", "Cell-type 2"]
+proportional[7] <- corMtx_prop_4["Inhibitory", "X7"]
+proportional[8] <- corMtx_prop_4["Inhibitory", "X2"]
 
 ## boxplot summary of correlations
 dat3 <- reshape2::melt(data.frame(
@@ -7366,7 +7561,7 @@ m2 <- as.matrix(gtCtGenesFN7)
 
 sharedGenes <- intersect(colnames(m1), colnames(m2))
 
-rownames(m1) <- paste0("Cell-type ", seq(9))
+rownames(m1) <- paste0("X", seq(9))
 
 summary_df <- do.call(rbind, lapply(names(gt_matches_20um), function(i){
         # get paired ct
@@ -9330,10 +9525,47 @@ numPixelsBenchmark <- readRDS("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/
 
 ```{r}
 
-corpus <- as.matrix(simFN7$sim)
-Ks <- seq(3,10)
-numDocs <- c(3,5,10,50,100,150)
+dat <- simFN7_9ct_135genes
+corpus <- as.matrix(dat$sim)
+Ks <- c(9)
+# numDocs <- c(3,5,10,50,100,150)
+numDocs <- c(50)
 # numDocs <- c(3,10,50,100)
+# numReps <- seq(10)
+numReps <- seq(1)
+# numDocs <- c(3,5)
+# numReps <- seq(3)
+
+set.seed(numReps) # for sampling
+seed <- 1 # for LDA
+## for each replicate, get a sample of pixel of size d
+s <- sample(nrow(corpus), numDocs)
+sampleCorpus <- corpus[s,]
+gtCorpus <- dat$gtSpotTopics[s,]
+## drop cell-types that are 0 for all sampled pixels
+gtCorpus <- gtCorpus[,which(colSums(gtCorpus) > 0)]
+
+## fit LDA models for each K in Ks on the sampled corpus
+ldas <- fitLDA(counts = sampleCorpus,
+               Ks = Ks,
+               testSize = NULL,
+               seed = seed,
+               ncores = 7,
+               plot = FALSE)
+
+```
+
+
+
+```{r}
+
+dat <- simFN7_9ct_135genes
+corpus <- as.matrix(dat$sim)
+Ks <- c(9)
+numDocs <- c(5,10,50,100,150)
+# numDocs <- c(50)
+# numDocs <- c(3,10,50,100)
+# numReps <- seq(10)
 numReps <- seq(10)
 # numDocs <- c(3,5)
 # numReps <- seq(3)
@@ -9349,12 +9581,13 @@ numPixelsBenchmark <- do.call(rbind, lapply(numDocs, function(d){
                             K=character(),
                             RMSE=double())
   for(r in numReps){
-    set.seed(r)
+    set.seed(r) # for sampling
+    seed <- 1 # for LDA
     ## for each replicate, get a sample of pixel of size d
     s <- sample(nrow(corpus), d)
     sampleCorpus <- corpus[s,]
-    gtCorpus <- simFN7$gtSpotTopics[s,]
-    ## drop cell-types that are 0 for all samples pixels
+    gtCorpus <- dat$gtSpotTopics[s,]
+    ## drop cell-types that are 0 for all sampled pixels
     gtCorpus <- gtCorpus[,which(colSums(gtCorpus) > 0)]
     
     ## fit LDA models for each K in Ks on the sampled corpus
@@ -9366,24 +9599,87 @@ numPixelsBenchmark <- do.call(rbind, lapply(numDocs, function(d){
                    plot = FALSE)
     # get beta and theta of sampled pixels for each fitted LDA model
     for(k in Ks){
+      
       res <- getBetaTheta(lda = optimalModel(models = ldas, opt = k),
                           corpus = sampleCorpus)
       ## compute rmse
       ## get pairs of topics and ground truth cell types that correlate best
       ## cannot have more rows than columns when pairing
-      if (ncol(res$theta) <= ncol(as.matrix(gtCorpus))){
-        theta_pairs <- lsatPairs(getCorrMtx(m1 = as.matrix(res$theta),
-                                            m2 = as.matrix(gtCorpus),
-                                            type = "t"))
-        predict_theta <- res$theta[,theta_pairs$rowix]
-        truth_theta <- gtCorpus[,theta_pairs$colsix]
-      } else {
-        theta_pairs <- lsatPairs(getCorrMtx(m1 = as.matrix(gtCorpus),
-                                            m2 = as.matrix(res$theta),
-                                            type = "t"))
-        predict_theta <- res$theta[,theta_pairs$colsix]
-        truth_theta <- gtCorpus[,theta_pairs$rowix]
+      # if (ncol(res$theta) <= ncol(as.matrix(gtCorpus))){
+      #   theta_pairs <- lsatPairs(getCorrMtx(m1 = as.matrix(res$theta),
+      #                                       m2 = as.matrix(gtCorpus),
+      #                                       type = "t"))
+      #   predict_theta <- res$theta[,theta_pairs$rowix]
+      #   truth_theta <- gtCorpus[,theta_pairs$colsix]
+      # } else {
+      #   theta_pairs <- lsatPairs(getCorrMtx(m1 = as.matrix(gtCorpus),
+      #                                       m2 = as.matrix(res$theta),
+      #                                       type = "t"))
+      #   predict_theta <- res$theta[,theta_pairs$colsix]
+      #   truth_theta <- gtCorpus[,theta_pairs$rowix]
+      # }
+      
+      ## pair instead using gsea
+      deconGexp <- res$beta*1000
+      gset <- gt_gene_set
+      assignments <- c()
+      for (i in seq(nrow(deconGexp))){
+        celltype <- i
+        vals <- sort(deconGexp[celltype,], decreasing = TRUE)
+        
+        ## highly expressed in cell-type of interest
+        highgexp <- names(which(deconGexp[celltype,] > 5))
+        ## high log2(fold-change) compared to other deconvolved cell-types
+        log2fc <- sort(log2(deconGexp[celltype,highgexp]/colMeans(deconGexp[-celltype,highgexp])), decreasing=TRUE)
+        
+        gsea.results <- liger::iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
+        # print(gsea.results[order(gsea.results$p.val),])
+        
+        # filter for top hits
+        gsea.sig <- gsea.results[gsea.results$q.val < 0.1,]
+        gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
+        # print(gsea.sig)
+        
+        ## order of selection:
+        ## 1. q-val
+        ## 2. sscore
+        gsea.sig <- gsea.sig %>%
+          arrange(q.val, -sscore, -edge)
+        assignments <- c(assignments, rownames(gsea.sig)[1])
       }
+      names(assignments) <- colnames(res$theta)
+      assignments <- as.factor(assignments)
+      
+      print(assignments)
+      
+      pred_theta <- do.call(cbind, lapply(levels(assignments), function(ct){
+        matches <- which(assignments == ct)
+        if (length(matches) > 1){
+          combnThetas <- rowSums(res$theta[,matches])
+        } else {
+          combnThetas <- res$theta[,matches]
+        }
+        combnThetas
+      }))
+      colnames(pred_theta) <- levels(assignments)
+      
+      ## make sure pred_theta has same columns in same order as truth_theta
+      predict_theta <- do.call(cbind, lapply(colnames(gtCorpus), function(ct){
+        if (ct %in% colnames(pred_theta)){
+          vals <- pred_theta[,ct]
+        } else {
+          vals <- rep(0, dim(gtCorpus)[1])
+        }
+        vals
+      })) 
+      colnames(predict_theta) <- colnames(gtCorpus)
+      truth_theta <- gtCorpus
+      
+      print(res$theta[1:3,])
+      print(predict_theta[1:3,])
+      print(truth_theta[1:3,])
+      
+      
       ## the rmse for the pixels, for a given K and numDocs; and for each replicate of that combo
       rmses <- unlist(lapply(seq(dim(truth_theta)[1]), function(i){
         # for each spot, compute RMSE based on proportions across cts
@@ -9392,6 +9688,8 @@ numPixelsBenchmark <- do.call(rbind, lapply(numDocs, function(d){
         predict <- as.vector(predict_theta[i,])
         mltools::rmse(preds = predict, actuals = actual)
       }))
+      
+      ## append result to dataframe
       m <- data.frame(numDocs = rep(d, length(rmses)),
                       replicate = rep(r, length(rmses)),
                       K = rep(k, length(rmses)),
@@ -9434,7 +9732,7 @@ ggplot() +
   # guides(color=guide_legend(title="K (number of cell-types")) +
   scale_x_continuous(breaks = c(5,10,50,100,150), labels = c(5,10,50,100,150)) +
   labs(title = "STdeconvolve accuracy on MERFISH ST dataset",
-       x = "number of pixels", y = "mean RMSE") +
+       x = "number of pixels", y = "RMSE") +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 0, size = 12),
         axis.text.y = element_text(size = 12),
@@ -10292,12 +10590,23 @@ ggplot2::ggplot(data = dat) +
 
 
 ## adjust the proportions based on adjusted matches
-## 4, 7, 8 combined into inhibitory
+## 2 and 8 as Excitatory
+## 7 and 4 as inhibitory
 ## pericytes and microglias not detected
 
 predict_theta <- breg_theta[,theta_pairs$colsix]
-predict_theta <- cbind(predict_theta, rowSums(predict_theta[,c("4","7","2")]))
-colnames(predict_theta) <- c("OD Immature", "Excitatory",  "drop",  "Astrocyte", "Ependymal", "Endothelial", "Pericytes",   "Microglia", "OD Mature", "Inhibitory")
+predict_theta <- cbind(predict_theta, rowSums(predict_theta[,c("4","7")]))
+predict_theta <- cbind(predict_theta, rowSums(predict_theta[,c("2", "8")]))
+
+## Cell-type 1   Cell-type 8   Cell-type 4   Cell-type 9   Cell-type 3   Cell-type 6 
+## "OD Immature"  "Excitatory"  "Inhibitory"   "Astrocyte"   "Ependymal" "Endothelial" 
+##   Cell-type 7   Cell-type 2   Cell-type 5 
+## "Inhibitory"  "Excitatory"   "OD Mature"
+
+## column names of predict_theta in same order as above.
+## new columns added for the combined 4+7 inhibitroy and 2+8 excitatory
+## set 7 and 2 to Pericytes and Microglia because these columns will be set to all 0's anyways below
+colnames(predict_theta) <- c("OD Immature", "Excitatory_drop",  "Inhibitory_drop",  "Astrocyte", "Ependymal", "Endothelial", "Pericytes",   "Microglia", "OD Mature", "Inhibitory", "Excitatory")
 
 predict_theta <- predict_theta[,ct_txn_order]
 predict_theta[,"Microglia"] <- 0
@@ -10459,19 +10768,80 @@ colnames(raw_RMSE_lda_8cts_cosine) <- colnames(truth_theta)
 breg_theta <- lda_k76_135genes_theta
 breg_gt_theta <- as.matrix(simFN7_neuro_9ct_135genes$gtSpotTopics)
 
-# get pairs of topics and ground truth cell types that correlate best
-theta_pairs <- lsatPairs(getCorrMtx(m1 = breg_theta,
-                                    m2 = breg_gt_theta,
-                                    type = "t"))
-# reorder the predicted topics to match their paired cell type
-# rows are spots and columns are topics
-# `pairs$rowix` are the new paired indices of the rows in the corrMtx. Here, the rows are the predicted topics
-predict_theta <- breg_theta[,theta_pairs$rowix]
-# the `pairs$rowix` are the new paired indices of the columns in the corrMtx. Here, the cols are the cell types
-truth_theta <- breg_gt_theta[,theta_pairs$colsix]
+# # get pairs of topics and ground truth cell types that correlate best
+# theta_pairs <- lsatPairs(getCorrMtx(m1 = breg_theta,
+#                                     m2 = breg_gt_theta,
+#                                     type = "t"))
+# # reorder the predicted topics to match their paired cell type
+# # rows are spots and columns are topics
+# # `pairs$rowix` are the new paired indices of the rows in the corrMtx. Here, the rows are the predicted topics
+# predict_theta <- breg_theta[,theta_pairs$rowix]
+# # the `pairs$rowix` are the new paired indices of the columns in the corrMtx. Here, the cols are the cell types
+# truth_theta <- breg_gt_theta[,theta_pairs$colsix]
+# 
+# # make sure the rows are the same, too
+# # truth_theta <- truth_theta[rownames(predict_theta),]
 
-# make sure the rows are the same, too
-# truth_theta <- truth_theta[rownames(predict_theta),]
+
+
+## pair instead using gsea
+deconGexp <- FN7_K76_135genes$beta*1000
+gset <- gt_gene_set_neuro
+assignments <- c()
+for (i in seq(nrow(deconGexp))){
+  celltype <- i
+  vals <- sort(deconGexp[celltype,], decreasing = TRUE)
+  
+  gsea.results <- liger::iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
+  # print(gsea.results[order(gsea.results$p.val),])
+  
+  # filter for top hits
+  # gsea.sig <- gsea.results[gsea.results$q.val < 0.05,]
+  gsea.sig <- gsea.results
+  gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
+  # print(gsea.sig)
+  
+  ## order of selection:
+  ## 1. q-val
+  ## 2. sscore
+  gsea.sig <- gsea.sig %>%
+    arrange(q.val, -sscore, -edge)
+  assignments <- c(assignments, rownames(gsea.sig)[1])
+  print(gsea.sig[1,])
+}
+names(assignments) <- colnames(breg_theta)
+assignments <- as.factor(assignments)
+
+print(assignments)
+
+pred_theta <- do.call(cbind, lapply(levels(assignments), function(ct){
+  matches <- which(assignments == ct)
+  if (length(matches) > 1){
+    combnThetas <- rowSums(breg_theta[,matches])
+  } else {
+    combnThetas <- breg_theta[,matches]
+  }
+  combnThetas
+}))
+colnames(pred_theta) <- levels(assignments)
+
+## make sure pred_theta has same columns in same order as truth_theta
+predict_theta <- do.call(cbind, lapply(colnames(breg_gt_theta), function(ct){
+  if (ct %in% colnames(pred_theta)){
+    vals <- pred_theta[,ct]
+  } else {
+    vals <- rep(0, dim(breg_gt_theta)[1])
+  }
+  vals
+})) 
+colnames(predict_theta) <- colnames(breg_gt_theta)
+truth_theta <- breg_gt_theta
+
+
+print(predict_theta[1:3,])
+print(truth_theta[1:3,])
+
+
 
 # -----------------------------------------
 t_raw <- data.frame(truth_theta, group = "T")
@@ -11108,14 +11478,14 @@ ggplot(data = dat,
         axis.title=element_text(size=15),
         plot.title = element_text(size=15, face=NULL),
         legend.position = "none")
-ggplot2::ggsave(filename = paste0("Supplemental_Figure_S5-A-rmse_across_pixels-100um_k9_ct9_135genes.pdf"),
-         device = "pdf",
-         path = fig_path,
-         scale = 1.5,
-         width = 7,
-         height = 4,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("Supplemental_Figure_S5-A-rmse_across_pixels-100um_k9_ct9_135genes.pdf"),
+#          device = "pdf",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 7,
+#          height = 4,
+#          units = c("in"),
+#          dpi = 300)
 
 # -----------------------------------------------------------------------------
 
@@ -11254,14 +11624,14 @@ ggplot(data = reshape2::melt(raw_75cts),
   theme(axis.text.x = element_text(angle = 0, size = 10),
         axis.text.y=element_text(size=10),
         legend.position = "none")
-ggplot2::ggsave(filename = paste0("1_100um_76cts_135genes_RMSE_lda_sl_rctd.png"),
-         device = "png",
-         path = fig_path,
-         scale = 1.5,
-         width = 5,
-         height = 4,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("1_100um_76cts_135genes_RMSE_lda_sl_rctd.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 5,
+#          height = 4,
+#          units = c("in"),
+#          dpi = 300)
 
 # raw_8cts <- data.frame("STdeconvolve" = as.vector(raw_RMSE_lda_8cts_spots),
 #                         "SPOTlight noNeuro" = as.vector(raw_RMSE_sl_noNeur_8cts_spots),
@@ -12265,14 +12635,14 @@ ggplot(data = k8_raw_ct_rmse_summary_nrmse, aes(x = Proportion, y = RMSE, color 
   labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 9 cell-types", y = "Normalized RMSE",
        x = "proportion in ground truth dataset") +
   guides(color=guide_legend(title="Cell-types"))
-ggplot2::ggsave(filename = paste0("2_100um_9cts_135genes_NRMSE_vs_proportion.png"),
-         device = "png",
-         path = fig_path,
-         scale = 1.5,
-         width = 7,
-         height = 4,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("2_100um_9cts_135genes_NRMSE_vs_proportion.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 7,
+#          height = 4,
+#          units = c("in"),
+#          dpi = 300)
 
 ggplot(data = k8_raw_ct_rmse_summary_nrmse, aes(x = Spot.proportion.std, y = RMSE, color = Cell.type)) +
   geom_point(size=3) +
@@ -12288,62 +12658,62 @@ ggplot(data = k8_raw_ct_rmse_summary_nrmse, aes(x = Spot.proportion.std, y = RMS
   labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 9 cell-types", y = "Normalized RMSE",
        x = "Pixel proportion std") +
   guides(color=guide_legend(title="Cell-types"))
-ggplot2::ggsave(filename = paste0("2_100um_9cts_135genes_NRMSE_vs_std.png"),
-         device = "png",
-         path = fig_path,
-         scale = 1.5,
-         width = 7,
-         height = 4,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("2_100um_9cts_135genes_NRMSE_vs_std.png"),
+#          device = "png",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 7,
+#          height = 4,
+#          units = c("in"),
+#          dpi = 300)
 
 ## ----------------------------------------------------------------
 
-ggplot(data = k8_raw_ct_rmse_summary_cosine, aes(x = Proportion, y = RMSE, color = Cell.type)) +
-  geom_point(size=3) +
-  facet_wrap(~Method) +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 0, size = 13),
-        axis.text.y=element_text(size=15),
-        strip.text = element_text(size=15),
-        # axis.title.x = element_text(size=15),
-        # axis.title.y = element_text(size=15),
-        axis.title=element_text(size=15),
-        plot.title = element_text(size=18, face=NULL)) +
-  labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 9 cell-types", y = "Cosine Similarity",
-       x = "proportion in ground truth dataset") +
-  guides(color=guide_legend(title="Cell-types"))
-ggplot2::ggsave(filename = paste0("2_100um_9cts_135genes_Cosine_vs_proportion.png"),
-         device = "png",
-         path = fig_path,
-         scale = 1.5,
-         width = 7,
-         height = 4,
-         units = c("in"),
-         dpi = 300)
-
-ggplot(data = k8_raw_ct_rmse_summary_cosine, aes(x = Spot.proportion.std, y = RMSE, color = Cell.type)) +
-  geom_point(size=3) +
-  facet_wrap(~Method) +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 0, size = 13),
-        axis.text.y=element_text(size=15),
-        strip.text = element_text(size=15),
-        # axis.title.x = element_text(size=15),
-        # axis.title.y = element_text(size=15),
-        axis.title=element_text(size=15),
-        plot.title = element_text(size=18, face=NULL)) +
-  labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 9 cell-types", y = "Cosine Similarity",
-       x = "Pixel proportion std") +
-  guides(color=guide_legend(title="Cell-types"))
-ggplot2::ggsave(filename = paste0("2_100um_9cts_135genes_Cosine_vs_std.png"),
-         device = "png",
-         path = fig_path,
-         scale = 1.5,
-         width = 7,
-         height = 4,
-         units = c("in"),
-         dpi = 300)
+# ggplot(data = k8_raw_ct_rmse_summary_cosine, aes(x = Proportion, y = RMSE, color = Cell.type)) +
+#   geom_point(size=3) +
+#   facet_wrap(~Method) +
+#   theme_classic() +
+#   theme(axis.text.x = element_text(angle = 0, size = 13),
+#         axis.text.y=element_text(size=15),
+#         strip.text = element_text(size=15),
+#         # axis.title.x = element_text(size=15),
+#         # axis.title.y = element_text(size=15),
+#         axis.title=element_text(size=15),
+#         plot.title = element_text(size=18, face=NULL)) +
+#   labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 9 cell-types", y = "Cosine Similarity",
+#        x = "proportion in ground truth dataset") +
+#   guides(color=guide_legend(title="Cell-types"))
+# # ggplot2::ggsave(filename = paste0("2_100um_9cts_135genes_Cosine_vs_proportion.png"),
+# #          device = "png",
+# #          path = fig_path,
+# #          scale = 1.5,
+# #          width = 7,
+# #          height = 4,
+# #          units = c("in"),
+# #          dpi = 300)
+# 
+# ggplot(data = k8_raw_ct_rmse_summary_cosine, aes(x = Spot.proportion.std, y = RMSE, color = Cell.type)) +
+#   geom_point(size=3) +
+#   facet_wrap(~Method) +
+#   theme_classic() +
+#   theme(axis.text.x = element_text(angle = 0, size = 13),
+#         axis.text.y=element_text(size=15),
+#         strip.text = element_text(size=15),
+#         # axis.title.x = element_text(size=15),
+#         # axis.title.y = element_text(size=15),
+#         axis.title=element_text(size=15),
+#         plot.title = element_text(size=18, face=NULL)) +
+#   labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 9 cell-types", y = "Cosine Similarity",
+#        x = "Pixel proportion std") +
+#   guides(color=guide_legend(title="Cell-types"))
+# # ggplot2::ggsave(filename = paste0("2_100um_9cts_135genes_Cosine_vs_std.png"),
+# #          device = "png",
+# #          path = fig_path,
+# #          scale = 1.5,
+# #          width = 7,
+# #          height = 4,
+# #          units = c("in"),
+# #          dpi = 300)
 
 ```
 
@@ -12429,18 +12799,20 @@ dat %>% arrange(Method, -RMSE)
 # only 1 I-39 cell in ref. Inflates the NRMSE. Remove
 dat <- k75_raw_ct_rmse_summary_nrmse[k75_raw_ct_rmse_summary_nrmse$Cell.type != "I 39",]
 
+dat$variance <- dat$Spot.proportion.std^2
+
 dat$selectedLabels <- ""
-ix_label <- which(dat$Cell.type %in% c("Pericytes", "Ependymal", "Astrocyte", "OD Mature"))
+ix_label <- which(dat$Cell.type %in% c("Pericytes", "Ependymal", "Microglia"))
 dat$selectedLabels[ix_label] <- dat$Cell.type[ix_label]
 
 ## RCTD largest RMSE
-dat$selectedLabels[135] <- "I 32"
-## SPOTlight largest RMSE
-dat$selectedLabels[19] <- "E 25"
-dat$selectedLabels[49] <- "I 21"
-## STdeconvolve largest RMSE
-dat$selectedLabels[207] <- "E 25"
-dat$selectedLabels[187] <- "I 32"
+# dat$selectedLabels[135] <- "I 32"
+# ## SPOTlight largest RMSE
+# dat$selectedLabels[19] <- "E 25"
+# dat$selectedLabels[49] <- "I 21"
+# ## STdeconvolve largest RMSE
+# dat$selectedLabels[207] <- "E 25"
+# dat$selectedLabels[187] <- "I 32"
 
 
 
@@ -12464,18 +12836,18 @@ ggplot(data = dat, aes(x = Proportion, y = RMSE, color = Cell.type)) +
   labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 76 cell-types", y = "Normalized RMSE",
        x = "proportion of ground truth dataset") +
   guides(color=guide_legend(title="Cell-types", ncol = 6))
-ggplot2::ggsave(filename = paste0("Supplemental_Figure_S14-A-nrmse_v_proportion-100um_76cts_135genes.pdf"),
-         device = "pdf",
-         path = fig_path,
-         scale = 1.5,
-         width = 8.5,
-         height = 4,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("Supplemental_Figure_S14-A-nrmse_v_proportion-100um_76cts_135genes.pdf"),
+#          device = "pdf",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 12,
+#          height = 4,
+#          units = c("in"),
+#          dpi = 300)
 
-ggplot(data = dat, aes(x = Spot.proportion.std, y = RMSE, color = Cell.type)) +
+ggplot(data = dat, aes(x = variance, y = RMSE, color = Cell.type)) +
   geom_point(size=1) +
-  ggrepel::geom_text_repel(data = dat, mapping = aes(x = Spot.proportion.std, y = RMSE, label = selectedLabels), size = 3, 
+  ggrepel::geom_text_repel(data = dat, mapping = aes(x = variance, y = RMSE, label = selectedLabels), size = 3, 
                     min.segment.length = 1.5, seed = 42, box.padding = 0.1, max.overlaps = Inf, point.padding = 0.01,
                     # fill = "white", xlim = c(-Inf, Inf), ylim = c(-Inf, Inf), 
                     nudge_x = 0.03, direction = "both", hjust = "left", nudge_y = 2
@@ -12491,16 +12863,16 @@ ggplot(data = dat, aes(x = Spot.proportion.std, y = RMSE, color = Cell.type)) +
         axis.title=element_text(size=15),
         plot.title = element_text(size=18, face=NULL)) +
   labs(title = "Deconvolution accuracy of each cell-type\n100 micron pixels, 76 cell-types", y = "Normalized RMSE",
-       x = "pixel proportion std") +
+       x = "pixel proportion variance") +
   guides(color=guide_legend(title="Cell-types", ncol = 6))
-ggplot2::ggsave(filename = paste0("Supplemental_Figure_S14-A-nrmse_v_sd-100um_76cts_135genes.pdf"),
-         device = "pdf",
-         path = fig_path,
-         scale = 1.5,
-         width = 8.5,
-         height = 4,
-         units = c("in"),
-         dpi = 300)
+# ggplot2::ggsave(filename = paste0("Supplemental_Figure_S14-A-nrmse_v_sd-100um_76cts_135genes.pdf"),
+#          device = "pdf",
+#          path = fig_path,
+#          scale = 1.5,
+#          width = 12,
+#          height = 4,
+#          units = c("in"),
+#          dpi = 300)
 
 ## ----------------------------------------------------------------
 

@@ -459,7 +459,8 @@ posScaleAll <- rbind(posScale1,
 
 plts <- lapply(unique(bclCorpus$slice), function(s){
   slice <- bclCorpus$slice == s
-  p <- posScaleAll[slice,]
+  # p <- posScaleAll[slice,]
+  p <- bclCorpus$pos[slice,]
   m <- as.matrix(bclProxyTheta[slice,])
   colnames(m) <- c("NonInvasive", "Invasive", "Ductal")
 
@@ -469,7 +470,8 @@ plts <- lapply(unique(bclCorpus$slice), function(s){
                        topicCols=as.vector(bclTxnClustCols[colnames(m)]),
                        groups = bclCorpus$txn[slice],
                        group_cols = bclTxnClustCols,
-                       r = 110, # different size piecharts for mOB data sets
+                       # r = 110, # different size piecharts for mOB data sets
+                       r = 0.4, # different size piecharts for mOB data sets
                        lwd = 0.3,
                        showLegend = FALSE,
                        plotTitle = paste("Section", s))
@@ -833,11 +835,12 @@ ggplot2::ggsave(filename = paste0("Supplemental_Figure_S10-E-topics_pixels-bcl_3
 
 ```{r}
 
-for(celltype in c(3, 13, 5)){
+for(celltype in c(3, 13)){
   
   plts <- lapply(unique(bclCorpus$slice), function(s){
     slice <- bclCorpus$slice == s
-    pos <- posScaleAll[slice,]
+    # pos <- posScaleAll[slice,]
+    pos <- bclCorpus$pos[slice,]
     m <- as.matrix(bcl_k15_theta[slice,celltype])
     txn <- bclCorpus$txn[slice]
   
@@ -860,7 +863,7 @@ for(celltype in c(3, 13, 5)){
                    topicCols=cc,
                    groups = txn, # rep("0", nrows(m))
                    group_cols = bclTxnClustCols, # c("0" = "black")
-                   r = 110,
+                   r = 0.4,
                    lwd = 0.2, # 0.1
                    showLegend = TRUE,
                    plotTitle = paste0("Section ", s),
