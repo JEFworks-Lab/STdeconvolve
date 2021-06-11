@@ -393,7 +393,15 @@ correlation_breaks = c(seq(-1,-0.01,length=100),
                        seq(-0.009,0.009,length=10),
                        seq(0.01,1,length=100))
 
-# lighten and darken a color
+
+#' lighten color
+#' 
+#' @description lighten a color
+#'
+#' @param color color
+#' @param factor how much to lighten (default: 0.5)
+#' 
+#' @export
 lighten <- function(color, factor = 0.5) {
   if ((factor > 1) | (factor < 0)) stop("factor needs to be within [0,1]")
   col <- col2rgb(color)
@@ -402,6 +410,15 @@ lighten <- function(color, factor = 0.5) {
   col
 }
 
+
+#' darken color
+#' 
+#' @description darken a color
+#'
+#' @param color color
+#' @param factor how much to darken (default: 1.4)
+#' 
+#' @export
 darken <- function(color, factor=1.4){
   col <- col2rgb(color)
   col <- col/factor
@@ -410,19 +427,30 @@ darken <- function(color, factor=1.4){
 }
 
 
-# color palette to replicate ggplot2
+#' color palette to replicate ggplot2
+#' 
+#' @description get a ggplot2 color palette of length n
+#'
+#' @param n length of color palette
+#' 
+#' @export
 gg_color_hue <- function(n) {
   hues = seq(15, 375, length = n + 1)
   hcl(h = hues, l = 65, c = 100)[1:n]
 }
 
 
-# transparent version of color
+
+#' transparent version of color.
+#' 
+#' @description adjust transparency of a color
+#'
+#' @param color color name
+#' @param percent % transparency (default: 50)
+#' @param name an optional name for the color (default: NULL)
+#' 
+#' @export
 transparentCol <- function(color, percent = 50, name = NULL) {
-  #       color = color name
-  #       percent = % transparency
-  #       name = an optional name for the color
-  
   ## Get RGB values for named color
   rgb.val <- col2rgb(color)
   

@@ -9,6 +9,7 @@ fitLDA(
   Ks = seq(2, 10, by = 2),
   seed = 0,
   testSize = NULL,
+  perc.rare.thresh = 0.05,
   ncores = parallel::detectCores(logical = TRUE) - 1,
   plot = TRUE,
   verbose = TRUE
@@ -23,6 +24,9 @@ fitLDA(
 
 \item{testSize}{fraction of pixels to set aside for test corpus when computing perplexity (default: NULL)
 Either NULL or decimal between 0 and 1.}
+
+\item{perc.rare.thresh}{the number of deconvolved cell-types with mean pixel proportion below this fraction used to assess
+performance of fitted models for each K. Recorded for each K. (default: 0.05)}
 
 \item{ncores}{Number of cores for parallelization}
 }

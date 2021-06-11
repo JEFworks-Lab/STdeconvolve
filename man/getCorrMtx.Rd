@@ -6,7 +6,7 @@
 proportions across documents (pixels), i.e. thetas, or gene probabilities,
 i.e. betas.}
 \usage{
-getCorrMtx(m1, m2, type, thresh = NULL)
+getCorrMtx(m1, m2, type, thresh = NULL, verbose = TRUE)
 }
 \arguments{
 \item{m1}{first matrix}
@@ -17,6 +17,8 @@ getCorrMtx(m1, m2, type, thresh = NULL)
 
 \item{thresh}{if comparing betas, use to compare genes above this probability (e.g., expression level).
 NULL or 0 < numeric < 1.0 (default: NULL)}
+
+\item{verbose}{control the verbosity (default: TRUE)}
 }
 \value{
 matrix of Pearson's correlations; m1 (rows) by m2 (cols)

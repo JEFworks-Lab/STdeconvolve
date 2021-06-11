@@ -33,7 +33,7 @@ Imports:
 LinkingTo:
     Rcpp
 Depends:
-    R (>= 4.0)
+    R (>= 3.6)
 Suggests: 
     knitr,
     rmarkdown,

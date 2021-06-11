@@ -33,6 +33,10 @@ The first is `restrictCorpus()`, which is highlighted in the `getting_started` t
 
 The second is `preprocess()`, which is a larger wrapper function and allows for a much greater and specified range of filtered and feature selection.
 
+```{r}
+library(STdeconvolve)
+```
+
 ```{r, data}
 data(mOB)
 pos <- mOB$pos
