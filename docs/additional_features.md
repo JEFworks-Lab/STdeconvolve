@@ -93,8 +93,6 @@ mobCorpus1 <- preprocess(t(cd),
     ## - Removing poor pixels with <= 100 reads 
     ## - Removing genes with <= 10 reads across pixels and detected in <= 1 pixels
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-1-1.png)
-
     ##   Remaining genes: 12292 and remaining pixels: 260 
     ## - Removing the top 3 expressed genes. 
     ## - After filtering for `genes.to.remove`: 
@@ -103,7 +101,12 @@ mobCorpus1 <- preprocess(t(cd),
     ##   Remaining genes: 11589 
     ## - Removed genes present in 5 % or less of pixels 
     ##   Remaining genes: 11116 
-    ## - Capturing only the overdispersed genes... 
+    ## - Capturing only the overdispersed genes...
+
+    ## Converting to sparse matrix ...
+
+![](additional_features_files/figure-markdown_github/unnamed-chunk-1-1.png)
+
     ## [1] "Calculating variance fit ..."
     ## [1] "Using gam with k=5..."
     ## [1] "171 overdispersed genes ... "
@@ -191,8 +194,7 @@ length(genes)
 head(genes)
 ```
 
-    ## [1] "1700015F17Rik" "1700101I11Rik" "1810020O05Rik" "1810062O18Rik" "2010300C02Rik"
-    ## [6] "2210408F21Rik"
+    ## [1] "1700015F17Rik" "1700101I11Rik" "1810020O05Rik" "1810062O18Rik" "2010300C02Rik" "2210408F21Rik"
 
 ``` r
 ## build corpus using just the selected genes
@@ -265,7 +267,7 @@ ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
 
     ## Splitting pixels into 20 % and 80 % testing and fitting corpuses
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-4-1.png)![](additional_features_files/figure-markdown_github/unnamed-chunk-4-2.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-4-1.png)
 
 While technically the lowest perplexity computed is when K=8, perplexity
 appears to be relatively stable between K=7 and K=15. Additionally, we
@@ -335,8 +337,7 @@ results <- buildLDAobject(LDAmodel = optimalModel(models = ldas, opt = "15"),
 print(names(results))
 ```
 
-    ## [1] "beta"       "theta"      "clusters"   "dendro"     "cols"       "betaCombn" 
-    ## [7] "thetaCombn" "clustCols"  "k"
+    ## [1] "beta"       "theta"      "clusters"   "dendro"     "cols"       "betaCombn"  "thetaCombn" "clustCols"  "k"
 
 Here, `results` is a list that contains the beta and theta matrix for
 the individual predicted cell-types, combined beta and theta matrices of
@@ -454,8 +455,7 @@ results <- buildLDAobject(LDAmodel = optimalModel(models = ldas, opt = "15"),
 print(names(results))
 ```
 
-    ## [1] "beta"       "theta"      "clusters"   "dendro"     "cols"       "betaCombn" 
-    ## [7] "thetaCombn" "clustCols"  "k"
+    ## [1] "beta"       "theta"      "clusters"   "dendro"     "cols"       "betaCombn"  "thetaCombn" "clustCols"  "k"
 
 All Cell-types or Cell-type clusters
 ------------------------------------
@@ -473,7 +473,7 @@ plt <- vizAllTopics(theta = m,
              lwd = 0.1,
              showLegend = TRUE,
              plotTitle = "K=15")
-plt <- plt + ggplot2::guides(fill=guide_legend(ncol=2))
+plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
@@ -495,7 +495,7 @@ plt <- vizAllTopics(theta = m,
              lwd = 0.4, # adjust thickness of the scatterpie borders
              showLegend = TRUE,
              plotTitle = "K=15")
-plt <- plt + ggplot2::guides(fill=guide_legend(ncol=2))
+plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
@@ -516,7 +516,7 @@ plt <- vizAllTopics(theta = m,
              lwd = 0.4, # adjust thickness of the scatterpie borders
              showLegend = TRUE,
              plotTitle = "K=15")
-plt <- plt + ggplot2::guides(fill=guide_legend(ncol=2))
+plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 

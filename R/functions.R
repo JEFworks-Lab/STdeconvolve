@@ -208,11 +208,11 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     }
     sec_ax_breaks <- scale0_1(sec_ax_labs)
     
-    plt <- ggplot2::ggplot(dat, aes(x=K)) +
-      ggplot2::geom_line(aes(y=rareCtsAdj), col="blue", lwd = 2) +
-      ggplot2::geom_line(aes(y=perplexAdj), col="red", lwd = 2) +
+    plt <- ggplot2::ggplot(dat, ggplot2::aes(x=K)) +
+      ggplot2::geom_line(ggplot2::aes(y=rareCtsAdj), col="blue", lwd = 2) +
+      ggplot2::geom_line(ggplot2::aes(y=perplexAdj), col="red", lwd = 2) +
       ggplot2::scale_y_continuous(name=paste0("# cell-types with mean proportion < ", round(perc.rare.thresh*100, 2), "%"), breaks = prim_ax_breaks, labels = prim_ax_labs,
-                                  sec.axis=sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
+                                  sec.axis=ggplot2::sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
       ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
       ggplot2::ggtitle("Fitted model K's vs deconvolved cell-types and perplexity") +
       ggplot2::theme_classic() +

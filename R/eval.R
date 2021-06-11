@@ -212,6 +212,7 @@ preprocess <- function(dat,
                              min.detected = min.detected,
                              plot=TRUE,
                              verbose=FALSE)
+  countsClean <- as.matrix(countsClean)
   if(verbose){
     cat("  Remaining genes:", dim(countsClean)[1], "and remaining pixels:", dim(countsClean)[2], "\n")
   }
@@ -237,7 +238,7 @@ preprocess <- function(dat,
     if(verbose){
       cat("- Removing the top", nTopGenes, "expressed genes.", "\n")
     }
-    top_expressed <- names(rowSums(countsClean)[order(rowSums(countsClean),
+    top_expressed <- names(Matrix::rowSums(countsClean)[order(Matrix::rowSums(countsClean),
                                                       decreasing = TRUE)][1:nTopGenes])
     countsClean <- countsClean[rownames(countsClean) %in% top_expressed == FALSE,]
     
@@ -265,7 +266,7 @@ preprocess <- function(dat,
       numberSpots <- (removeAbove * ncol(countsClean_))
       # rowSums of countsClean_ equate to number of pixels where each gene is expressed
       # remove genes expressed in "numberSpots" or more pixels
-      countsClean <- countsClean[which(rowSums(countsClean_) < numberSpots),]
+      countsClean <- countsClean[which(Matrix::rowSums(countsClean_) < numberSpots),]
       if(verbose){
         cat("- Removed genes present in",
             as.character(removeAbove*100), "% or more of pixels", "\n",
@@ -285,7 +286,7 @@ preprocess <- function(dat,
       numberSpots <- (removeBelow * ncol(countsClean_))
       # rowSums of countsClean_ equate to number of pixels where each gene is expressed
       # remove genes expressed in "numberSpots" or less pixels
-      countsClean <- countsClean[which(rowSums(countsClean_) > numberSpots),]
+      countsClean <- countsClean[which(Matrix::rowSums(countsClean_) > numberSpots),]
       if(verbose){
         cat("- Removed genes present in",
             as.character(removeBelow*100), "% or less of pixels", "\n",
@@ -338,7 +339,7 @@ preprocess <- function(dat,
   if(verbose){
     cat("- Check that each pixel has at least 1 non-zero gene count entry..", "\n")
   }
-  corpus <- corpus[which(!rowSums(corpus) == 0),]
+  corpus <- corpus[which(!Matrix::rowSums(corpus) == 0),]
   corpus_slm <- slam::as.simple_triplet_matrix(corpus)
   cat("Final corpus:", "\n")
   print(corpus_slm)

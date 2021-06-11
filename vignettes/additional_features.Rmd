@@ -221,7 +221,7 @@ plt <- vizAllTopics(theta = m,
              lwd = 0.1,
              showLegend = TRUE,
              plotTitle = "K=15")
-plt <- plt + ggplot2::guides(fill=guide_legend(ncol=2))
+plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
@@ -240,7 +240,7 @@ plt <- vizAllTopics(theta = m,
              lwd = 0.4, # adjust thickness of the scatterpie borders
              showLegend = TRUE,
              plotTitle = "K=15")
-plt <- plt + ggplot2::guides(fill=guide_legend(ncol=2))
+plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
@@ -259,7 +259,7 @@ plt <- vizAllTopics(theta = m,
              lwd = 0.4, # adjust thickness of the scatterpie borders
              showLegend = TRUE,
              plotTitle = "K=15")
-plt <- plt + ggplot2::guides(fill=guide_legend(ncol=2))
+plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 

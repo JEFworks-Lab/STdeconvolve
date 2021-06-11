@@ -80,7 +80,7 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1), plot=TRUE, verbose=
     ## final e step document 260
     ## final e step document 260
 
-![](getting_started_files/figure-markdown_github/getting_started_opt-1.png)![](getting_started_files/figure-markdown_github/getting_started_opt-2.png)
+![](getting_started_files/figure-markdown_github/getting_started_opt-1.png)
 
 In this example, we will use the model with the lowest model perplexity.
 The resulting `theta` matrix can be interpreted as the proportion of
@@ -108,6 +108,11 @@ vizAllTopics(deconProp, pos,
              group_cols = rainbow(length(levels(annot))),
              r=0.4)
 ```
+
+    ## Bioconductor version 3.12 (BiocManager 1.30.12), ?BiocManager::install for help
+
+    ## Bioconductor version '3.12' is out-of-date; the current release version '3.13' is available with R version '4.1'; see
+    ##   https://bioconductor.org/install
 
 ![](getting_started_files/figure-markdown_github/getting_started_proportions-1.png)
 

@@ -63,7 +63,7 @@ vizAllTopics <- function(theta, pos,
   }
   
   if (is.na(overlay[1]) == FALSE){
-    p <- ggplot2::ggplot(mapping = aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
+    p <- ggplot2::ggplot(mapping = ggplot2::aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
       ggplot2::coord_equal(xlim = c(0,dim(overlay)[2]), ylim = c(0, dim(overlay)[1]), expand = FALSE) +
       ggplot2::theme(
         #panel.background = element_rect(fill = "white"),
@@ -232,7 +232,7 @@ vizTopicClusters <- function(theta, pos, clusters,
     }
     
     if (is.na(overlay[1]) == FALSE){
-      p <- ggplot2::ggplot(mapping = aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
+      p <- ggplot2::ggplot(mapping = ggplot2::aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
         ggplot2::coord_equal(xlim = c(0,dim(overlay)[2]), ylim = c(0, dim(overlay)[1]), expand = FALSE) +
         ggplot2::theme(
           #panel.background = element_rect(fill = "white"),
@@ -259,7 +259,7 @@ vizTopicClusters <- function(theta, pos, clusters,
       p <- ggplot2::ggplot() +
         ggplot2::theme(
           #panel.background = element_rect(fill = "white"),
-          panel.grid = element_blank(),
+          panel.grid = ggplot2::element_blank(),
           axis.line = ggplot2::element_blank(),
           axis.text.x = ggplot2::element_blank(),
           axis.text.y = ggplot2::element_blank(),
@@ -354,7 +354,7 @@ vizGeneCounts <- function(df, gene,
   }
   
   p <- ggplot2::ggplot() +
-    ggplot2::geom_point(data = df, aes(x=x, y=y, fill=counts, color = groups),
+    ggplot2::geom_point(data = df, ggplot2::aes(x=x, y=y, fill=counts, color = groups),
                shape = 21,
                stroke = stroke, size = size, 
                alpha = alpha) +
