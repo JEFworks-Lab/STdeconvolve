@@ -30,6 +30,7 @@ Imports:
     viridis,
     dynamicTreeCut,
     slam
+    mgcv
 LinkingTo:
     Rcpp
 Depends:
