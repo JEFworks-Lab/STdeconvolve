@@ -271,10 +271,10 @@ buildBregmaCorpus <- function (hashTable, bregmaID) {
 SPOTlightPredict <- function(nmfRef, stCounts, min_cont = 0.0) {
   
   # get basis matrix W [genes x topics]
-  w <- NMF:::basis(nmfRef[[1]])
+  w <- NMF::basis(nmfRef[[1]])
   colnames(w) <- paste("Topic", 1:ncol(w), sep = "_")
   # get coefficient matrix H [topics x cells]
-  h <- NMF:::coef(nmfRef[[1]])
+  h <- NMF::coef(nmfRef[[1]])
   
   
   # reference for which cell type(s) a topic represents

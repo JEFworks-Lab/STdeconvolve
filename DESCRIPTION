@@ -33,7 +33,10 @@ Imports:
     mgcv,
     gridExtra,
     KernSmooth,
-    stats
+    stats,
+    clue,
+    hash,
+    NMF
 LinkingTo:
     Rcpp
 Depends:
