@@ -43,6 +43,10 @@ allows for a much greater and specified range of filtered and feature
 selection.
 
 ``` r
+library(STdeconvolve)
+```
+
+``` r
 data(mOB)
 pos <- mOB$pos
 cd <- mOB$counts
@@ -105,13 +109,13 @@ mobCorpus1 <- preprocess(t(cd),
 
     ## Converting to sparse matrix ...
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-1-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-2-1.png)
 
     ## [1] "Calculating variance fit ..."
     ## [1] "Using gam with k=5..."
     ## [1] "171 overdispersed genes ... "
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-1-2.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-2-2.png)
 
     ## - Using top 100 overdispersed genes. 
     ## - Check that each pixel has at least 1 non-zero gene count entry.. 
@@ -172,7 +176,7 @@ counts <- cleanCounts(counts = cd,
                       min.detected = 1)
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-3-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-4-1.png)
 
 ``` r
 odGenes <- getOverdispersedGenes(as.matrix(counts),
@@ -214,7 +218,7 @@ mobCorpus2 <- preprocess(t(cd),
     ## - Removing poor pixels with <= 1 reads 
     ## - Removing genes with <= 1 reads across pixels and detected in <= 1 pixels
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-3-2.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-4-2.png)
 
     ##   Remaining genes: 345 and remaining pixels: 260 
     ## - Check that each pixel has at least 1 non-zero gene count entry.. 
@@ -257,7 +261,7 @@ no longer returning informative topics, or cell-types.
 
 ``` r
 ## fit LDA models to the corpus
-ks <- seq(from = 2, to = 25, by = 1) # range of K's to fit LDA models with given the input corpus
+ks <- seq(from = 2, to = 18, by = 1) # range of K's to fit LDA models with given the input corpus
 ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
                Ks = ks,
                ncores = parallel::detectCores(logical = TRUE) - 1, # number of cores to fit LDA models in parallel
@@ -267,7 +271,7 @@ ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
 
     ## Splitting pixels into 20 % and 80 % testing and fitting corpuses
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-4-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-5-1.png)
 
 While technically the lowest perplexity computed is when K=8, perplexity
 appears to be relatively stable between K=7 and K=15. Additionally, we
@@ -328,7 +332,7 @@ results <- buildLDAobject(LDAmodel = optimalModel(models = ldas, opt = "15"),
     ##  ..cutHeight not given, setting it to 1.74  ===>  99% of the (truncated) height range in dendro.
     ##  ..done.
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-7-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-8-1.png)
 
     ## [1] "cell-types combined."
     ## [1] "cell-types combined."
@@ -382,7 +386,7 @@ clust <- clusterTopics(beta = results$beta,
     ##  ..cutHeight not given, setting it to 1.74  ===>  99% of the (truncated) height range in dendro.
     ##  ..done.
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-8-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-9-1.png)
 
 ``` r
 clust
@@ -477,7 +481,7 @@ plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-11-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-12-1.png)
 
 Scatterpie borders can be colored, either custom, or based on group
 membership
@@ -499,7 +503,7 @@ plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-12-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-13-1.png)
 
 Based on group membership (let’s use the coarse cell layers of the MOB)
 
@@ -520,7 +524,7 @@ plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-13-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-14-1.png)
 
 Now let’s visualize the cell-type clusters:
 
@@ -541,7 +545,7 @@ plt <- vizAllTopics(theta = m,
 plt
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-14-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-15-1.png)
 
 Individual Cell-types and Cell-type clusters
 --------------------------------------------
@@ -553,41 +557,6 @@ vizTopicClusters(theta = m,
                  pos = p,
                  clusters = results$cols,
                  sharedCol = TRUE, # cell-types in a cluster share the same color
-                 groups = rep("0", dim(m)[1]),
-                 group_cols = c("0" = "black"),
-                 r = 0.4,
-                 lwd = 0.3,
-                 showLegend = TRUE)
-```
-
-    ## [1] "Topic cluster members:"
-    ## #FF0000 : 2 4 13 14 15
-
-![](additional_features_files/figure-markdown_github/unnamed-chunk-15-1.png)
-
-    ## #CCFF00 : 1 9 12
-
-![](additional_features_files/figure-markdown_github/unnamed-chunk-15-2.png)
-
-    ## #00FF66 : 5 7 10
-
-![](additional_features_files/figure-markdown_github/unnamed-chunk-15-3.png)
-
-    ## #0066FF : 6 11
-
-![](additional_features_files/figure-markdown_github/unnamed-chunk-15-4.png)
-
-    ## #CC00FF : 3 8
-
-![](additional_features_files/figure-markdown_github/unnamed-chunk-15-5.png)
-
-``` r
-m <- results$theta
-p <- pos[rownames(results$theta),]
-vizTopicClusters(theta = m,
-                 pos = p,
-                 clusters = results$cols,
-                 sharedCol = FALSE, # cell-types in a cluster on a color gradient
                  groups = rep("0", dim(m)[1]),
                  group_cols = c("0" = "black"),
                  r = 0.4,
@@ -616,6 +585,41 @@ vizTopicClusters(theta = m,
 
 ![](additional_features_files/figure-markdown_github/unnamed-chunk-16-5.png)
 
+``` r
+m <- results$theta
+p <- pos[rownames(results$theta),]
+vizTopicClusters(theta = m,
+                 pos = p,
+                 clusters = results$cols,
+                 sharedCol = FALSE, # cell-types in a cluster on a color gradient
+                 groups = rep("0", dim(m)[1]),
+                 group_cols = c("0" = "black"),
+                 r = 0.4,
+                 lwd = 0.3,
+                 showLegend = TRUE)
+```
+
+    ## [1] "Topic cluster members:"
+    ## #FF0000 : 2 4 13 14 15
+
+![](additional_features_files/figure-markdown_github/unnamed-chunk-17-1.png)
+
+    ## #CCFF00 : 1 9 12
+
+![](additional_features_files/figure-markdown_github/unnamed-chunk-17-2.png)
+
+    ## #00FF66 : 5 7 10
+
+![](additional_features_files/figure-markdown_github/unnamed-chunk-17-3.png)
+
+    ## #0066FF : 6 11
+
+![](additional_features_files/figure-markdown_github/unnamed-chunk-17-4.png)
+
+    ## #CC00FF : 3 8
+
+![](additional_features_files/figure-markdown_github/unnamed-chunk-17-5.png)
+
 Or just plot each cell-type, or a group of selected cell-types
 individually
 
@@ -639,4 +643,4 @@ vizAllTopics(theta = m,
              overlay = NA) # BONUS: plot the scatterpies on top of a raster image of the H&E tissue, if set equal to the rgb matrix
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-17-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-18-1.png)

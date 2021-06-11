@@ -2,11 +2,12 @@
 title: "additional_features"
 author: "Brendan F. Miller"
 date: "5/9/2021"
-output:   
-  md_document:
-    variant: markdown_github
-    toc: true
-    toc_depth: 3
+output: rmarkdown::html_document
+# output:
+#   md_document:
+#     variant: markdown_github
+#     toc: true
+#     toc_depth: 3
 vignette: >
   %\VignetteIndexEntry{Additional Features with STdeconvolve}
   %\VignetteEncoding{UTF-8}
@@ -129,7 +130,7 @@ Second, as K increases, the additional cell-types that are predicted tend to be 
 
 ```{r}
 ## fit LDA models to the corpus
-ks <- seq(from = 2, to = 25, by = 1) # range of K's to fit LDA models with given the input corpus
+ks <- seq(from = 2, to = 18, by = 1) # range of K's to fit LDA models with given the input corpus
 ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
                Ks = ks,
                ncores = parallel::detectCores(logical = TRUE) - 1, # number of cores to fit LDA models in parallel
@@ -137,7 +138,7 @@ ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
                plot=TRUE, verbose=FALSE)
 ```
 
-While technically the lowest perplexity computed is when K=8, perplexity appears to be relatively stable between K=7 and K=15. Additionally, we expect there to be more than 4 cell-types and thus K should be greater than 4 (based on "knee" metric).
+While technically the lowest perplexity computed is when K=8, perplexity appears to be relatively stable between K=7 and K=18. Additionally, we expect there to be more than 4 cell-types and thus K should be greater than 4 (based on "knee" metric).
 
 However, the number of cell-types with mean proportion <5% doesn't start steadily increasing until around K=15, suggesting that the number of predicted cell-types are likely informative until this chosen K.
 

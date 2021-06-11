@@ -2,9 +2,10 @@
 title: "Getting Started with STdeconvolve"
 author: "Jean Fan"
 date: "2/26/2021"
-output:   
-  md_document:
-    variant: markdown_github
+output: rmarkdown::html_document
+# output:   
+#   md_document:
+#     variant: markdown_github
 vignette: >
   %\VignetteIndexEntry{Getting Started with STdeconvolve}
   %\VignetteEncoding{UTF-8}
