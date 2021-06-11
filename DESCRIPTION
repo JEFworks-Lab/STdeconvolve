@@ -30,7 +30,10 @@ Imports:
     viridis,
     dynamicTreeCut,
     slam,
-    mgcv
+    mgcv,
+    gridExtra,
+    KernSmooth,
+    stats
 LinkingTo:
     Rcpp
 Depends:

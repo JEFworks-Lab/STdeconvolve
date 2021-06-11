@@ -29,6 +29,10 @@ vizTopicClusters(
 assigned to. In this case, the levels should be colors. In \code{vizAllTopics},
 clusters is "topicCols" and can just be a vector of colors.}
 
+\item{sharedCol}{Boolean indicating if the cell-types in a cluster will be plotted with
+the same color or if each celll-type will be colored by its own shade to also
+show how the cell-types in a cluster are distributed in space wrt each other.}
+
 \item{groups}{colors the pixel scatterpie lines based on a group or cell layer
 they belong to. Needs to be a character vector in the order of the spot
 rows in theta. Ex: c("0", "1", "0", ...)}
@@ -46,6 +50,10 @@ group_cols if being used.}
 
 \item{overlay}{plot the scatterpies on top of a raster image of the H&E tissue
 (default: NA)}
+
+\item{fig_path}{path so save output figures for each plotted cluster (not in use)}
+
+\item{fig_prefix}{prefix to name each output figure for each plotted cluster (not in use)}
 }
 \description{
 Similar to \code{vizAllTopics} but will generate a separate plot for

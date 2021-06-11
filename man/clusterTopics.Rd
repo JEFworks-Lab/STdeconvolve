@@ -22,8 +22,6 @@ clusterTopics(
 \item{deepSplit}{Dynamic tree cutting sensitivity parameter (default: 4)}
 
 \item{plot}{Boolean for plotting}
-
-\item{distance}{Distance measure to be used (default: euclidean)}
 }
 \value{
 A list that contains

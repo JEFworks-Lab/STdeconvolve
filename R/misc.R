@@ -23,7 +23,7 @@
 #' @param patch_size dimension in um to make the simulated spots for a MERFISH
 #'     experiment. The Centroid coords are already in um. (default: 100)
 #' 
-#' @return a hash table where each key is a bregma ID (ie [["-0.04]])
+#' @return a hash table where each key is a bregma ID (ie [["-0.04"]])
 #'     and the returned object is a list that contains
 #' \itemize{
 #' \item bregmaFullDf: the "annot.table" data.frame for the specific bregma with
@@ -198,7 +198,7 @@ buildBregmaCorpus <- function (hashTable, bregmaID) {
   
   # ground truth cell type - gene expression frequencies 
   mat <- hashTable[[bregmaID]][["cellGexp"]][cells,]
-  mm <- model.matrix(~ 0 + factor(cellTypes))
+  mm <- stats::model.matrix(~ 0 + factor(cellTypes))
   colnames(mm) <- levels(factor(cellTypes))
   gtCtGenes <- t(t(as.matrix(mat)) %*% mm)
   # remove "Blanks" from data:
@@ -271,10 +271,10 @@ buildBregmaCorpus <- function (hashTable, bregmaID) {
 SPOTlightPredict <- function(nmfRef, stCounts, min_cont = 0.0) {
   
   # get basis matrix W [genes x topics]
-  w <- basis(nmfRef[[1]])
+  w <- NMF:::basis(nmfRef[[1]])
   colnames(w) <- paste("Topic", 1:ncol(w), sep = "_")
   # get coefficient matrix H [topics x cells]
-  h <- coef(nmfRef[[1]])
+  h <- NMF:::coef(nmfRef[[1]])
   
   
   # reference for which cell type(s) a topic represents

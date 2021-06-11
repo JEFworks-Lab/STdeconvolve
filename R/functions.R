@@ -77,7 +77,8 @@ restrictCorpus <- function(counts,
 #' @param perc.rare.thresh the number of deconvolved cell-types with mean pixel proportion below this fraction used to assess
 #'     performance of fitted models for each K. Recorded for each K. (default: 0.05)
 #' @param ncores Number of cores for parallelization
-#' @plot Boolean for plotting
+#' @param plot Boolean for plotting (default: TRUE)
+#' @param verbose Boolean for verbosity (default: TRUE)
 #'
 #' @return A list that contains
 #' \itemize{
@@ -275,7 +276,6 @@ getBetaTheta <- function(lda, corpus) {
 #' Aggregate cell-types together using dynamic tree cutting.
 #'
 #' @param beta Beta matrix (cell-type gene distribution matrix)
-#' @param distance Distance measure to be used (default: euclidean)
 #' @param clustering Clustering agglomeration method to be used (default: ward.D)
 #' @param dynamic Dynamic tree cutting method to be used (default: hybrid)
 #' @param deepSplit Dynamic tree cutting sensitivity parameter (default: 4)

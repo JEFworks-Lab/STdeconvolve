@@ -132,7 +132,7 @@ vizAllTopics <- function(theta, pos,
 #' @param clusters factor of colors that each cluster (i.e., cell-type-cluster) is
 #'     assigned to. In this case, the levels should be colors. In `vizAllTopics`,
 #'     clusters is "topicCols" and can just be a vector of colors.
-#' @sharedCol Boolean indicating if the cell-types in a cluster will be plotted with
+#' @param sharedCol Boolean indicating if the cell-types in a cluster will be plotted with
 #'     the same color or if each celll-type will be colored by its own shade to also
 #'     show how the cell-types in a cluster are distributed in space wrt each other.
 #' @param groups colors the pixel scatterpie lines based on a group or cell layer
@@ -146,6 +146,8 @@ vizAllTopics <- function(theta, pos,
 #' @param plotTitle add title to the resulting plot (default: NA)
 #' @param overlay plot the scatterpies on top of a raster image of the H&E tissue
 #'     (default: NA)
+#' @param fig_path path so save output figures for each plotted cluster (not in use)
+#' @param fig_prefix prefix to name each output figure for each plotted cluster (not in use)
 #'     
 #' @export
 vizTopicClusters <- function(theta, pos, clusters,
@@ -324,6 +326,7 @@ vizTopicClusters <- function(theta, pos, clusters,
 #' @param size size of the geom_points to plot (default: 7)
 #' @param stroke thickness of the geom_point lines to help in emphasizing groups
 #'     (default: 2)
+#' @param alpha alpha value of colored pixels (default: 1)
 #' @param plotTitle option to add a title to the plot
 #' @param showLegend Boolean to show the plot legend
 #' 

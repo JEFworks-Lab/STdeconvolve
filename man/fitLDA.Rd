@@ -29,6 +29,10 @@ Either NULL or decimal between 0 and 1.}
 performance of fitted models for each K. Recorded for each K. (default: 0.05)}
 
 \item{ncores}{Number of cores for parallelization}
+
+\item{plot}{Boolean for plotting (default: TRUE)}
+
+\item{verbose}{Boolean for verbosity (default: TRUE)}
 }
 \value{
 A list that contains

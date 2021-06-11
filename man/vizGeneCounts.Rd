@@ -38,6 +38,8 @@ rows in df. Ex: c("0", "1", "0", ...)}
 \item{stroke}{thickness of the geom_point lines to help in emphasizing groups
 (default: 2)}
 
+\item{alpha}{alpha value of colored pixels (default: 1)}
+
 \item{plotTitle}{option to add a title to the plot}
 
 \item{showLegend}{Boolean to show the plot legend}

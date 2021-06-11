@@ -20,7 +20,7 @@ bregmas for which spots will be simulated}
 experiment. The Centroid coords are already in um. (default: 100)}
 }
 \value{
-a hash table where each key is a bregma ID (ie [\link{"-0.04}])
+a hash table where each key is a bregma ID (ie [\link{"-0.04"}])
 and the returned object is a list that contains
 \itemize{
 \item bregmaFullDf: the "annot.table" data.frame for the specific bregma with
