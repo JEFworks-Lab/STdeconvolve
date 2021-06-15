@@ -58,3 +58,6 @@ remotes::install_github('JEFworks-Lab/STdeconvolve')
 - [Getting Started with STdeconvolve](getting_started.md)
 - [Additional Features with STdeconvolve](additional_features.md)
 
+## Contributing
+
+We welcome any bug reports, enhancement requests, general questions, and other contributions. To submit a bug report or enhancement request, please use the `STdeconvolve` GitHub issues tracker. For more substantial contributions, please fork this repo, push your changes to your fork, and submit a pull request with a good commit message.
