@@ -16,6 +16,10 @@ To install `STdeconvolve`, we recommend using `remotes`:
 
 ``` r
 require(remotes)
-remotes::install_github('JEFworks/STdeconvolve')
+remotes::install_github('JEFworks-Lab/STdeconvolve')
 ```
+
+## Tutorials
+- [Getting Started with STdeconvolve](https://github.com/JEFworks/STdeconvolve/blob/package/docs/getting_started.md)
+- [Additional Features with STdeconvolve](https://github.com/JEFworks/STdeconvolve/blob/package/docs/additional_features.md)
 
