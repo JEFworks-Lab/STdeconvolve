@@ -4,7 +4,7 @@
 [![R build status](https://github.com/JEFworks/STdeconvolve/workflows/R-CMD-check/badge.svg)](https://github.com/JEFworks/STdeconvolve/actions)
 <!-- badges: end -->
 
-`STdeconvolve` enables reference-free cell-type deconvolution of multi-cellular spatial transcriptomics data. The overall approach is detailed in the following publications: **COMING SOON**
+`STdeconvolve` enables reference-free cell-type deconvolution of multi-cellular spatial transcriptomics data. The overall approach is detailed on [bioRxiv](https://www.biorxiv.org/content/10.1101/2021.06.15.448381v1)
 
 ## Overview
 

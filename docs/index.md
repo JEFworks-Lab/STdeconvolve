@@ -8,7 +8,7 @@
 
 <img src="https://github.com/JEFworks/STdeconvolve/blob/package/docs/img/STdeconvolve_logo.png?raw=true"/>
 
-The overall approach is detailed in COMING SOON!
+The overall approach is detailed on [bioRxiv](https://www.biorxiv.org/content/10.1101/2021.06.15.448381v1)
 
 ## Overview
 
