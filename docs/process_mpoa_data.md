@@ -252,9 +252,13 @@ simFN7 <- list(sim = sim_N7,
 `simFN7` is the simulated dataset for 9 major cell-types in 100um2 pixels across all tissue sections of the animal.
 
 `simFN7$sim`: A 3072x135 simple triplet matrix (pixels x genes count matrix). Input for STdeconvolve
+
 `simFN7$gtSpotTopics`: ground truth cell-type pixel proportions for 9 major cell-types
+
 `simFN7$gtCtGenes`: ground truth cell-type gene expression profiles
+
 `simFN7$cellCounts`: number of cells in each simulated pixel
+
 `simFN7$annotDf`: metadata table of cells kept in simulated pixels
 
 
