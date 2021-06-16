@@ -61,3 +61,11 @@ remotes::install_github('JEFworks-Lab/STdeconvolve')
 ## Contributing
 
 We welcome any bug reports, enhancement requests, general questions, and other contributions. To submit a bug report or enhancement request, please use the `STdeconvolve` GitHub issues tracker. For more substantial contributions, please fork this repo, push your changes to your fork, and submit a pull request with a good commit message.
+
+## Reproducing Analyses
+
+Links below point to code outlining the preprocessing of datasets used for analyses in the manuscript.
+
+- [MERFISH mouse medial preoptic area (Moffit et al. 2018)](process_mpoa_data.md)
+- [Mouse Olfactory Bulb (Stahl et al. 2016)](process_mob_data.md)
+- [Breast cancer sections (Yoosuf et al. 2020)](process_bcl_data.md)
