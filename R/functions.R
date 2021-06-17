@@ -96,6 +96,10 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
                    seed = 0, testSize = NULL, perc.rare.thresh = 0.05,
                    ncores = parallel::detectCores(logical = TRUE) - 1,
                    plot = TRUE, verbose = TRUE) {
+  
+  if (min(Ks) < 2){
+    stop("K must be and integer of 2 or greater.")
+  }
 
   counts <- as.matrix(counts)
 

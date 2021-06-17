@@ -1,0 +1,235 @@
+---
+title: "Untitled"
+author: "Brendan F. Miller"
+date: "6/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(SingleCellExperiment)
+library(ggplot2)
+library(BayesSpace)
+library(Matrix)
+
+```
+
+```{r}
+
+melanoma <- getRDS(dataset="2018_thrane_melanoma", sample="ST_mel1_rep2")
+
+```
+
+```{r}
+
+sce <- readVisium("/Users/brendan/Desktop/PostDoc/data/V1_Adult_Mouse_Brain_Coronal/")
+
+```
+
+```{r}
+
+set.seed(102)
+coronal <- spatialPreprocess(sce, platform="Visium", 
+                              n.PCs=7, n.HVGs=2000, log.normalize=TRUE)
+
+```
+
+
+```{r}
+
+coronal <- qTune(coronal, qs=seq(2, 10), platform="Visium", d=7)
+qPlot(coronal)
+
+```
+
+```{r}
+
+set.seed(149)
+coronal <- spatialCluster(coronal, q=10, platform="ST", d=7,
+                           init.method="mclust", model="t", gamma=2,
+                           nrep=1000, burn.in=100,
+                           save.chain=TRUE)
+
+```
+
+```{r}
+
+clusterPlot(coronal)
+
+```
+
+```{r}
+
+coronal.enhanced <- spatialEnhance(coronal, q=15, platform="Visium", d=7,
+                                    model="t", gamma=2,
+                                    jitter_prior=0.3, jitter_scale=3.5,
+                                    nrep=1000, burn.in=100,
+                                    save.chain=TRUE)
+
+```
+```{r}
+
+clusterPlot(coronal.enhanced)
+
+```
+
+```{r}
+
+clusterPlot(coronal.enhanced)
+
+```
+
+
+make sce object of the MERFISH simulated data. Then try to resolve 9 clusters.
+
+```{r}
+
+load("/Users/brendan/Desktop/PostDoc/work/STDeconvolve/data/merfish_v2-simFN7_8-9cts_125-135gene_combos.RData")
+
+```
+
+```{r}
+
+# simFN7_9ct_135genes$cellCounts
+
+counts <- t(as.matrix(slam::as.simple_triplet_matrix(simFN7_9ct_135genes$sim)))
+colData <- simFN7_9ct_135genes$cellCounts[,c("x", "y")]
+colnames(colData) <- c("row", "col")
+rowData <- rownames(counts)
+
+merfish_sce <- SingleCellExperiment(assays=list(counts=as(counts, "dgCMatrix")),
+                                    rowData=rowData,
+                                    colData=colData)
+
+```
+
+```{r}
+
+set.seed(102)
+merfish_sce <- spatialPreprocess(merfish_sce, platform="ST", 
+                                   n.PCs=7, n.HVGs=135, log.normalize=TRUE)
+
+```
+
+```{r}
+
+set.seed(149)
+merfish_sce <- spatialCluster(merfish_sce, q=9, platform="ST", d=7,
+                           init.method="mclust", model="t", gamma=2,
+                           nrep=1000, burn.in=100,
+                           save.chain=TRUE)
+
+```
+
+```{r}
+
+clusterPlot(merfish_sce[,1:100], size=1, linetype = 1)
+
+```
+
+```{r}
+
+merfish_sce.enhanced <- spatialEnhance(merfish_sce, q=9, platform="ST", d=7,
+                                    model="t", gamma=2,
+                                    jitter_prior=0.3, jitter_scale=3.5,
+                                    nrep=1000, burn.in=100,
+                                    save.chain=TRUE)
+
+```
+
+```{r}
+
+clusterPlot(merfish_sce.enhanced[,1:100])
+
+```
+
+plotting not working, so extract info yourself
+
+```{r}
+
+## clusters
+merfish_sce.enhanced$spatial.cluster
+
+## subspot x-coord
+merfish_sce.enhanced$imagerow
+
+## subspot y-coord
+merfish_sce.enhanced$imagecol
+
+## regular clusters
+merfish_sce$spatial.cluster
+
+## x-coord
+merfish_sce$row
+
+## y-coord
+merfish_sce$col
+
+```
+
+```{r}
+
+dat_enhanced <- merfish_sce.enhanced@colData
+
+## first bregma:
+dat_enhanced_breg1 <- dat_enhanced[dat_enhanced$spot.idx < 32,]
+
+ggplot(data = as.data.frame(dat_enhanced_breg1)) +
+  geom_point(aes(x = row, y = col, color = as.character(spatial.cluster, size = 1)))
+
+```
+
+
+```{r}
+
+dat <- data.frame(x = merfish_sce.enhanced$imagerow,
+                  y = merfish_sce.enhanced$imagecol,
+                  c = as.character(merfish_sce.enhanced$spatial.cluster))
+
+ggplot(data = dat[,]) +
+  geom_point(aes(x = x, y = y, color = c, size = 0.001))
+
+# ggplot(data = dat[3702:3958,]) +
+#   geom_point(aes(x = x, y = y, color = c, size = 5))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+classCols <- c("Astrocyte" = "#9F7D56",
+               "Endothelial" = "#F4E95B",
+               "Ependymal" = "#0022F2",
+               "Excitatory" = "#4AA6F5",
+               "Inhibitory" = "#D73931",
+               "Microglia" = "#D63487",
+               "OD Immature" = "#9D257B",
+               "OD Mature" = "#60AE58",
+               "Pericytes" = "#EDAF56")
+
+
+clusterPlot(melanoma, palette=c("purple", "red", "blue", "yellow"), color="black") +
+  theme_bw() +
+  xlab("Column") +
+  ylab("Row") +
+  labs(fill="BayesSpace\ncluster", title="Spatial clustering of ST_mel1_rep2")
+
+
+
+would be useful to be able to get the gexp profiles of each cluster. Otherwise how else are they annotatable?
+But admittedly useful for enhanced clustering and resolution of the data
+
+
+
