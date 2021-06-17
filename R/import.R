@@ -5,17 +5,17 @@
 # https://raghavan.usc.edu/papers/kneedle-simplex11.pdf (Finding a "Kneedle" in a Haystack:
 # Detecting Knee Points in System Behavior)
 where.is.knee <- function(points = NULL) {
-
+  
   lower.limit <- 2
   upper.limit <- length(points) -1
-
+  
   second.derivative <- sapply(lower.limit:upper.limit, function(i) { points[i+1] + points[i-1] - (2 * points[i]) })
-
+  
   w.max <- which.max(second.derivative)
   best.k <- w.max +1
-
+  
   return(best.k)
-
+  
 }
 
 #' Filter a counts matrix
@@ -102,16 +102,16 @@ getOverdispersedGenes <- function(counts,
                                   max.adjusted.variance=1e3,
                                   min.adjusted.variance=1e-3,
                                   verbose=TRUE, details=FALSE) {
-
+  
   if (!any(class(counts) %in% c("dgCMatrix", "dgTMatrix"))) {
     if(verbose) {
       message('Converting to sparse matrix ...')
     }
     counts <- Matrix::Matrix(counts, sparse = TRUE)
   }
-
+  
   mat <- Matrix::t(counts) ## make rows as cells, cols as genes
-
+  
   if(verbose) {
     print("Calculating variance fit ...")
   }
@@ -119,11 +119,11 @@ getOverdispersedGenes <- function(counts,
   dfv <- log(apply(mat, 2, var))
   names(dfm) <- names(dfv) <- colnames(mat)
   df <- data.frame(m=dfm, v=dfv)
-
+  
   vi <- which(is.finite(dfv))
-
+  
   if(length(vi)<gam.k*1.5) { gam.k=1 } ## too few genes
-
+  
   if(gam.k<2) {
     if(verbose) {
       print("Using lm ...")
@@ -142,7 +142,7 @@ getOverdispersedGenes <- function(counts,
   df$lp <- as.numeric(pf(exp(df$res),n.obs,n.obs,lower.tail=F,log.p=T))
   df$lpa <- bh.adjust(df$lp,log=TRUE)
   df$qv <- as.numeric(qchisq(df$lp, n.cells-1, lower.tail = FALSE,log.p=TRUE)/n.cells)
-
+  
   if(use.unadjusted.pvals) {
     ods <- which(df$lp<log(alpha))
   } else {
@@ -151,10 +151,10 @@ getOverdispersedGenes <- function(counts,
   if(verbose) {
     print(paste0(length(ods), ' overdispersed genes ... ' ))
   }
-
+  
   df$gsf <- geneScaleFactors <- sqrt(pmax(min.adjusted.variance,pmin(max.adjusted.variance,df$qv))/exp(df$v));
   df$gsf[!is.finite(df$gsf)] <- 0;
-
+  
   if(plot) {
     if(do.par) {
       par(mfrow=c(1,2), mar = c(3.5,3.5,2.0,0.5), mgp = c(2,0.65,0), cex = 1.0);
@@ -170,7 +170,7 @@ getOverdispersedGenes <- function(counts,
     if(is.finite(max.adjusted.variance)) { abline(h=max.adjusted.variance,lty=2,col=1) }
     points(df$m[ods],df$qv[ods],col=2,pch='.')
   }
-
+  
   ## variance normalize
   norm.mat <- counts*df$gsf
   if(!details) {
@@ -193,9 +193,9 @@ fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=F,un
     col <- level.colors[1:length(levels(x))];
   }
   names(col) <- levels(x);
-
+  
   if(shuffle) col <- sample(col);
-
+  
   y <- col[as.integer(x)]; names(y) <- names(x);
   y[is.na(y)] <- unclassified.cell.color;
   if(return.details) {
@@ -240,7 +240,7 @@ bh.adjust <- function(x, log = FALSE) {
 #'
 #' @importFrom Matrix Matrix colSums t
 #'
-normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseudo = 1,
+normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseudo = 1, 
                              log = TRUE, verbose = TRUE) {
   if (!class(counts) %in% c("dgCMatrix", "dgTMatrix")) {
     if (verbose) {
@@ -249,7 +249,7 @@ normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseu
     counts <- Matrix::Matrix(counts, sparse = TRUE)
   }
   if (verbose) {
-    message("Normalizing matrix with ", ncol(counts), " cells and ",
+    message("Normalizing matrix with ", ncol(counts), " cells and ", 
             nrow(counts), " genes.")
   }
   if (is.null(normFactor)) {
@@ -265,7 +265,7 @@ normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseu
   counts <- counts * depthScale
   if (log) {
     if (verbose) {
-      message("Log10 transforming with pseudocount ",
+      message("Log10 transforming with pseudocount ", 
               pseudo, ".")
     }
     counts <- log10(counts + pseudo)
@@ -285,3 +285,5 @@ winsorize <- function (x, qt=.05) {
   x[ x > lim[2] ] <- lim[2]
   x
 }
+
+

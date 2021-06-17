@@ -33,24 +33,24 @@ vizAllTopics <- function(theta, pos,
                          showLegend = TRUE,
                          plotTitle = NA,
                          overlay = NA) {
-
+  
   # pixel cell-type distribution reordered based on topicOrder
   theta_ordered <- theta[, topicOrder]
   theta_ordered <- as.data.frame(theta_ordered)
   # colnames(theta_ordered) <- paste0("Topic.", topicOrder)
-  colnames(theta_ordered) <- paste0("", as.character(colnames(theta_ordered)))
-
+  colnames(theta_ordered) <- paste0("Topic.", colnames(theta_ordered))
+  
   # add columns "x", "y" with document positions from `pos`
   theta_ordered_pos <- merge(data.frame(theta_ordered),
                              data.frame(pos), by=0)
-
+  
   # column names of cell-types, in order of topicOrder
   # topicColumns <- paste0("Topic.", topicOrder)
-
+  
   # first column after merge is "Row.names", last two are "x" and "y"
   # problem is that data frame will replace "-" and " " with "."
   topicColumns <- colnames(theta_ordered_pos)[2:(dim(theta_ordered_pos)[2]-2)]
-
+  
   # color of piechart groups (lines of piechart):
   if (is.na(groups[1]) == TRUE) {
     groups <- rep("0", dim(theta_ordered_pos)[1])
@@ -61,9 +61,9 @@ vizAllTopics <- function(theta, pos,
   if (is.na(group_cols[1]) == TRUE) {
     group_cols <- c("0" = "gray")
   }
-
+  
   if (is.na(overlay[1]) == FALSE){
-    p <- ggplot2::ggplot(mapping = aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
+    p <- ggplot2::ggplot(mapping = ggplot2::aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
       ggplot2::coord_equal(xlim = c(0,dim(overlay)[2]), ylim = c(0, dim(overlay)[1]), expand = FALSE) +
       ggplot2::theme(
         #panel.background = element_rect(fill = "white"),
@@ -82,7 +82,7 @@ vizAllTopics <- function(theta, pos,
                                   lwd = lwd,
                                   data = theta_ordered_pos,
                                   cols = topicColumns,
-                                  legend_name = "CellTypes") +
+                                  legend_name = "Topics") +
       ggplot2::scale_fill_manual(values = topicCols) +
       ggplot2::scale_color_manual(values = group_cols)
   } else {
@@ -102,26 +102,26 @@ vizAllTopics <- function(theta, pos,
                                   lwd = lwd,
                                   data = theta_ordered_pos,
                                   cols = topicColumns,
-                                  legend_name = "CellTypes") +
+                                  legend_name = "Topics") +
       ggplot2::scale_fill_manual(values = topicCols) +
       ggplot2::scale_color_manual(values = group_cols)
   }
-
+  
   if (showLegend == FALSE) {
     # p <- p + ggplot2::guides(fill=FALSE)
     p <- p + ggplot2::theme(legend.position = "none")
   }
-
+  
   if (is.na(plotTitle) == FALSE) {
     p <- p + ggplot2::ggtitle(plotTitle)
   }
-
+  
   return(p)
 }
 
 
 #' Visualize proportions of cell-types or aggregated cell-type-clusters individually
-#'
+#' 
 #' @description Similar to `vizAllTopics` but will generate a separate plot for
 #'     each cell-type or cell-type-cluster where the other cell-types or clusters will be
 #'     colored gray. In this way, the actual proportions of each cell-type in a pixel
@@ -132,7 +132,7 @@ vizAllTopics <- function(theta, pos,
 #' @param clusters factor of colors that each cluster (i.e., cell-type-cluster) is
 #'     assigned to. In this case, the levels should be colors. In `vizAllTopics`,
 #'     clusters is "topicCols" and can just be a vector of colors.
-#' @sharedCol Boolean indicating if the cell-types in a cluster will be plotted with
+#' @param sharedCol Boolean indicating if the cell-types in a cluster will be plotted with
 #'     the same color or if each celll-type will be colored by its own shade to also
 #'     show how the cell-types in a cluster are distributed in space wrt each other.
 #' @param groups colors the pixel scatterpie lines based on a group or cell layer
@@ -146,7 +146,9 @@ vizAllTopics <- function(theta, pos,
 #' @param plotTitle add title to the resulting plot (default: NA)
 #' @param overlay plot the scatterpies on top of a raster image of the H&E tissue
 #'     (default: NA)
-#'
+#' @param fig_path path so save output figures for each plotted cluster (not in use)
+#' @param fig_prefix prefix to name each output figure for each plotted cluster (not in use)
+#'     
 #' @export
 vizTopicClusters <- function(theta, pos, clusters,
                              sharedCol = FALSE,
@@ -159,19 +161,19 @@ vizTopicClusters <- function(theta, pos, clusters,
                              overlay = NA,
                              fig_path = "./",
                              fig_prefix = NA) {
-
+  
   print("Topic cluster members:")
   # produce a plot for each cell-type-cluster:
   for (cluster in levels(clusters)) {
-
+    
     # select the cell-types in the cluster
     topics <- labels(clusters[which(clusters == cluster)])
-
+    
     cat(cluster, ":", topics, "\n")
-
+    
     # pixel cell-type distribution reordered based on topicOrder and selected cluster cell-types
     theta_ordered <- theta[, topics]
-
+    
     # get percentage of other cell-types not in cluster to maintain actual
     # pixel cell-type proportions that sum to 1
     if (is.null(dim(theta_ordered))) {
@@ -179,11 +181,11 @@ vizTopicClusters <- function(theta, pos, clusters,
     } else {
       other <- 1 - rowSums(theta_ordered)
     }
-
+    
     theta_ordered <- as.data.frame(theta_ordered)
-    colnames(theta_ordered) <- paste0("celltype_", topics)
+    colnames(theta_ordered) <- paste0("Topic.", topics)
     theta_ordered$other <- other
-
+    
     # if any cell-types not represented at all, drop them
     # Apparently if proportion of a  cell-type is 0 for all pixels, it is not plotted
     # and doesn't appear in the legend and messes with the colors such that
@@ -198,27 +200,27 @@ vizTopicClusters <- function(theta, pos, clusters,
         next
       }
     }
-
+    
     # add columns with pixel positions
     rownames(theta_ordered) <- rownames(pos)
     theta_ordered_pos <- merge(data.frame(theta_ordered),
                                data.frame(pos), by=0)
-
+    
     # first column after merge is "Row.names", last two are "x" and "y"
     # problem is that data frame will replace "-" and " " with "."
     topicColumns <- colnames(theta_ordered_pos)[2:(dim(theta_ordered_pos)[2]-2)]
-
+    
     # get a hue of colors for each cell-type in cell-type-cluster
     if (sharedCol){
       color_ramp <- grDevices::colorRampPalette(c(cluster, cluster))
     } else {
       color_ramp <- grDevices::colorRampPalette(c(lighten(cluster, factor = 0.5), darken(cluster, factor = 2)))
     }
-
+    
     topic_colors <- color_ramp(ncol(theta_ordered) - 1) # don't count "other" here
     # topic_colors <- append(topic_colors, c("gray")) # add gray to other here
     topic_colors <- append(topic_colors, c(transparentCol("white", percent = 60)))
-
+    
     # color of scatterpie groups (lines of scatterpies):
     if (is.na(groups[1]) == TRUE) {
       groups <- rep("0", dim(theta_ordered_pos)[1])
@@ -230,9 +232,9 @@ vizTopicClusters <- function(theta, pos, clusters,
       group_cols <- c("0" = "gray")
       # group_cols <- c("0" = transparentCol("white", percent = 90))
     }
-
+    
     if (is.na(overlay[1]) == FALSE){
-      p <- ggplot2::ggplot(mapping = aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
+      p <- ggplot2::ggplot(mapping = ggplot2::aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
         ggplot2::coord_equal(xlim = c(0,dim(overlay)[2]), ylim = c(0, dim(overlay)[1]), expand = FALSE) +
         ggplot2::theme(
           #panel.background = element_rect(fill = "white"),
@@ -251,7 +253,7 @@ vizTopicClusters <- function(theta, pos, clusters,
                                     lwd = lwd,
                                     data=theta_ordered_pos,
                                     cols = topicColumns,
-                                    legend_name = "CellTypes") +
+                                    legend_name = "Topics") +
         # coord_equal() +
         ggplot2::scale_fill_manual(values=topic_colors) +
         ggplot2::scale_color_manual(values = group_cols)
@@ -259,7 +261,7 @@ vizTopicClusters <- function(theta, pos, clusters,
       p <- ggplot2::ggplot() +
         ggplot2::theme(
           #panel.background = element_rect(fill = "white"),
-          panel.grid = element_blank(),
+          panel.grid = ggplot2::element_blank(),
           axis.line = ggplot2::element_blank(),
           axis.text.x = ggplot2::element_blank(),
           axis.text.y = ggplot2::element_blank(),
@@ -272,27 +274,27 @@ vizTopicClusters <- function(theta, pos, clusters,
                                     lwd = lwd,
                                     data=theta_ordered_pos,
                                     cols = topicColumns,
-                                    legend_name = "CellTypes") +
+                                    legend_name = "Topics") +
         # coord_equal() +
         ggplot2::scale_fill_manual(values=topic_colors) +
         ggplot2::scale_color_manual(values = group_cols)
     }
-
+    
     if (showLegend == FALSE) {
       # p <- p + ggplot2::guides(fill=FALSE)
       p <- p + ggplot2::theme(legend.position = "none")
     }
-
+    
     if (is.na(plotTitle) == FALSE) {
       p <- p + ggplot2::ggtitle(plotTitle)
     }
-
+    
     if (is.na(fig_prefix) == FALSE) {
       fig_name <- paste0(fig_prefix, "_", topics, ".pdf")
     } else {
       fig_name <- paste0(topics, ".pdf")
     }
-
+    
     print(p)
     # ggsave(filename = fig_name,
     #        device = "pdf",
@@ -308,7 +310,7 @@ vizTopicClusters <- function(theta, pos, clusters,
 
 #' Visualize gene counts in pixels in space. Can also see group assignment of
 #' spots.
-#'
+#' 
 #' @description Note: visualized one gene at a time. Can set up a loop to plot
 #'    a different gene column in df individually.
 #'
@@ -324,9 +326,10 @@ vizTopicClusters <- function(theta, pos, clusters,
 #' @param size size of the geom_points to plot (default: 7)
 #' @param stroke thickness of the geom_point lines to help in emphasizing groups
 #'     (default: 2)
+#' @param alpha alpha value of colored pixels (default: 1)
 #' @param plotTitle option to add a title to the plot
 #' @param showLegend Boolean to show the plot legend
-#'
+#' 
 #' @export
 vizGeneCounts <- function(df, gene,
                           groups = NA,
@@ -336,12 +339,12 @@ vizGeneCounts <- function(df, gene,
                           alpha = 1,
                           plotTitle = NA,
                           showLegend = TRUE) {
-
+  
   counts <- df[,gene]
-
+  
   ## winsorize
   counts <- winsorize(counts, qt=winsorize)
-
+  
   # color spots by group:
   if (is.na(groups[1]) == TRUE) {
     groups <- " "
@@ -352,15 +355,15 @@ vizGeneCounts <- function(df, gene,
   if (is.na(group_cols[1]) == TRUE) {
     group_cols <- c(" " = "white")
   }
-
+  
   p <- ggplot2::ggplot() +
-    ggplot2::geom_point(data = df, aes(x=x, y=y, fill=counts, color = groups),
-                        shape = 21,
-                        stroke = stroke, size = size,
-                        alpha = alpha) +
+    ggplot2::geom_point(data = df, ggplot2::aes(x=x, y=y, fill=counts, color = groups),
+               shape = 21,
+               stroke = stroke, size = size, 
+               alpha = alpha) +
     viridis::scale_fill_viridis(option = "A", direction = -1) +
     ggplot2::scale_color_manual(values = group_cols)
-
+  
   p <- p +
     ggplot2::theme(
       #panel.background = element_rect(fill = "white"),
@@ -373,27 +376,35 @@ vizGeneCounts <- function(df, gene,
       axis.title.y = ggplot2::element_blank(),
       panel.background = ggplot2::element_blank())
   # theme_classic()
-
+  
   if (showLegend == FALSE) {
     # p <- p + ggplot2::guides(fill=FALSE)
     p <- p + ggplot2::theme(legend.position = "none")
   }
-
+  
   if (is.na(plotTitle) == FALSE) {
     p <- p + ggplot2::ggtitle(plotTitle)
   }
-
+  
   return(p)
 }
 
 
 # custom correlation color range for heatmap.2 correlation plots
 correlation_palette <- grDevices::colorRampPalette(c("blue", "white", "red"))(n = 209)
-correlation_breaks = c(seq(-1,-0.2,length=80),
-                       seq(-0.19,0.19,length=50),
-                       seq(0.2,1,length=80))
+correlation_breaks = c(seq(-1,-0.01,length=100),
+                       seq(-0.009,0.009,length=10),
+                       seq(0.01,1,length=100))
 
-# lighten and darken a color
+
+#' lighten color
+#' 
+#' @description lighten a color
+#'
+#' @param color color
+#' @param factor how much to lighten (default: 0.5)
+#' 
+#' @export
 lighten <- function(color, factor = 0.5) {
   if ((factor > 1) | (factor < 0)) stop("factor needs to be within [0,1]")
   col <- col2rgb(color)
@@ -402,6 +413,15 @@ lighten <- function(color, factor = 0.5) {
   col
 }
 
+
+#' darken color
+#' 
+#' @description darken a color
+#'
+#' @param color color
+#' @param factor how much to darken (default: 1.4)
+#' 
+#' @export
 darken <- function(color, factor=1.4){
   col <- col2rgb(color)
   col <- col/factor
@@ -410,28 +430,39 @@ darken <- function(color, factor=1.4){
 }
 
 
-# color palette to replicate ggplot2
+#' color palette to replicate ggplot2
+#' 
+#' @description get a ggplot2 color palette of length n
+#'
+#' @param n length of color palette
+#' 
+#' @export
 gg_color_hue <- function(n) {
   hues = seq(15, 375, length = n + 1)
   hcl(h = hues, l = 65, c = 100)[1:n]
 }
 
 
-# transparent version of color
-transparentCol <- function(color, percent = 50, name = NULL) {
-  #       color = color name
-  #       percent = % transparency
-  #       name = an optional name for the color
 
+#' transparent version of color.
+#' 
+#' @description adjust transparency of a color
+#'
+#' @param color color name
+#' @param percent % transparency (default: 50)
+#' @param name an optional name for the color (default: NULL)
+#' 
+#' @export
+transparentCol <- function(color, percent = 50, name = NULL) {
   ## Get RGB values for named color
   rgb.val <- col2rgb(color)
-
+  
   ## Make new color using input color as base and alpha set by transparency
   t.col <- rgb(rgb.val[1], rgb.val[2], rgb.val[3],
                max = 255,
                alpha = (100 - percent) * 255 / 100,
                names = name)
-
+  
   ## Save the color
   invisible(t.col)
 }

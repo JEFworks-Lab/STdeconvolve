@@ -12,17 +12,17 @@
 #' @return matrix of Pearson's correlations; m1 (rows) by m2 (cols)
 #' @export
 getCorrMtx <- function(m1, m2, type, thresh = NULL, verbose = TRUE) {
-
+  
   if (is.matrix(m1) == FALSE | is.matrix(m2) == FALSE){
     stop("`m1` and `m2` must be matrices")
   }
   if (!type %in% c("t", "b")){
     stop("`type` must be either 't' or 'b'")
   }
-
+  
   # if comparing thetas the cell-types are the columns (pixels x cell-types)
   if (type == "t"){
-
+    
     # make sure the same pixels are being compared
     keep_spots <- intersect(rownames(m1), rownames(m2))
     if(verbose){
@@ -37,24 +37,24 @@ getCorrMtx <- function(m1, m2, type, thresh = NULL, verbose = TRUE) {
     colnames(corMtx) <- colnames(m2)
     return(corMtx)
   }
-
+  
   # if comparing betas the cell-types are the rows (cell-types x genes)
   if (type == "b"){
-
+    
     # make sure the same genes are being compared
     keep_genes <- intersect(colnames(m1), colnames(m2))
     if(verbose){
       cat("cell-type correlations based on", length(keep_genes), "shared genes between m1 and m2.", "\n")
     }
-
+    
     if (is.numeric(thresh)){
       if(verbose){
         cat("comparing genes with cell-type probability >", thresh, "\n")
       }
     }
-
+    
     corMtx <- do.call(rbind, lapply(1:nrow(m1), function(i) {
-
+      
       # if choosing top genes for a cell-type using thresh
       if (is.null(thresh)){
         genes <- keep_genes
@@ -63,7 +63,7 @@ getCorrMtx <- function(m1, m2, type, thresh = NULL, verbose = TRUE) {
       } else {
         stop("thresh must be NULL or numeric > 0 and < 1")
       }
-
+      
       sapply(1:nrow(m2), function(j) {
         if (is.null(thresh)){
           genes <- keep_genes
@@ -174,7 +174,7 @@ preprocess <- function(dat,
                        od.genes.alpha = 0.05,
                        gam.k = 5,
                        verbose = TRUE) {
-
+  
   if (typeof(dat) == "character") {
     if (file.exists(dat) == TRUE){
       counts <- read.table(dat)
@@ -186,11 +186,11 @@ preprocess <- function(dat,
   } else {
     stop("`dat` is not a viable path or matrix")
   }
-
+  
   if(verbose) {
     cat("Initial genes:", dim(t(counts))[1], "Initial pixels:", dim(t(counts))[2], "\n")
   }
-
+  
   # use specific genes in the corpus
   if (is.na(selected.genes[1]) == FALSE) {
     if(verbose){
@@ -212,10 +212,11 @@ preprocess <- function(dat,
                              min.detected = min.detected,
                              plot=TRUE,
                              verbose=FALSE)
+  countsClean <- as.matrix(countsClean)
   if(verbose){
     cat("  Remaining genes:", dim(countsClean)[1], "and remaining pixels:", dim(countsClean)[2], "\n")
   }
-
+  
   # adjust pixel coordinates, optional.
   # based on Stahl 2016 ST data with alignment matrices
   if (is.na(alignFile) == FALSE) {
@@ -230,22 +231,22 @@ preprocess <- function(dat,
       cat("Warning: `alignFile` path does not exists. Skipping position adjustments.", "\n")
     }
   }
-
+  
   # remove top expressed genes (nTopGenes needs to be integer or NA)
   if (is.na(nTopGenes) == FALSE & is.numeric(nTopGenes) == TRUE) {
     nTopGenes <- round(nTopGenes)
     if(verbose){
       cat("- Removing the top", nTopGenes, "expressed genes.", "\n")
     }
-    top_expressed <- names(rowSums(countsClean)[order(rowSums(countsClean),
+    top_expressed <- names(Matrix::rowSums(countsClean)[order(Matrix::rowSums(countsClean),
                                                       decreasing = TRUE)][1:nTopGenes])
     countsClean <- countsClean[rownames(countsClean) %in% top_expressed == FALSE,]
-
+    
     # print(paste("after removing top ",
     #             as.character(nTopGenes),
     #             " genes:", dim(countsClean)[1], "genes remain."))
   }
-
+  
   # remove specific genes (if there are any). Use grepl to search for gene name pattern matches
   if (is.na(genes.to.remove) == FALSE) {
     countsClean <- countsClean[!grepl(paste(genes.to.remove, collapse="|"), rownames(countsClean)),]
@@ -254,7 +255,7 @@ preprocess <- function(dat,
           " Remaining genes:", dim(countsClean)[1], "\n")
     }
   }
-
+  
   # remove genes that appear in more than certain percentage of the pixels
   if (is.na(removeAbove) == FALSE & is.numeric(removeAbove) == TRUE){
     if (removeAbove >= 0 & removeAbove <= 1){
@@ -265,7 +266,7 @@ preprocess <- function(dat,
       numberSpots <- (removeAbove * ncol(countsClean_))
       # rowSums of countsClean_ equate to number of pixels where each gene is expressed
       # remove genes expressed in "numberSpots" or more pixels
-      countsClean <- countsClean[which(rowSums(countsClean_) < numberSpots),]
+      countsClean <- countsClean[which(Matrix::rowSums(countsClean_) < numberSpots),]
       if(verbose){
         cat("- Removed genes present in",
             as.character(removeAbove*100), "% or more of pixels", "\n",
@@ -285,7 +286,7 @@ preprocess <- function(dat,
       numberSpots <- (removeBelow * ncol(countsClean_))
       # rowSums of countsClean_ equate to number of pixels where each gene is expressed
       # remove genes expressed in "numberSpots" or less pixels
-      countsClean <- countsClean[which(rowSums(countsClean_) > numberSpots),]
+      countsClean <- countsClean[which(Matrix::rowSums(countsClean_) > numberSpots),]
       if(verbose){
         cat("- Removed genes present in",
             as.character(removeBelow*100), "% or less of pixels", "\n",
@@ -295,7 +296,7 @@ preprocess <- function(dat,
       cat("Warning: `removeBelow` must be a numeric from 0 to 1. Skipping `removeBelow` gene filter.", "\n")
     }
   }
-
+  
   # use overdispersed variable genes for corpus
   if (ODgenes == TRUE) {
     if(verbose){
@@ -307,7 +308,7 @@ preprocess <- function(dat,
                                 gam.k = gam.k,
                                 plot = TRUE,
                                 details = TRUE)
-
+    
     # option to select just the top n overdispersed genes based on
     # log p-val adjusted
     if (is.na(nTopOD) == FALSE){
@@ -327,22 +328,22 @@ preprocess <- function(dat,
     } else {
       od_genes <- OD$ods
     }
-
+    
     countsClean <- countsClean[od_genes,]
   }
-
+  
   corpus <- t(as.matrix(countsClean))
-
+  
   # last filter: each row must have at least 1 non-zero entry
   # to be compatible with `topicmodels`.
   if(verbose){
     cat("- Check that each pixel has at least 1 non-zero gene count entry..", "\n")
   }
-  corpus <- corpus[which(!rowSums(corpus) == 0),]
+  corpus <- corpus[which(!Matrix::rowSums(corpus) == 0),]
   corpus_slm <- slam::as.simple_triplet_matrix(corpus)
   cat("Final corpus:", "\n")
   print(corpus_slm)
-
+  
   # get pixel positions if pixel colnames contain the positions
   # this is the case for some ST datasets like Stahl 2016 sets
   # ex: "20x30" -> 20 x, 30 y positions
@@ -359,7 +360,7 @@ preprocess <- function(dat,
   } else {
     positions <- NULL
   }
-
+  
   cat("Preprocess complete.", "\n")
   return(list(corpus = corpus,
               slm = corpus_slm,
@@ -379,7 +380,7 @@ nrmse_func <-  function(obs, pred, type = "sd") {
   if (!type %in% c("mean", "sd", "maxmin", "iq")) message("Wrong type!")
   nrmse <- round(nrmse, 3)
   return(nrmse)
-
+  
 }
 
 

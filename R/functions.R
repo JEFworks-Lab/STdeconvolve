@@ -20,7 +20,7 @@ restrictCorpus <- function(counts,
                            alpha = 0.05,
                            plot = FALSE,
                            verbose = TRUE) {
-
+  
   ## overdispersed genes only
   if(verbose) {
     print(paste0('Restricting to overdispersed genes with alpha=', alpha, '...'))
@@ -31,7 +31,7 @@ restrictCorpus <- function(counts,
                                    details = TRUE,
                                    verbose = verbose)
   countsFilt <- counts[odGenes$ods,]
-
+  
   ## remove genes that are present in more than X% of pixels
   vi <- rowSums(as.matrix(countsFilt) > 0) >= ncol(countsFilt)*removeAbove
   if(verbose) {
@@ -41,7 +41,7 @@ restrictCorpus <- function(counts,
   if(verbose) {
     print(paste0(nrow(countsFilt_), ' genes remaining...'))
   }
-
+  
   ## remove genes that are present in less than X% of pixels
   vi <- rowSums(as.matrix(countsFilt_) > 0) <= ncol(countsFilt_)*removeBelow
   if(verbose) {
@@ -56,7 +56,7 @@ restrictCorpus <- function(counts,
     hist(log10(Matrix::colSums(countsFiltRestricted)+1), breaks=20, main='Genes Per Pixel')
     hist(log10(Matrix::rowSums(countsFiltRestricted)+1), breaks=20, main='Pixels Per Gene')
   }
-
+  
   return(countsFiltRestricted)
 }
 
@@ -77,7 +77,8 @@ restrictCorpus <- function(counts,
 #' @param perc.rare.thresh the number of deconvolved cell-types with mean pixel proportion below this fraction used to assess
 #'     performance of fitted models for each K. Recorded for each K. (default: 0.05)
 #' @param ncores Number of cores for parallelization
-#' @plot Boolean for plotting
+#' @param plot Boolean for plotting (default: TRUE)
+#' @param verbose Boolean for verbosity (default: TRUE)
 #'
 #' @return A list that contains
 #' \itemize{
@@ -100,9 +101,9 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   if (min(Ks) < 2){
     stop("K must be and integer of 2 or greater.")
   }
-
+  
   counts <- as.matrix(counts)
-
+  
   if (is.null(testSize)){
     set.seed(seed)
     testingPixels <- seq(nrow(counts))
@@ -115,27 +116,27 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   } else {
     stop("`testSize` must be NULL or decimal between 0 and 1")
   }
-
+  
   ## counts must be pixels (rows) x genes (cols) matrix
   corpus <- slam::as.simple_triplet_matrix((as.matrix(counts)))
   corpusFit <- slam::as.simple_triplet_matrix((as.matrix(counts[fittingPixels,])))
   corpusTest <- slam::as.simple_triplet_matrix((as.matrix(counts[testingPixels,])))
-
+  
   # if (slam::is.simple_triplet_matrix(counts) == TRUE){
   #   corpus <- counts
   # } else {
   #   corpus <- slam::as.simple_triplet_matrix(t(as.matrix(counts)))
   # }
-
+  
   if (verbose == TRUE){
     verbose <- 1
   } else {
     verbose <- 0
   }
-
+  
   controls <- list(seed = seed,
                    verbose = verbose, keep = 1, estimate.alpha = TRUE)
-
+  
   start_time <- Sys.time()
   fitted_models <- parallel::mclapply(Ks, function(k) {
     topicmodels::LDA(corpusFit, k=k, control = controls)
@@ -143,26 +144,26 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   mc.cores = ncores
   )
   names(fitted_models) <- Ks
-
+  
   if(verbose) {
     total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
     print(sprintf("Time to fit LDA models was %smins", total_t))
   }
-
+  
   if(verbose) {
     print("Computing perplexity for each fitted model...")
   }
-
+  
   pScores <- unlist(lapply(fitted_models, function(model){
     p <- topicmodels::perplexity(model, newdata = corpusTest)
     return(p)
   }))
-
+  
   ## Kneed algorithm
   kOpt1 <- Ks[where.is.knee(pScores)]
   ## Min
   kOpt2 <- Ks[which(pScores == min(pScores))]
-
+  
   ## check number of predicted cell-types at low proportions
   out <- lapply(1:length(Ks), function(i) {
     apply(getBetaTheta(fitted_models[[i]], corpus = corpus)$theta, 2, mean)
@@ -170,7 +171,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   ## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
   numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))
   kOpt3 <- Ks[where.is.knee(numrare)]
-
+  
   if(plot) {
     # plot(Ks, pScores,
     #      ylab = "perplexity",
@@ -189,13 +190,13 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     # abline(v = kOpt3, col='red')
     # legend(x = "top",
     #        legend = c("kneed"), col = c("red"), lty = 1, lwd = 1)
-
+    
     dat <- data.frame(K = as.double(Ks),
                       rareCts = numrare,
                       perplexity = pScores,
                       rareCtsAdj = scale0_1(numrare),
                       perplexAdj = scale0_1(pScores))
-
+    
     prim_ax_labs <- seq(min(dat$rareCts), max(dat$rareCts))
     prim_ax_breaks <- scale0_1(prim_ax_labs)
     ## if number rareCts stays constant, then only one break. scale0_1(prim_ax_labs) would be NaN so change to 0
@@ -211,12 +212,12 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
       sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/max(dat$rareCts))
     }
     sec_ax_breaks <- scale0_1(sec_ax_labs)
-
-    plt <- ggplot2::ggplot(dat, aes(x=K)) +
-      ggplot2::geom_line(aes(y=rareCtsAdj), col="blue", lwd = 2) +
-      ggplot2::geom_line(aes(y=perplexAdj), col="red", lwd = 2) +
+    
+    plt <- ggplot2::ggplot(dat, ggplot2::aes(x=K)) +
+      ggplot2::geom_line(ggplot2::aes(y=rareCtsAdj), col="blue", lwd = 2) +
+      ggplot2::geom_line(ggplot2::aes(y=perplexAdj), col="red", lwd = 2) +
       ggplot2::scale_y_continuous(name=paste0("# cell-types with mean proportion < ", round(perc.rare.thresh*100, 2), "%"), breaks = prim_ax_breaks, labels = prim_ax_labs,
-                                  sec.axis=sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
+                                  sec.axis=ggplot2::sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
       ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
       ggplot2::ggtitle("Fitted model K's vs deconvolved cell-types and perplexity") +
       ggplot2::theme_classic() +
@@ -233,7 +234,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
       )
     print(plt)
   }
-
+  
   return(list(models = fitted_models,
               kneedOptK = kOpt1,
               minOptK = kOpt2,
@@ -265,12 +266,12 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
 #'
 #' @export
 getBetaTheta <- function(lda, corpus) {
-
+  
   result <- topicmodels::posterior(lda, newdata = corpus)
   theta <- result$topics
   beta <- result$terms
   # topicFreqsOverall <- colSums(theta) / length(lda@documents)
-
+  
   return(list(beta = beta,
               theta = theta))
 }
@@ -279,7 +280,6 @@ getBetaTheta <- function(lda, corpus) {
 #' Aggregate cell-types together using dynamic tree cutting.
 #'
 #' @param beta Beta matrix (cell-type gene distribution matrix)
-#' @param distance Distance measure to be used (default: euclidean)
 #' @param clustering Clustering agglomeration method to be used (default: ward.D)
 #' @param dynamic Dynamic tree cutting method to be used (default: hybrid)
 #' @param deepSplit Dynamic tree cutting sensitivity parameter (default: 4)
@@ -299,7 +299,7 @@ clusterTopics <- function(beta,
                           dynamic = "hybrid",
                           deepSplit = 4,
                           plot = TRUE) {
-
+  
   if (deepSplit == 4) {
     maxCoreScatter = 0.95
     minGap = (1 - maxCoreScatter) * 3/4
@@ -316,12 +316,12 @@ clusterTopics <- function(beta,
     maxCoreScatter = 0.64
     minGap = (1 - maxCoreScatter) * 3/4
   }
-
+  
   #d_ <- dist(beta, method = distance)
   ## Jean: use correlation instead
   d_ <- as.dist(1-cor(t(beta)))
   hc_ <- stats::hclust(d_, method = clustering)
-
+  
   groups <- dynamicTreeCut::cutreeDynamic(hc_,
                                           method = dynamic,
                                           distM = as.matrix(d_),
@@ -331,10 +331,10 @@ clusterTopics <- function(beta,
                                           minGap = minGap,
                                           maxAbsCoreScatter=NULL,
                                           minAbsGap=NULL)
-
+  
   names(groups) <- hc_$labels
   groups <- factor(groups)
-
+  
   if (plot) {
     #plot(hc_)
     d2_ <- as.dist(1-cor(beta))
@@ -348,11 +348,11 @@ clusterTopics <- function(beta,
             ylab = "Genes",
             main = "Predicted cell-types and clusters")
   }
-
+  
   return(list(clusters = groups,
               order = hc_$order,
               dendro = as.dendrogram(hc_)))
-
+  
 }
 
 
@@ -378,27 +378,27 @@ clusterTopics <- function(beta,
 #'
 #' @export
 combineTopics <- function(mtx, clusters, type) {
-
+  
   if (!type %in% c("t", "b")){
     stop("`type` must be either 't' or 'b'")
   }
-
+  
   # if mtx is theta, transpose so cell-types are rows
   if (type == "t") {
     mtx <- t(mtx)
   }
-
+  
   combinedTopics <- do.call(rbind, lapply(levels(clusters), function(cluster) {
-
+    
     # get cell-types in a given cluster
     topics <- labels(clusters[which(clusters == cluster)])
-
+    
     # print(cluster)
     # print(length(topics))
-
+    
     # matrix slice for the cell-types in the cluster
     mtx_slice <- mtx[topics,]
-
+    
     if (length(topics) == 1) {
       topicVector <- mtx_slice
     } else if (length(topics) > 1) {
@@ -410,12 +410,12 @@ combineTopics <- function(mtx, clusters, type) {
       }
     }
     topicVector
-
+    
   }))
   rownames(combinedTopics) <- levels(clusters)
   colnames(combinedTopics) <- colnames(mtx)
   print("cell-types combined.")
-
+  
   # if theta, make cell-types the columns again
   if (type == "t") {
     combinedTopics <- t(combinedTopics)
@@ -436,7 +436,7 @@ combineTopics <- function(mtx, clusters, type) {
 #'
 #' @export
 optimalModel <- function(models, opt) {
-
+  
   if (opt == "kneed"){
     m <- models$models[[which(sapply(models$models, slot, "k") == models$kneedOptK)]]
   } else if (opt == "min"){
@@ -497,21 +497,21 @@ buildLDAobject <- function(LDAmodel,
                            deepSplit = 4,
                            colorScheme = "rainbow",
                            plot = TRUE){
-
+  
   # get beta and theta list object from the LDA model
   m <- getBetaTheta(LDAmodel, corpus = corpus)
-
+  
   # cluster cell-types
   clust <- clusterTopics(beta = m$beta,
                          clustering = clustering,
                          dynamic = dynamic,
                          deepSplit = deepSplit,
                          plot = plot)
-
+  
   # add cluster information to the list
   m$clusters <- clust$clusters
   m$dendro <- clust$dendro
-
+  
   # colors for the cell-types. Essentially colored by the cluster they are in
   cols <- m$clusters
   if (colorScheme == "rainbow"){
@@ -521,11 +521,11 @@ buildLDAobject <- function(LDAmodel,
     levels(cols) <- gg_color_hue(length(levels(cols)))
   }
   m$cols <- cols
-
+  
   # construct beta and thetas for the cell-type-clusters
   m$betaCombn <- combineTopics(m$beta, clusters = m$clusters, type = "b")
   m$thetaCombn <- combineTopics(m$theta, clusters = m$clusters, type = "t")
-
+  
   # colors for the cell-type-clusters
   # separate factor for ease of use with vizTopicClusters and others
   # note that these color assignments are different than the
@@ -534,11 +534,11 @@ buildLDAobject <- function(LDAmodel,
   names(clusterCols) <- colnames(m$thetaCombn)
   levels(clusterCols) <- levels(m$cols)
   m$clustCols <- clusterCols
-
+  
   m$k <- LDAmodel@k
-
+  
   return(m)
-
+  
 }
 
 
@@ -570,7 +570,7 @@ lsatPairs <- function(mtx){
   # and the second is the paired column
   rowsix <- seq_along(pairing)
   colsix <- as.numeric(pairing)
-
+  
   return(list(pairs = pairing,
               rowix = rowsix,
               colsix = colsix))
