@@ -83,7 +83,7 @@ vizAllTopics <- function(theta, pos,
                                   data = theta_ordered_pos,
                                   cols = topicColumns,
                                   legend_name = "Topics") +
-      ggplot2::scale_fill_manual(values = topicCols) +
+      ggplot2::scale_fill_manual(values = as.vector(topicCols)) +
       ggplot2::scale_color_manual(values = group_cols)
   } else {
     p <- ggplot2::ggplot() +
@@ -103,7 +103,7 @@ vizAllTopics <- function(theta, pos,
                                   data = theta_ordered_pos,
                                   cols = topicColumns,
                                   legend_name = "Topics") +
-      ggplot2::scale_fill_manual(values = topicCols) +
+      ggplot2::scale_fill_manual(values = as.vector(topicCols)) +
       ggplot2::scale_color_manual(values = group_cols)
   }
   

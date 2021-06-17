@@ -98,11 +98,15 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
                    ncores = parallel::detectCores(logical = TRUE) - 1,
                    plot = TRUE, verbose = TRUE) {
   
-  if (min(Ks) < 2){
-    stop("K must be and integer of 2 or greater.")
+  if ( min(Ks) < 2 | !isTRUE(all(Ks == floor(Ks))) ){
+    stop("`Ks` must be a vector of integers greater than 2.")
   }
   
   counts <- as.matrix(counts)
+  
+  if ( !isTRUE(all(counts == floor(counts))) ){
+    stop("`counts` must contain integer gene counts")
+  }
   
   if (is.null(testSize)){
     set.seed(seed)
@@ -153,7 +157,6 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   if(verbose) {
     print("Computing perplexity for each fitted model...")
   }
-  
   pScores <- unlist(lapply(fitted_models, function(model){
     p <- topicmodels::perplexity(model, newdata = corpusTest)
     return(p)
