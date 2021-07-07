@@ -17,7 +17,7 @@ preprocess(
   min.lib.size = 1,
   min.detected = 1,
   ODgenes = TRUE,
-  nTopOD = NA,
+  nTopOD = 1000,
   od.genes.alpha = 0.05,
   gam.k = 5,
   verbose = TRUE
@@ -61,7 +61,9 @@ needs to have been detected in to keep (default: 1)}
 \item{ODgenes}{Boolean to use \code{getOverdispersedGenes} for the corpus
 genes (default: TRUE)}
 
-\item{nTopOD}{number of top over dispersed genes to use. int (default: NA)}
+\item{nTopOD}{number of top over dispersed genes to use. int (default: 1000).
+If the number of overdispersed genes is less then this number will use all of them,
+or set to NA to use all overdispersed genes.}
 
 \item{od.genes.alpha}{alpha parameter for \code{getOverdispersedGenes}.
 Higher = less stringent and more over dispersed genes returned (default: 0.05)}

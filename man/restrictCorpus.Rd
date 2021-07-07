@@ -9,6 +9,7 @@ restrictCorpus(
   removeAbove = 1,
   removeBelow = 0.05,
   alpha = 0.05,
+  nTopOD = 1000,
   plot = FALSE,
   verbose = TRUE
 )
@@ -23,6 +24,10 @@ restrictCorpus(
 \item{alpha}{alpha parameter for \code{getOverdispersedGenes}.
 Higher = less stringent and more overdispersed genes returned (default: 0.05)}
 
+\item{nTopOD}{number of top over dispersed genes to use. int (default: 1000).
+If the number of overdispersed genes is less then this number will use all of them,
+or set to NA to use all overdispersed genes.}
+
 \item{plot}{return histogram plots of genes per pixel and pixels per genes
 for over dispersed genes and after corpus restriction. (default: FALSE)}
 
@@ -32,4 +37,5 @@ for over dispersed genes and after corpus restriction. (default: FALSE)}
 identifies over dispersed genes across pixels to use as informative words
 (genes) in topic modeling. Also allows ability to restrict over dispersed genes
 to those that occur in more than and/or less than selected fractions of pixels in corpus.
+Limits to the top 1000 overdispersed genes in order to keep the corpus to a reasonable size.
 }

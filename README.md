@@ -42,10 +42,11 @@ results <- getBetaTheta(optLDA, t(as.matrix(corpus)))
 deconProp <- results$theta
 deconGexp <- results$beta*1000
 ## visualize deconvolved cell-type proportions
-vizAllTopics(deconProp, pos, 
+vizAllTopics(deconProp, pos,
+             topicCols = gg_color_hue(ncol(deconProp)),
              groups = annot, 
              group_cols = rainbow(length(levels(annot))),
-             r=0.4)	     
+             r=0.4)	  
 ```
 
 <img src="https://github.com/JEFworks/STdeconvolve/blob/package/docs/getting_started_files/figure-markdown_github/getting_started_proportions-1.png?raw=true"/>

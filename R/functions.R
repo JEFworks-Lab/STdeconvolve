@@ -3,12 +3,16 @@
 #' @description identifies over dispersed genes across pixels to use as informative words
 #'     (genes) in topic modeling. Also allows ability to restrict over dispersed genes
 #'     to those that occur in more than and/or less than selected fractions of pixels in corpus.
+#'     Limits to the top 1000 overdispersed genes in order to keep the corpus to a reasonable size.
 #'
 #' @param counts genes x pixels gene count matrix
 #' @param removeAbove remove over dispersed genes that are present in more than this fraction of pixels (default: 1.0)
 #' @param removeBelow remove over dispersed genes that are present in less than this fraction of pixels (default: 0.05)
 #' @param alpha alpha parameter for `getOverdispersedGenes`.
 #'     Higher = less stringent and more overdispersed genes returned (default: 0.05)
+#' @param nTopOD number of top over dispersed genes to use. int (default: 1000).
+#'     If the number of overdispersed genes is less then this number will use all of them,
+#'     or set to NA to use all overdispersed genes.
 #' @param plot return histogram plots of genes per pixel and pixels per genes
 #'     for over dispersed genes and after corpus restriction. (default: FALSE)
 #' @param verbose (default: TRUE)
@@ -18,39 +22,61 @@ restrictCorpus <- function(counts,
                            removeAbove = 1.0,
                            removeBelow = 0.05,
                            alpha = 0.05,
+                           nTopOD = 1000,
                            plot = FALSE,
                            verbose = TRUE) {
   
-  ## overdispersed genes only
+  ## remove genes that are present in more than X% of pixels
+  vi <- rowSums(as.matrix(counts) > 0) >= ncol(counts)*removeAbove
   if(verbose) {
-    print(paste0('Restricting to overdispersed genes with alpha=', alpha, '...'))
+    print(paste0('Removing ', sum(vi), ' genes present in ', removeAbove*100, '% or more of pixels...'))
   }
-  odGenes <- getOverdispersedGenes(counts,
+  counts <- counts[!vi,]
+  if(verbose) {
+    print(paste0(nrow(counts), ' genes remaining...'))
+  }
+  
+  ## remove genes that are present in less than X% of pixels
+  vi <- rowSums(as.matrix(counts) > 0) <= ncol(counts)*removeBelow
+  if(verbose) {
+    print(paste0('Removing ', sum(vi), ' genes present in ', removeBelow*100, '% or less of pixels...'))
+  }
+  counts <- counts[!vi,]
+  if(verbose) {
+    print(paste0(nrow(counts), ' genes remaining...'))
+  }
+  
+  ## overdispersed genes
+  if(verbose) {
+    print(paste0('Restricting to overdispersed genes with alpha = ', alpha, '...'))
+  }
+  OD <- getOverdispersedGenes(counts,
                                    alpha = alpha,
                                    plot = plot,
                                    details = TRUE,
                                    verbose = verbose)
-  countsFilt <- counts[odGenes$ods,]
+
+  # option to select just the top n overdispersed genes based on
+  # log p-val adjusted
+  if (is.na(nTopOD) == FALSE){
+    if(verbose){
+      cat(" Using top", nTopOD, "overdispersed genes.", "\n")
+    }
+    OD_filt <- OD$df[OD$ods,]
+    # check if actual number of OD genes less than `nTopOD`
+    if (dim(OD_filt)[1] < nTopOD){
+      if(verbose){
+        cat(" number of top overdispersed genes available:", dim(OD_filt)[1], "\n")
+      }
+      od_genes <- rownames(OD_filt)
+    } else {
+      od_genes <- rownames(OD_filt[order(OD_filt$lpa),][1:nTopOD,])
+    }
+  } else {
+    od_genes <- OD$ods
+  }
+  countsFiltRestricted <- counts[od_genes,]
   
-  ## remove genes that are present in more than X% of pixels
-  vi <- rowSums(as.matrix(countsFilt) > 0) >= ncol(countsFilt)*removeAbove
-  if(verbose) {
-    print(paste0('Removing ', sum(vi), ' genes present in ', removeAbove*100, '% or more of pixels...'))
-  }
-  countsFilt_ <- countsFilt[!vi,]
-  if(verbose) {
-    print(paste0(nrow(countsFilt_), ' genes remaining...'))
-  }
-  
-  ## remove genes that are present in less than X% of pixels
-  vi <- rowSums(as.matrix(countsFilt_) > 0) <= ncol(countsFilt_)*removeBelow
-  if(verbose) {
-    print(paste0('Removing ', sum(vi), ' genes present in ', removeBelow*100, '% or less of pixels...'))
-  }
-  countsFiltRestricted <- countsFilt_[!vi,]
-  if(verbose) {
-    print(paste0(nrow(countsFiltRestricted), ' genes remaining...'))
-  }
   if (plot) {
     par(mfrow=c(1,2), mar=rep(5,4))
     hist(log10(Matrix::colSums(countsFiltRestricted)+1), breaks=20, main='Genes Per Pixel')

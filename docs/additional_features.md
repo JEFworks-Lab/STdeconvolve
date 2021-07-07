@@ -198,7 +198,8 @@ length(genes)
 head(genes)
 ```
 
-    ## [1] "1700015F17Rik" "1700101I11Rik" "1810020O05Rik" "1810062O18Rik" "2010300C02Rik" "2210408F21Rik"
+    ## [1] "1700015F17Rik" "1700101I11Rik" "1810020O05Rik" "1810062O18Rik" "2010300C02Rik"
+    ## [6] "2210408F21Rik"
 
 ``` r
 ## build corpus using just the selected genes
@@ -274,7 +275,7 @@ ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
 ![](additional_features_files/figure-markdown_github/unnamed-chunk-5-1.png)
 
 While technically the lowest perplexity computed is when K=8, perplexity
-appears to be relatively stable between K=7 and K=15. Additionally, we
+appears to be relatively stable between K=7 and K=18. Additionally, we
 expect there to be more than 4 cell-types and thus K should be greater
 than 4 (based on “knee” metric).
 
@@ -341,7 +342,8 @@ results <- buildLDAobject(LDAmodel = optimalModel(models = ldas, opt = "15"),
 print(names(results))
 ```
 
-    ## [1] "beta"       "theta"      "clusters"   "dendro"     "cols"       "betaCombn"  "thetaCombn" "clustCols"  "k"
+    ## [1] "beta"       "theta"      "clusters"   "dendro"     "cols"       "betaCombn" 
+    ## [7] "thetaCombn" "clustCols"  "k"
 
 Here, `results` is a list that contains the beta and theta matrix for
 the individual predicted cell-types, combined beta and theta matrices of
@@ -459,7 +461,8 @@ results <- buildLDAobject(LDAmodel = optimalModel(models = ldas, opt = "15"),
 print(names(results))
 ```
 
-    ## [1] "beta"       "theta"      "clusters"   "dendro"     "cols"       "betaCombn"  "thetaCombn" "clustCols"  "k"
+    ## [1] "beta"       "theta"      "clusters"   "dendro"     "cols"       "betaCombn" 
+    ## [7] "thetaCombn" "clustCols"  "k"
 
 All Cell-types or Cell-type clusters
 ------------------------------------

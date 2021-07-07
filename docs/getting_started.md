@@ -45,17 +45,19 @@ corpus <- restrictCorpus(counts,
                          verbose = TRUE)
 ```
 
-    ## [1] "Restricting to overdispersed genes with alpha=0.05..."
+    ## [1] "Removing 124 genes present in 100% or more of pixels..."
+    ## [1] "14704 genes remaining..."
+    ## [1] "Removing 3009 genes present in 5% or less of pixels..."
+    ## [1] "11695 genes remaining..."
+    ## [1] "Restricting to overdispersed genes with alpha = 0.05..."
     ## [1] "Calculating variance fit ..."
     ## [1] "Using gam with k=5..."
-    ## [1] "345 overdispersed genes ... "
+    ## [1] "232 overdispersed genes ... "
 
 ![](getting_started_files/figure-markdown_github/getting_started_feature-2.png)
 
-    ## [1] "Removing 16 genes present in 100% or more of pixels..."
-    ## [1] "329 genes remaining..."
-    ## [1] "Removing 81 genes present in 5% or less of pixels..."
-    ## [1] "248 genes remaining..."
+    ##  Using top 1000 overdispersed genes. 
+    ##  number of top overdispersed genes available: 232
 
 ![](getting_started_files/figure-markdown_github/getting_started_feature-3.png)
 
@@ -69,16 +71,8 @@ range of LDA models to inform the choice of an optimal `K`.
 ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1), plot=TRUE, verbose=TRUE)
 ```
 
-    ## [1] "Time to fit LDA models was 0.29mins"
+    ## [1] "Time to fit LDA models was 0.32mins"
     ## [1] "Computing perplexity for each fitted model..."
-    ## final e step document 260
-    ## final e step document 260
-    ## final e step document 260
-    ## final e step document 260
-    ## final e step document 260
-    ## final e step document 260
-    ## final e step document 260
-    ## final e step document 260
 
 ![](getting_started_files/figure-markdown_github/getting_started_opt-1.png)
 
@@ -109,15 +103,10 @@ vizAllTopics(deconProp, pos,
              r=0.4)
 ```
 
-    ## Bioconductor version 3.12 (BiocManager 1.30.12), ?BiocManager::install for help
-
-    ## Bioconductor version '3.12' is out-of-date; the current release version '3.13' is available with R version '4.1'; see
-    ##   https://bioconductor.org/install
-
 ![](getting_started_files/figure-markdown_github/getting_started_proportions-1.png)
 
 We can also visualize the top marker genes for each deconvolved
-cell-type. We will use deconvolved cell-types `7` and `2` as examples
+cell-type. We will use deconvolved cell-types `5` and `1` as examples
 here. We will define the top marker genes here as genes highly expressed
 in the deconvolved cell-type (count \> 5) that also have the top 4
 highest log2(fold change) when comparing the deconvolved cell-type’s
@@ -125,7 +114,7 @@ expression profile to the average of all other deconvolved cell-types’
 expression profiles.
 
 ``` r
-celltype <- 7
+celltype <- 5
 ## highly expressed in cell-type of interest
 highgexp <- names(which(deconGexp[celltype,] > 5))
 ## high log2(fold-change) compared to other deconvolved cell-types
@@ -153,7 +142,7 @@ gridExtra::grid.arrange(
 ![](getting_started_files/figure-markdown_github/getting_started_expression-1.png)
 
 ``` r
-celltype <- 2
+celltype <- 1
 ## highly expressed in cell-type of interest
 highgexp <- names(which(deconGexp[celltype,] > 5))
 ## high log2(fold-change) compared to other deconvolved cell-types

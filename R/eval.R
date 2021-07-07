@@ -142,7 +142,9 @@ scale0_1 <- function(x) {
 #'     needs to have been detected in to keep (default: 1)
 #' @param ODgenes Boolean to use ``getOverdispersedGenes`` for the corpus
 #'    genes (default: TRUE)
-#' @param nTopOD number of top over dispersed genes to use. int (default: NA)
+#' @param nTopOD number of top over dispersed genes to use. int (default: 1000).
+#'     If the number of overdispersed genes is less then this number will use all of them,
+#'     or set to NA to use all overdispersed genes.
 #' @param od.genes.alpha alpha parameter for `getOverdispersedGenes`.
 #'     Higher = less stringent and more over dispersed genes returned (default: 0.05)
 #' @param gam.k gam.k parameter for `getOverdispersedGenes`. Dimension
@@ -170,7 +172,7 @@ preprocess <- function(dat,
                        min.lib.size = 1,
                        min.detected = 1,
                        ODgenes = TRUE,
-                       nTopOD = NA,
+                       nTopOD = 1000,
                        od.genes.alpha = 0.05,
                        gam.k = 5,
                        verbose = TRUE) {
