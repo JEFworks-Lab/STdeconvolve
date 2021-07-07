@@ -1,9 +1,17 @@
-## from https://rdrr.io/cran/gama/src/R/bestk.R
-# Calculates an aproximation of the second derivative of a set of points
-# the maximum second derivative will be a good choice for the inflection point (the elbow or knee)
-# https://stackoverflow.com/questions/2018178/finding-the-best-trade-off-point-on-a-curve
-# https://raghavan.usc.edu/papers/kneedle-simplex11.pdf (Finding a "Kneedle" in a Haystack:
-# Detecting Knee Points in System Behavior)
+#' Calculates an approximation of the second derivative of a set of points
+#'
+#' @description Calculates an approximation of the second derivative of a set of points.
+#'     The maximum second derivative will be a good choice for the inflection point (the elbow or knee).
+#'     From https://rdrr.io/cran/gama/src/R/bestk.R
+#'     https://stackoverflow.com/questions/2018178/finding-the-best-trade-off-point-on-a-curve
+#'     https://raghavan.usc.edu/papers/kneedle-simplex11.pdf (Finding a "Kneedle" in a Haystack:
+#'     Detecting Knee Points in System Behavior)
+#' @param points vector of perplexity values ordered by the corresponding LDA model K
+#' 
+#' @return the best K (i.e. inflection point of the perplexities)
+#' 
+#' @export
+#' 
 where.is.knee <- function(points = NULL) {
   
   lower.limit <- 2

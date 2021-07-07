@@ -142,11 +142,10 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
                    verbose = verbose, keep = 1, estimate.alpha = TRUE)
   
   start_time <- Sys.time()
-  fitted_models <- parallel::mclapply(Ks, function(k) {
+  fitted_models <- parallel::mclapply(Ks, function(k){
+    if(verbose) system(paste("echo 'now fitting LDA model with K =", k, "'"))
     topicmodels::LDA(corpusFit, k=k, control = controls)
-  },
-  mc.cores = ncores
-  )
+  }, mc.cores = ncores)
   names(fitted_models) <- Ks
   
   if(verbose) {
@@ -157,10 +156,13 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   if(verbose) {
     print("Computing perplexity for each fitted model...")
   }
-  pScores <- unlist(lapply(fitted_models, function(model){
-    p <- topicmodels::perplexity(model, newdata = corpusTest)
-    return(p)
-  }))
+  
+  pScores <- parallel::mclapply(Ks, function(k){
+    if(verbose) system(paste("echo 'computing perplexity for LDA model with K =", k, "'"))
+    model <- fitted_models[[as.character(k)]]
+    topicmodels::perplexity(model, newdata = corpusTest)
+  }, mc.cores = ncores)
+  pScores <- unlist(pScores)
   
   ## Kneed algorithm
   kOpt1 <- Ks[where.is.knee(pScores)]
@@ -194,11 +196,14 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     # legend(x = "top",
     #        legend = c("kneed"), col = c("red"), lty = 1, lwd = 1)
     
-    dat <- data.frame(K = as.double(Ks),
+    dat <- data.frame(K = as.double(ks),
                       rareCts = numrare,
                       perplexity = pScores,
                       rareCtsAdj = scale0_1(numrare),
-                      perplexAdj = scale0_1(pScores))
+                      perplexAdj = scale0_1(pScores),
+                      alphas = unlist(sapply(fitted_models, slot, "alpha")))
+    dat[["alpha < 1"]] <- ifelse(dat$alphas < 1, 'gray90', 'gray50')
+    dat$alphaBool <- ifelse(dat$alphas < 1, 0, 1)
     
     prim_ax_labs <- seq(min(dat$rareCts), max(dat$rareCts))
     prim_ax_breaks <- scale0_1(prim_ax_labs)
@@ -216,18 +221,23 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     }
     sec_ax_breaks <- scale0_1(sec_ax_labs)
     
-    plt <- ggplot2::ggplot(dat, ggplot2::aes(x=K)) +
-      ggplot2::geom_line(ggplot2::aes(y=rareCtsAdj), col="blue", lwd = 2) +
-      ggplot2::geom_line(ggplot2::aes(y=perplexAdj), col="red", lwd = 2) +
+    plt <- ggplot2::ggplot(dat) +
+      ggplot2::geom_line(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", lwd = 2) +
+      ggplot2::geom_line(ggplot2::aes(y=perplexAdj, x=K), col="red", lwd = 2) +
+      ggplot2::geom_bar(ggplot2::aes(x = K, y = alphaBool), fill = dat$`alpha < 1`, stat = "identity", width = 1) +
       ggplot2::scale_y_continuous(name=paste0("# cell-types with mean proportion < ", round(perc.rare.thresh*100, 2), "%"), breaks = prim_ax_breaks, labels = prim_ax_labs,
-                                  sec.axis=ggplot2::sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
+                                  sec.axis= ggplot2::sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
       ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
-      ggplot2::ggtitle("Fitted model K's vs deconvolved cell-types and perplexity") +
+      ggplot2::labs(title = "Fitted model K's vs deconvolved cell-types and perplexity",
+                    subtitle = "") +
       ggplot2::theme_classic() +
       ggplot2::theme(
+        panel.background = ggplot2::element_blank(),
         plot.title = ggplot2::element_text(size=15, face=NULL),
+        # plot.subtitle = ggplot2::element_text(size=13, face=NULL),
         panel.grid.minor = ggplot2::element_blank(),
         panel.grid.major = ggplot2::element_line(color = "black", size = 0.1),
+        panel.ontop = TRUE,
         axis.title.y.left = ggplot2::element_text(color="blue", size = 13),
         axis.text.y.left = ggplot2::element_text(color="blue", size = 13),
         axis.title.y.right = ggplot2::element_text(color="red", size = 15, vjust = 1.5),
