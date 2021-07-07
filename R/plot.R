@@ -7,15 +7,15 @@
 #' @param theta document (pixel) x cell-type proportion matrix
 #' @param pos position of pixels, as data.frame with `x` and `y` columns
 #' @param topicOrder order of topics in theta to visualize as a numeric vector
-#'     and same length as topicCols ( default: seq(ncol(theta)) )
-#' @param topicCols vector of colors for each of the cell-types to be visualized.
-#'     Same length and order as topicOrder ( default: rainbow(ncol(theta)) )
-#' @param groups colors the pixel piechart lines based on a group
-#'     they belong to. Needs to be a character vector in the order of the pixel
-#'     rows in theta. Ex: c("0", "1", "0", ...)
-#' @param group_cols color labels for the groups. Ex: c("0" = "gray", "1" = "red")
-#' @param r radius of the scatterpie circles. Adjust based on positions of pixels (default: 1)
-#' @param lwd width of lines of the pie charts. Increasing helps visualize
+#'     and same length as topicCols (default: seq(ncol(theta)))
+#' @param topicCols Vector of colors for each of the cell-types to be visualized.
+#'     Same length and order as topicOrder (default: rainbow(ncol(theta)))
+#' @param groups Indicates color of the scatterpie strokes with the goal of coloring them
+#'     by their assigned group. This can be a vector or factor indicating the group of each
+#'     scatterpie. Needs to be in the same order as the pixel rows in "theta" (default: NA)
+#' @param group_cols Color labels for the groups. Can be a vector or factor. (default: NA)
+#' @param r Radius of the scatterpie circles. Adjust based on positions of pixels (default: max(0.4, max(pos)/nrow(pos)*4))
+#' @param lwd Width of lines of the pie charts. Increasing helps visualize
 #'     group_cols if being used.
 #' @param showLegend Boolean to show the legend indicating cell-types and their color
 #' @param plotTitle add title to the resulting plot (default: NA)
@@ -28,7 +28,7 @@ vizAllTopics <- function(theta, pos,
                          topicCols=rainbow(ncol(theta)),
                          groups = NA,
                          group_cols = NA,
-                         r = 1,
+                         r = max(0.4, max(pos)/nrow(pos)*4),
                          lwd = 0.5,
                          showLegend = TRUE,
                          plotTitle = NA,

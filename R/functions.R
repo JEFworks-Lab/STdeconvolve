@@ -196,7 +196,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     # legend(x = "top",
     #        legend = c("kneed"), col = c("red"), lty = 1, lwd = 1)
     
-    dat <- data.frame(K = as.double(ks),
+    dat <- data.frame(K = as.double(Ks),
                       rareCts = numrare,
                       perplexity = pScores,
                       rareCtsAdj = scale0_1(numrare),
