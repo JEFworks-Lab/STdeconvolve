@@ -43,7 +43,6 @@ deconProp <- results$theta
 deconGexp <- results$beta*1000
 ## visualize deconvolved cell-type proportions
 vizAllTopics(deconProp, pos,
-             topicCols = gg_color_hue(ncol(deconProp)),
              groups = annot, 
              group_cols = rainbow(length(levels(annot))),
              r=0.4)	  

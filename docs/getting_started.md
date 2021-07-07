@@ -77,6 +77,17 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1), plot=TRUE, verbose=
 ![](getting_started_files/figure-markdown_github/getting_started_opt-1.png)
 
 In this example, we will use the model with the lowest model perplexity.
+
+The shaded region indicates where a fitted model for a given K had an
+`alpha` \> 1. `alpha` is an LDA parameter that is solved for during
+model fitting and corresponds to the shape parameter of a symmetric
+Dirichlet distribution. In the model, this Dirichlet distribution
+describes the cell-type proportions in the pixels. A symmetric Dirichlet
+with alpha \> 1 would lead to more uniform cell-type distributions in
+the pixels and difficulty identifying distinct cell-types. Instead, we
+want models with alphas \< 1, resulting in sparse distributions where
+only a few cell-types are represented in a given pixel.
+
 The resulting `theta` matrix can be interpreted as the proportion of
 each deconvolved cell-type across each spatially resolved pixel. The
 resulting `beta` matrix can be interpreted as the putative gene
