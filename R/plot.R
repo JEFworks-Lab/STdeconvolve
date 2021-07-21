@@ -392,7 +392,7 @@ vizGeneCounts <- function(df, gene,
 
 # custom correlation color range for heatmap.2 correlation plots
 correlation_palette <- grDevices::colorRampPalette(c("blue", "white", "red"))(n = 209)
-correlation_breaks = c(seq(-1,-0.01,length=100),
+correlation_breaks <- c(seq(-1,-0.01,length=100),
                        seq(-0.009,0.009,length=10),
                        seq(0.01,1,length=100))
 

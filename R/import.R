@@ -182,7 +182,7 @@ getOverdispersedGenes <- function(counts,
   ## variance normalize
   norm.mat <- counts*df$gsf
   if(!details) {
-    return(rownames(mat)[ods])
+    return(colnames(mat)[ods])
   } else {
     ## return normalization factor
     return(list(mat=norm.mat, ods=colnames(mat)[ods], df=df))

@@ -334,6 +334,11 @@ preprocess <- function(dat,
     countsClean <- countsClean[od_genes,]
   }
   
+  if (dim(countsClean)[1] > 1000){
+    cat("Genes in corpus > 1000 (", dim(countsFiltRestricted)[1],
+        "). This may cause model fitting to take a while. Consider reducing the number of genes.", "\n")
+  }
+  
   corpus <- t(as.matrix(countsClean))
   
   # last filter: each row must have at least 1 non-zero entry

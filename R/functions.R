@@ -83,6 +83,10 @@ restrictCorpus <- function(counts,
     hist(log10(Matrix::rowSums(countsFiltRestricted)+1), breaks=20, main='Pixels Per Gene')
   }
   
+  if (dim(countsFiltRestricted)[1] > 1000){
+    cat("Genes in corpus > 1000 (", dim(countsFiltRestricted)[1],
+        "). This may cause model fitting to take a while. Consider reducing the number of genes.", "\n")
+  }
   return(countsFiltRestricted)
 }
 
@@ -120,15 +124,19 @@ restrictCorpus <- function(counts,
 #'
 #' @export
 fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
-                   seed = 0, testSize = NULL, perc.rare.thresh = 0.05,
-                   ncores = parallel::detectCores(logical = TRUE) - 1,
-                   plot = TRUE, verbose = TRUE) {
+                    seed = 0, testSize = NULL, perc.rare.thresh = 0.05,
+                    ncores = parallel::detectCores(logical = TRUE) - 1,
+                    plot = TRUE, verbose = TRUE) {
   
   if ( min(Ks) < 2 | !isTRUE(all(Ks == floor(Ks))) ){
     stop("`Ks` must be a vector of integers greater than 2.")
   }
   
   counts <- as.matrix(counts)
+  
+  if (length(which(rowSums(counts) == 0))){
+    stop("Each row (pixel) of `counts` needs to contain at least one non-zero entry")
+  }
   
   if ( !isTRUE(all(counts == floor(counts))) ){
     stop("`counts` must contain integer gene counts")
@@ -165,13 +173,14 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   }
   
   controls <- list(seed = seed,
-                   verbose = verbose, keep = 1, estimate.alpha = TRUE)
+                   verbose = 0, keep = 1, estimate.alpha = TRUE)
   
   start_time <- Sys.time()
-  fitted_models <- parallel::mclapply(Ks, function(k){
+  fitted_models <- BiocParallel::bplapply(Ks, function(k){
     if(verbose) system(paste("echo 'now fitting LDA model with K =", k, "'"))
+    # if(verbose) print(paste("now fitting LDA model with K =", k))
     topicmodels::LDA(corpusFit, k=k, control = controls)
-  }, mc.cores = ncores)
+  }, BPPARAM = BiocParallel::SnowParam(workers = ncores))
   names(fitted_models) <- Ks
   
   if(verbose) {
@@ -183,11 +192,12 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     print("Computing perplexity for each fitted model...")
   }
   
-  pScores <- parallel::mclapply(Ks, function(k){
+  pScores <- BiocParallel::bplapply(Ks, function(k){
     if(verbose) system(paste("echo 'computing perplexity for LDA model with K =", k, "'"))
+    # if(verbose) print(paste("computing perplexity for LDA model with K =", k))
     model <- fitted_models[[as.character(k)]]
     topicmodels::perplexity(model, newdata = corpusTest)
-  }, mc.cores = ncores)
+  }, BPPARAM = BiocParallel::SnowParam(workers = ncores))
   pScores <- unlist(pScores)
   
   ## Kneed algorithm
@@ -196,6 +206,10 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   kOpt2 <- Ks[which(pScores == min(pScores))]
   
   ## check number of predicted cell-types at low proportions
+  if(verbose) {
+    print("Getting predicted cell-types at low proportions...")
+  }
+  
   out <- lapply(1:length(Ks), function(i) {
     apply(getBetaTheta(fitted_models[[i]], corpus = corpus)$theta, 2, mean)
   })
@@ -204,6 +218,11 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   kOpt3 <- Ks[where.is.knee(numrare)]
   
   if(plot) {
+    
+    if(verbose) {
+      print("Plotting...")
+    }
+    
     # plot(Ks, pScores,
     #      ylab = "perplexity",
     #      xlab = "K",
@@ -231,6 +250,8 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     dat[["alpha < 1"]] <- ifelse(dat$alphas < 1, 'gray90', 'gray50')
     dat$alphaBool <- ifelse(dat$alphas < 1, 0, 1)
     
+    # print(dat)
+    
     prim_ax_labs <- seq(min(dat$rareCts), max(dat$rareCts))
     prim_ax_breaks <- scale0_1(prim_ax_labs)
     ## if number rareCts stays constant, then only one break. scale0_1(prim_ax_labs) would be NaN so change to 0
@@ -250,7 +271,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     plt <- ggplot2::ggplot(dat) +
       ggplot2::geom_line(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", lwd = 2) +
       ggplot2::geom_line(ggplot2::aes(y=perplexAdj, x=K), col="red", lwd = 2) +
-      ggplot2::geom_bar(ggplot2::aes(x = K, y = alphaBool), fill = dat$`alpha < 1`, stat = "identity", width = 1) +
+      ggplot2::geom_bar(ggplot2::aes(x = K, y = alphaBool), fill = dat$`alpha < 1`, stat = "identity", width = 1, alpha = 0.5) +
       ggplot2::scale_y_continuous(name=paste0("# cell-types with mean proportion < ", round(perc.rare.thresh*100, 2), "%"), breaks = prim_ax_breaks, labels = prim_ax_labs,
                                   sec.axis= ggplot2::sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
       ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
@@ -613,5 +634,67 @@ lsatPairs <- function(mtx){
   return(list(pairs = pairing,
               rowix = rowsix,
               colsix = colsix))
+}
+
+
+#' Function to filter out cell-types in pixels below a certain proportion
+#' 
+#' @description Sets cell-types in each pixel to 0 that are below a given proportion.
+#'     Then renormalizes the pixel proportions to sum to 1.
+#'     Cell-types that result in 0 in all pixels after this filtering step are removed.
+#'
+#' @param theta pixel (rows) by cell-types (columns) distribution matrix. Each row
+#'     is the cell-type composition for a given pixel
+#' @param perc.filt proportion threshold to remove cell-types in pixels (default: 0.05)
+#' 
+#' @return A filtered pixel (rows) by cell-types (columns) distribution matrix.
+#' 
+#' @export 
+filterTheta <- function(theta, perc.filt = 0.05){
+  ## remove rare cell-types in pixels
+  theta[theta < perc.filt] <- 0
+  ## re-adjust pixel proportions to 1
+  theta <- theta/rowSums(theta)
+  ## if NAs because all cts are 0 in a spot, replace with 0
+  theta[is.na(theta)] <- 0
+  ## drop any cts that are 0 for all pixels
+  theta <- theta[,which(colSums(theta) > 0)]
+  return(theta)
+}
+
+
+#' Function to reduce theta matrices down to the top X cell-types in each
+#' pixel. 
+#' 
+#' @description The cell-types with the top X highest proportions are kept in each
+#'     pixel and the rest are set to 0. Then renormalizes the pixel proportions to sum to 1.
+#'     Cell-types that result in 0 in all pixels after this filtering step are removed.
+#'
+#' @param theta pixel (rows) by cell-types (columns) distribution matrix. Each row
+#'     is the cell-type composition for a given pixel
+#' @param top Seelct number of top cell-types in each pixel to keep (defaul: 3)
+#' 
+#' @return A filtered pixel (rows) by cell-types (columns) distribution matrix.
+#' 
+#' @export 
+reduceTheta <- function(theta, top = 3){
+  
+  theta_filt <- do.call(rbind, lapply(seq(nrow(theta)), function(i){
+    p <- theta[i,]
+    thresh <- sort(p, decreasing = TRUE)[top]
+    p[p < thresh] <- 0
+    p
+  }))
+  
+  colnames(theta_filt) <- colnames(theta)
+  rownames(theta_filt) <- rownames(theta)
+  
+  theta_filt <- theta_filt/rowSums(theta_filt)
+  ## if NAs because all cts are 0 in a spot, replace with 0
+  theta_filt[is.na(theta_filt)] <- 0
+  ## drop any cts that are 0 for all pixels
+  theta_filt <- theta_filt[,which(colSums(theta_filt) > 0)]
+  
+  return(theta_filt)
 }
 
