@@ -335,7 +335,7 @@ preprocess <- function(dat,
   }
   
   if (dim(countsClean)[1] > 1000){
-    cat("Genes in corpus > 1000 (", dim(countsFiltRestricted)[1],
+    cat("Genes in corpus > 1000 (", dim(countsClean)[1],
         "). This may cause model fitting to take a while. Consider reducing the number of genes.", "\n")
   }
   
