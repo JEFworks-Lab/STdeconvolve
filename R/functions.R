@@ -698,3 +698,22 @@ reduceTheta <- function(theta, top = 3){
   return(theta_filt)
 }
 
+#' Returns top n genes of each deconvolved cell-type for a given beta matrix
+#'
+#' @description For a given beta matrix (cell-type gene distribution matrix),
+#'     returns the top n genes based on their probability.
+#' 
+#' @param beta beta matrix (cell-type gene distribution matrix)
+#' @param n number of top genes for each deconvolved cell-type to return (defaul: 10)
+#' 
+#' @return a list where each item is a vector of the top genes and their associated probabilities for
+#'     a given deconvolved cell-type
+#' 
+#' @export
+topGenes <- function(beta, n = 10){
+  topgenes <- lapply(seq(nrow(beta)), function(ct){
+    sort(beta[ct,], decreasing = TRUE)[1:n]
+  })
+  names(topgenes) <- rownames(beta)
+  return(topgenes)
+}

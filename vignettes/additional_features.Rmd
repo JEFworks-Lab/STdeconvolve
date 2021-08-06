@@ -328,7 +328,7 @@ colnames(m) <- c("14", "12", "Other")
 vizAllTopics(theta = m,
              pos = p,
              topicOrder=seq(ncol(m)),
-             topicCols=c(transparentCol("red", percent = 50), # bonus: can make colors transparent if overlaying on top pf an image
+             topicCols=c(transparentCol("red", percent = 50), # BONUS: can make colors transparent if overlaying on top of an image
                          "black",
                          "white"), 
              groups = rep("0", dim(m)[1]),

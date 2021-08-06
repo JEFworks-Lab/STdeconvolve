@@ -282,11 +282,20 @@ normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseu
 }
 
 
-# winsorize
+#' Function to winsorize the gene counts
+#'
+#' @description Function to winsorize the gene counts
+#' 
+#' @param x gene count matrix
+#' @param qt quantile for winsorization (defaul: 0.05)
+#' 
+#' @return winsorized gene count matrix
+#' 
+#' @export
 winsorize <- function (x, qt=.05) {
   if(length(qt) != 1 || qt < 0 ||
      qt > 0.5) {
-    stop("bad value for quantile threashold")
+    stop("bad value for quantile threshold")
   }
   lim <- quantile(x, probs=c(qt, 1-qt))
   x[ x < lim[1] ] <- lim[1]
