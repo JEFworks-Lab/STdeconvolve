@@ -100,7 +100,7 @@ restrictCorpus <- function(counts,
 #'     information.
 #'
 #' @param counts Gene expression counts with pixels as rows and genes as columns
-#' @param Ks vector of K parameters to search
+#' @param Ks vector of K parameters, or number of cell-types, to fit models with
 #' @param seed Random seed
 #' @param testSize fraction of pixels to set aside for test corpus when computing perplexity (default: NULL)
 #'    Either NULL or decimal between 0 and 1.
@@ -116,10 +116,11 @@ restrictCorpus <- function(counts,
 #' \item kneedOptK: the optimal K based on Kneed algorithm
 #' \item minOptK: the optimal K based on minimum
 #' \item ctPropOptK: Suggested upper bound on K. K in which number of returned cell-types
-#'     with mean proportion < 5% starts to increases steadily.
-#' \item numRare: number of cell-types with mean pixel proportion < 5% for each K
+#'     with mean proportion < perc.rare.thresh starts to increase steadily.
+#' \item numRare: number of cell-types with mean pixel proportion < perc.rare.thresh for each K
 #' \item perplexities: perplexity scores for each model
-#' \item corpus: the corpus that was used to fit each model
+#' \item fitCorpus: the corpus that was used to fit each model
+#' \item testCorpus: the corpus used to compute model perplexity. If testSize = NULL then same as fitCorpus.
 #' }
 #'
 #' @export
@@ -192,6 +193,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     print("Computing perplexity for each fitted model...")
   }
   
+  start_time <- Sys.time()
   pScores <- BiocParallel::bplapply(Ks, function(k){
     if(verbose) system(paste("echo 'computing perplexity for LDA model with K =", k, "'"))
     # if(verbose) print(paste("computing perplexity for LDA model with K =", k))
@@ -199,6 +201,11 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     topicmodels::perplexity(model, newdata = corpusTest)
   }, BPPARAM = BiocParallel::SnowParam(workers = ncores))
   pScores <- unlist(pScores)
+  
+  if(verbose) {
+    total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+    print(sprintf("Time to compute perplexities was %smins", total_t))
+  }
   
   ## Kneed algorithm
   kOpt1 <- Ks[where.is.knee(pScores)]
@@ -210,12 +217,18 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     print("Getting predicted cell-types at low proportions...")
   }
   
+  start_time <- Sys.time()
   out <- lapply(1:length(Ks), function(i) {
     apply(getBetaTheta(fitted_models[[i]], corpus = corpus)$theta, 2, mean)
   })
   ## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
   numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))
   kOpt3 <- Ks[where.is.knee(numrare)]
+  
+  if(verbose) {
+    total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
+    print(sprintf("Time to compute cell-types at low proportions was %smins", total_t))
+  }
   
   if(plot) {
     
@@ -250,8 +263,6 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     dat[["alpha < 1"]] <- ifelse(dat$alphas < 1, 'gray90', 'gray50')
     dat$alphaBool <- ifelse(dat$alphas < 1, 0, 1)
     
-    # print(dat)
-    
     prim_ax_labs <- seq(min(dat$rareCts), max(dat$rareCts))
     prim_ax_breaks <- scale0_1(prim_ax_labs)
     ## if number rareCts stays constant, then only one break. scale0_1(prim_ax_labs) would be NaN so change to 0
@@ -261,6 +272,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
       ## and its label will still be set to the constant value of rareCts
       dat$rareCtsAdj <- 0
     }
+    
     if(max(dat$rareCts) < 1){
       sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/1)
     } else {
@@ -268,7 +280,20 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     }
     sec_ax_breaks <- scale0_1(sec_ax_labs)
     
+    if(length(sec_ax_labs) == 1){
+      sec_ax_breaks <- 0
+      dat$perplexAdj <- 0
+    }
+    
+    print(dat)
+    print(prim_ax_labs)
+    print(prim_ax_breaks)
+    print(sec_ax_labs)
+    print(sec_ax_breaks)
+    
     plt <- ggplot2::ggplot(dat) +
+      ggplot2::geom_point(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", lwd = 2) +
+      ggplot2::geom_point(ggplot2::aes(y=perplexAdj, x=K), col="red", lwd = 2) +
       ggplot2::geom_line(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", lwd = 2) +
       ggplot2::geom_line(ggplot2::aes(y=perplexAdj, x=K), col="red", lwd = 2) +
       ggplot2::geom_bar(ggplot2::aes(x = K, y = alphaBool), fill = dat$`alpha < 1`, stat = "identity", width = 1, alpha = 0.5) +
@@ -506,7 +531,7 @@ optimalModel <- function(models, opt) {
   } else if (opt %in% sapply(models$models, slot, "k")){
     m <- models$models[[which(sapply(models$models, slot, "k") == opt)]]
   } else {
-    stop("`opt` must be either 'kneed',  'min', 'proportion', or int of a fitted K")
+    stop("`opt` must be either 'kneed',  'min', 'proportion', or integer of a fitted K")
   }
   return(m)
 }

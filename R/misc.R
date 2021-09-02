@@ -244,7 +244,7 @@ buildBregmaCorpus <- function (hashTable, bregmaID) {
 #'     that are not returned by `SPOTlight::spotlight_deconvolution()`.
 #'     
 #'     This does come with a caveat that one must be careful about:
-#'     WARNING: SPOTlight functions crash the R session if you use a corpus with a gene set
+#'     WARNING: SPOTlight functions crash the R session if you use a corpus with gene(s)
 #'     that is not in the NMF W. I think this happens in `SPOTlight::predict_spatial_mixtures()`
 #'     during the nnls step at the end. Because it generates the full W matrix after selecting
 #'     genes in the ST mtrx. When the NMF was trained, there was a step that made it only
@@ -253,10 +253,12 @@ buildBregmaCorpus <- function (hashTable, bregmaID) {
 #'     ST mtrx on the trained NMF, then I bet it would crash because the matrices end up not being comparable shapes.
 #' 
 #' 
-#' @param nmfRef the list returned from `SPOTlight::train_nmf()`. In `SPOTlight::spotlight_deconvolution()`,
-#'     this returned list actually has this nmf input list as its first element
+#' @param nmfRef the list returned from `SPOTlight::train_nmf()`. For `SPOTlight::spotlight_deconvolution()`,
+#'     this returned list actually has this nmfRef input list as its first element, i.e. nmfRef[[1]]
 #' @param stCounts ST count matrix to deconvolve, genes x spots
 #' @param min_cont param of `mixture_deconvolution_nmf()`. remove topics less than this percent in a spot
+#' @param normCtTopicProfiles if TRUE, uses the normalized cell-type topic-proportions instead of the 
+#'     unnormalized cell-type topic coefficients that is typically used by SPOTlight. (default: FALSE)
 #' 
 #' @return a list that contains
 #' \itemize{
@@ -268,7 +270,7 @@ buildBregmaCorpus <- function (hashTable, bregmaID) {
 #' }
 #'
 #' @export
-SPOTlightPredict <- function(nmfRef, stCounts, min_cont = 0.0) {
+SPOTlightPredict <- function(nmfRef, stCounts, min_cont = 0.0, normCtTopicProfiles = FALSE) {
   
   # get basis matrix W [genes x topics]
   w <- NMF::basis(nmfRef[[1]])
@@ -282,7 +284,7 @@ SPOTlightPredict <- function(nmfRef, stCounts, min_cont = 0.0) {
   # values are coefficients
   # uses the H matrix and the cluster labels to get a new mtx where topic x cluster,
   # Cell types can be made up of multiple topics...
-  ct_topic_profiles <- topic_profile_per_cluster_nmf(h = h,
+  ct_topic_profiles <- SPOTlight::topic_profile_per_cluster_nmf(h = h,
                                                      train_cell_clust = nmfRef[[2]])
   
   # convert to topic proportions for each cell type
@@ -326,9 +328,9 @@ SPOTlightPredict <- function(nmfRef, stCounts, min_cont = 0.0) {
   
   
   # [topics x spots]; topic coefficients for each spot
-  # This function appears to account for that only using genes in ST that are also in W
+  # This function appears only using genes in ST that are also in W
   # NNLS to get topic coefficients for each spot based on genes associated with each topic (W)
-  topics_in_spots <- predict_spatial_mixtures_nmf(nmf_mod = nmfRef[[1]],
+  topics_in_spots <- SPOTlight::predict_spatial_mixtures_nmf(nmf_mod = nmfRef[[1]],
                                                   mixture_transcriptome = stCounts,
                                                   transf = "uv")
   # normalize coefficients to get topic proportions in each spot
@@ -340,14 +342,23 @@ SPOTlightPredict <- function(nmfRef, stCounts, min_cont = 0.0) {
   colnames(topics_in_spots_norm) <- colnames(topics_in_spots)
   
   # returns [spot x CellType]; proportion of each cell type in each spot
-  # topics below `min_cont` are not counted in a spot
+  # celltypes below `min_cont` are not counted in a spot
   # within this function, `topics_in_spots` is also made but not returned
-  ct_in_spots <- mixture_deconvolution_nmf(nmf_mod = nmfRef[[1]],
+  # uses the raw unnormalized celltype topic coefficients (ct_topic_profiles)
+  # could use the normalized and adjusted cell-type topic proportions (ct_topics) but 
+  # this will cause a slight change in the reported pixel cell-type proportions
+  # SPOTlight code uses the unnormalized cell-type topic coefficients
+  if(normCtTopicProfiles){
+    topic_profiles <- ct_topics
+  } else {
+    topic_profiles <- ct_topic_profiles
+  }
+  ct_in_spots <- SPOTlight::mixture_deconvolution_nmf(nmf_mod = nmfRef[[1]],
                                            mixture_transcriptome = stCounts,
                                            transf = "uv", 
-                                           reference_profiles = ct_topics, 
-                                           min_cont = min_cont) # only keep topics if 9% or more in a spot
-  # note that last column is an additional columns for the residual error
+                                           reference_profiles = topic_profiles, 
+                                           min_cont = min_cont)
+  # note that last column is an additional column for the residual error
   # cleanup to get actual spot-celltype predictions:
   rownames(ct_in_spots) <- colnames(stCounts)
   ct_in_spots_clean <- ct_in_spots[,1:(ncol(ct_in_spots)-1)] # last column is residuals
