@@ -5,15 +5,18 @@
 \title{Wrapper around functions in \code{SPOTlight::spotlight_deconvolution()}
 that take place subsequently after training the NMF model.}
 \usage{
-SPOTlightPredict(nmfRef, stCounts, min_cont = 0)
+SPOTlightPredict(nmfRef, stCounts, min_cont = 0, normCtTopicProfiles = FALSE)
 }
 \arguments{
-\item{nmfRef}{the list returned from \code{SPOTlight::train_nmf()}. In \code{SPOTlight::spotlight_deconvolution()},
-this returned list actually has this nmf input list as its first element}
+\item{nmfRef}{the list returned from \code{SPOTlight::train_nmf()}. For \code{SPOTlight::spotlight_deconvolution()},
+this returned list actually has this nmfRef input list as its first element, i.e. nmfRef[\link{1}]}
 
 \item{stCounts}{ST count matrix to deconvolve, genes x spots}
 
 \item{min_cont}{param of \code{mixture_deconvolution_nmf()}. remove topics less than this percent in a spot}
+
+\item{normCtTopicProfiles}{if TRUE, uses the normalized cell-type topic-proportions instead of the
+unnormalized cell-type topic coefficients that is typically used by SPOTlight. (default: FALSE)}
 }
 \value{
 a list that contains
@@ -32,7 +35,7 @@ a very long time (hours depending on number of genes and clusters in scRNAseq re
 that are not returned by `SPOTlight::spotlight_deconvolution()`.
 
 This does come with a caveat that one must be careful about:
-WARNING: SPOTlight functions crash the R session if you use a corpus with a gene set
+WARNING: SPOTlight functions crash the R session if you use a corpus with gene(s)
 that is not in the NMF W. I think this happens in `SPOTlight::predict_spatial_mixtures()`
 during the nnls step at the end. Because it generates the full W matrix after selecting
 genes in the ST mtrx. When the NMF was trained, there was a step that made it only

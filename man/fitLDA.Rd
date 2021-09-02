@@ -18,7 +18,7 @@ fitLDA(
 \arguments{
 \item{counts}{Gene expression counts with pixels as rows and genes as columns}
 
-\item{Ks}{vector of K parameters to search}
+\item{Ks}{vector of K parameters, or number of cell-types, to fit models with}
 
 \item{seed}{Random seed}
 
@@ -41,10 +41,11 @@ A list that contains
 \item kneedOptK: the optimal K based on Kneed algorithm
 \item minOptK: the optimal K based on minimum
 \item ctPropOptK: Suggested upper bound on K. K in which number of returned cell-types
-with mean proportion < 5\% starts to increases steadily.
-\item numRare: number of cell-types with mean pixel proportion < 5\% for each K
+with mean proportion < perc.rare.thresh starts to increase steadily.
+\item numRare: number of cell-types with mean pixel proportion < perc.rare.thresh for each K
 \item perplexities: perplexity scores for each model
-\item corpus: the corpus that was used to fit each model
+\item fitCorpus: the corpus that was used to fit each model
+\item testCorpus: the corpus used to compute model perplexity. If testSize = NULL then same as fitCorpus.
 }
 }
 \description{
