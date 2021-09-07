@@ -560,3 +560,97 @@ correlationPlot_2 <- function(mat, rowLabs = NA, colLabs = NA, rowv = NA, colv =
   
   return(plt)
 }
+
+
+#' Plot the perplexity and rare cell-types versus fitted Ks
+#' 
+#' @description the same plot returned by fitLDA() but now callable as a 
+#'     separate function. 
+#'     
+#' @param models models output from fitLDA()
+#' @param corpus If corpus is NULL, then it will use the original corpus that
+#'     the model was fitted to. Otherwise, compute deconvolved topics from this
+#'     new corpus. Needs to be pixels x genes and nonnegative integer counts. 
+#'     Each row needs at least 1 nonzero entry (default: NULL)
+#' @param perc.rare.thresh the number of deconvolved cell-types with mean pixel proportion below this fraction used to assess
+#'     performance of fitted models for each K. Recorded for each K. (default: 0.05)
+#' 
+#' @export
+perplexityPlot <- function(models, corpus = NULL, perc.rare.thresh = 0.05){
+  
+  fitted_models <- models$models
+  Ks <- as.vector(unlist(sapply(fitted_models, slot, "k")))
+  pScores <- models$perplexities
+  
+  out <- lapply(1:length(Ks), function(i) {
+    apply(getBetaTheta(fitted_models[[i]], corpus = corpus)$theta, 2, mean)
+  })
+  ## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
+  numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))
+  
+  dat <- data.frame(K = as.double(Ks),
+                    rareCts = numrare,
+                    perplexity = pScores,
+                    rareCtsAdj = scale0_1(numrare),
+                    perplexAdj = scale0_1(pScores),
+                    alphas = unlist(sapply(fitted_models, slot, "alpha")))
+  dat[["alpha < 1"]] <- ifelse(dat$alphas < 1, 'gray90', 'gray50')
+  dat$alphaBool <- ifelse(dat$alphas < 1, 0, 1)
+  
+  prim_ax_labs <- seq(min(dat$rareCts), max(dat$rareCts))
+  prim_ax_breaks <- scale0_1(prim_ax_labs)
+  ## if number rareCts stays constant, then only one break. scale0_1(prim_ax_labs) would be NaN so change to 0
+  if(length(prim_ax_labs) == 1){
+    prim_ax_breaks <- 0
+    ## also the rareCtsAdj <- scale0_1(rareCts) would be NaN, so set to 0, so at same position as the tick,
+    ## and its label will still be set to the constant value of rareCts
+    dat$rareCtsAdj <- 0
+  }
+  
+  if(max(dat$rareCts) < 1){
+    sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/1)
+  } else {
+    sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/max(dat$rareCts))
+  }
+  sec_ax_breaks <- scale0_1(sec_ax_labs)
+  
+  if(length(sec_ax_labs) == 1){
+    sec_ax_breaks <- 0
+    dat$perplexAdj <- 0
+  }
+  
+  print(dat)
+  print(prim_ax_labs)
+  print(prim_ax_breaks)
+  print(sec_ax_labs)
+  print(sec_ax_breaks)
+  
+  plt <- ggplot2::ggplot(dat) +
+    ggplot2::geom_point(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", lwd = 2) +
+    ggplot2::geom_point(ggplot2::aes(y=perplexAdj, x=K), col="red", lwd = 2) +
+    ggplot2::geom_line(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", lwd = 2) +
+    ggplot2::geom_line(ggplot2::aes(y=perplexAdj, x=K), col="red", lwd = 2) +
+    ggplot2::geom_bar(ggplot2::aes(x = K, y = alphaBool), fill = dat$`alpha < 1`, stat = "identity", width = 1, alpha = 0.5) +
+    ggplot2::scale_y_continuous(name=paste0("# cell-types with mean proportion < ", round(perc.rare.thresh*100, 2), "%"), breaks = prim_ax_breaks, labels = prim_ax_labs,
+                                sec.axis= ggplot2::sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
+    ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
+    ggplot2::labs(title = "Fitted model K's vs deconvolved cell-types and perplexity",
+                  subtitle = "") +
+    ggplot2::theme_classic() +
+    ggplot2::theme(
+      panel.background = ggplot2::element_blank(),
+      plot.title = ggplot2::element_text(size=15, face=NULL),
+      # plot.subtitle = ggplot2::element_text(size=13, face=NULL),
+      panel.grid.minor = ggplot2::element_blank(),
+      panel.grid.major = ggplot2::element_line(color = "black", size = 0.1),
+      panel.ontop = TRUE,
+      axis.title.y.left = ggplot2::element_text(color="blue", size = 13),
+      axis.text.y.left = ggplot2::element_text(color="blue", size = 13),
+      axis.title.y.right = ggplot2::element_text(color="red", size = 15, vjust = 1.5),
+      axis.text.y.right = ggplot2::element_text(color="red", size = 13),
+      axis.text.x = ggplot2::element_text(angle = 0, size = 13),
+      axis.title.x = ggplot2::element_text(size=13)
+    )
+  print(plt)
+}
+

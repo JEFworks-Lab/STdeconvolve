@@ -198,7 +198,12 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     if(verbose) system(paste("echo 'computing perplexity for LDA model with K =", k, "'"))
     # if(verbose) print(paste("computing perplexity for LDA model with K =", k))
     model <- fitted_models[[as.character(k)]]
-    topicmodels::perplexity(model, newdata = corpusTest)
+    ## if no splitting, then same corpus and thus no need to refit in order to save time
+    if(is.null(testSize)){
+      topicmodels::perplexity(model)
+    } else {
+      topicmodels::perplexity(model, newdata = corpusTest)
+    }
   }, BPPARAM = BiocParallel::SnowParam(workers = ncores))
   pScores <- unlist(pScores)
   
@@ -219,7 +224,15 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   
   start_time <- Sys.time()
   out <- lapply(1:length(Ks), function(i) {
-    apply(getBetaTheta(fitted_models[[i]], corpus = corpus)$theta, 2, mean)
+    ## if no splitting, then already fit to entire corpus and no need to refit
+    if(is.null(testSize)){
+      apply(getBetaTheta(fitted_models[[i]], corpus = NULL)$theta, 2, mean)
+    } else {
+      ## if splitting, then want to make sure that the rare celltypes
+      ## are determined for the entire corpus to begin with and thus
+      ## refit on the entire corpus to determine theta and rare cell-types
+      apply(getBetaTheta(fitted_models[[i]], corpus = corpus)$theta, 2, mean)
+    }
   })
   ## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
   numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))
@@ -336,9 +349,10 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
 #'
 #' @param lda an LDA model from `topicmodels`. From list of models returned by
 #'     fitLDA
-#' @param corpus Gene expression counts with pixels as rows and genes as columns
-#'     for which to get predicted cell-type proportions and cell-type gene expression profiles.
-#'     Typically same one that was used to fit the LDA model.
+#' @param corpus If corpus is NULL, then it will use the original corpus that
+#'     the model was fitted to. Otherwise, compute deconvolved topics from this
+#'     new corpus. Needs to be pixels x genes and nonnegative integer counts. 
+#'     Each row needs at least 1 nonzero entry (default: NULL)
 #'
 #' @return A list that contains
 #' \itemize{
@@ -350,9 +364,29 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
 #' }
 #'
 #' @export
-getBetaTheta <- function(lda, corpus) {
+getBetaTheta <- function(lda, corpus = NULL) {
   
-  result <- topicmodels::posterior(lda, newdata = corpus)
+  ## If corpus is NULL, then it will use the original fitted data
+  ## otherwise, use new corpus to predict topic proportions based on the 
+  ## model. pixels x genes, with nonzero integer counts. Also converted
+  ## to slam matrix format to be compatible with topicmodels package.
+  if(is.null(corpus)){
+    result <- topicmodels::posterior(lda)
+  } else {
+    
+    corpus <- as.matrix(corpus)
+    
+    if (length(which(rowSums(corpus) == 0))){
+      stop("Each row (pixel) of `corpus` needs to contain at least one non-zero entry")
+    }
+    if ( !isTRUE(all(corpus == floor(corpus))) ){
+      stop("`corpus` must contain integer gene counts")
+    }
+    
+    corpus <- slam::as.simple_triplet_matrix((as.matrix(corpus)))
+    result <- topicmodels::posterior(lda, newdata = corpus)
+  }
+  
   theta <- result$topics
   beta <- result$terms
   # topicFreqsOverall <- colSums(theta) / length(lda@documents)
