@@ -619,12 +619,6 @@ perplexityPlot <- function(models, corpus = NULL, perc.rare.thresh = 0.05){
     dat$perplexAdj <- 0
   }
   
-  print(dat)
-  print(prim_ax_labs)
-  print(prim_ax_breaks)
-  print(sec_ax_labs)
-  print(sec_ax_breaks)
-  
   plt <- ggplot2::ggplot(dat) +
     ggplot2::geom_point(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", lwd = 2) +
     ggplot2::geom_point(ggplot2::aes(y=perplexAdj, x=K), col="red", lwd = 2) +
