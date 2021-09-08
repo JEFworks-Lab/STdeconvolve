@@ -8,7 +8,7 @@ for an LDA model in \code{fitLDA} output list.}
 \usage{
 buildLDAobject(
   LDAmodel,
-  corpus,
+  corpus = NULL,
   clustering = "ward.D",
   dynamic = "hybrid",
   deepSplit = 4,
@@ -19,9 +19,10 @@ buildLDAobject(
 \arguments{
 \item{LDAmodel}{LDA model from fitLDA}
 
-\item{corpus}{Gene expression counts with pixels as rows and genes as columns
-for which to get predicted cell-type proportions and cell-type gene expression profiles.
-Typically same one that was used to fit the LDA model.}
+\item{corpus}{If corpus is NULL, then it will use the original corpus that
+the model was fitted to. Otherwise, compute deconvolved topics from this
+new corpus. Needs to be pixels x genes and nonnegative integer counts.
+Each row needs at least 1 nonzero entry (default: NULL)}
 
 \item{clustering}{Clustering agglomeration method to be used (default: ward.D)}
 
