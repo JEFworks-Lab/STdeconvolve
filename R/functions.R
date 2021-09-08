@@ -298,11 +298,11 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
       dat$perplexAdj <- 0
     }
     
-    print(dat)
-    print(prim_ax_labs)
-    print(prim_ax_breaks)
-    print(sec_ax_labs)
-    print(sec_ax_breaks)
+    # print(dat)
+    # print(prim_ax_labs)
+    # print(prim_ax_breaks)
+    # print(sec_ax_labs)
+    # print(sec_ax_breaks)
     
     plt <- ggplot2::ggplot(dat) +
       ggplot2::geom_point(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", lwd = 2) +
@@ -314,7 +314,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
                                   sec.axis= ggplot2::sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
       ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
       ggplot2::labs(title = "Fitted model K's vs deconvolved cell-types and perplexity",
-                    subtitle = "") +
+                    subtitle = "models with poor alphas > 1 shaded") +
       ggplot2::theme_classic() +
       ggplot2::theme(
         panel.background = ggplot2::element_blank(),

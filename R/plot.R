@@ -629,7 +629,7 @@ perplexityPlot <- function(models, corpus = NULL, perc.rare.thresh = 0.05){
                                 sec.axis= ggplot2::sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
     ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
     ggplot2::labs(title = "Fitted model K's vs deconvolved cell-types and perplexity",
-                  subtitle = "") +
+                  subtitle = "models with poor alphas > 1 shaded") +
     ggplot2::theme_classic() +
     ggplot2::theme(
       panel.background = ggplot2::element_blank(),
