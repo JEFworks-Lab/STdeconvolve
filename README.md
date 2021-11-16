@@ -21,6 +21,8 @@ require(remotes)
 remotes::install_github('JEFworks-Lab/STdeconvolve')
 ```
 
+Installation should take a few minutes on a typical desktop computer.
+
 ## Example
 
 ``` r
