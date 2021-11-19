@@ -4,15 +4,15 @@
 [![R build status](https://github.com/JEFworks/STdeconvolve/workflows/R-CMD-check/badge.svg)](https://github.com/JEFworks/STdeconvolve/actions)
 <!-- badges: end -->
 
-`STdeconvolve` enables reference-free cell-type deconvolution of multi-cellular spatially resolved transcriptomics data
+`STdeconvolve` enables reference-free cell-type deconvolution of multi-cellular pixel-resolution spatially resolved transcriptomics data
 
 <img src="https://github.com/JEFworks/STdeconvolve/blob/package/docs/img/STdeconvolve_logo.png?raw=true"/>
 
-The overall approach is detailed on [bioRxiv](https://www.biorxiv.org/content/10.1101/2021.06.15.448381v1)
+The overall approach is detailed on [bioRxiv](https://www.biorxiv.org/content/10.1101/2021.06.15.448381v2)
 
 ## Overview
 
-`STdeconvolve` is an unsupervised machine learning approach to deconvolve multi-cellular pixel resolution spatial transcriptomics datasets in order to recover the putative transcriptomic profiles of cell-types and their proportional representation within spatially resolved pixels without reliance on external single-cell transcriptomics references.
+`STdeconvolve` is an unsupervised machine learning approach to deconvolve multi-cellular pixel-resolution spatial transcriptomics datasets in order to recover the putative transcriptomic profiles of cell-types and their proportional representation within spatially resolved pixels without reliance on external single-cell transcriptomics references.
 
 <img src="https://github.com/JEFworks/STdeconvolve/blob/package/docs/img/STdeconvolve_workflowforwebsite_v2.png?raw=true"/>
 
