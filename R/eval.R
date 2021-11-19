@@ -135,9 +135,9 @@ scale0_1 <- function(x) {
 #' @param removeBelow non-negative numeric <=1 to use as a percentage.
 #'    Removes genes present in this fraction or less of pixels (default: NA)
 #' @param min.reads `cleanCounts` param; minimum number of reads to keep
-#'     a gene (default: 100)
+#'     a gene (default: 1)
 #' @param min.lib.size `cleanCounts` param; minimum number of counts a
-#'     pixel needs to keep (default: 100)
+#'     pixel needs to keep (default: 1)
 #' @param min.detected `cleanCounts` param; minimum number of pixels a gene
 #'     needs to have been detected in to keep (default: 1)
 #' @param ODgenes Boolean to use ``getOverdispersedGenes`` for the corpus
@@ -389,5 +389,4 @@ nrmse_func <-  function(obs, pred, type = "sd") {
   return(nrmse)
   
 }
-
 

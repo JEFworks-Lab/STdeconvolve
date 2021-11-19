@@ -62,6 +62,9 @@ vizAllTopics <- function(theta, pos,
     group_cols <- c("0" = "gray")
   }
   
+  print(cat("Plotting scatterpies for", dim(theta_ordered_pos)[1], "pixels with", length(topicColumns),
+            "cell-types...this could take a while if the dataset is large..."))
+  
   if (is.na(overlay[1]) == FALSE){
     p <- ggplot2::ggplot(mapping = ggplot2::aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
       ggplot2::coord_equal(xlim = c(0,dim(overlay)[2]), ylim = c(0, dim(overlay)[1]), expand = FALSE) +
