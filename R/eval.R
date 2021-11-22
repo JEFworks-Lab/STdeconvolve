@@ -375,18 +375,56 @@ preprocess <- function(dat,
 }
 
 
-
-nrmse_func <-  function(obs, pred, type = "sd") {
-  squared_sums <- sum((obs - pred)^2)
-  mse <- squared_sums/length(obs)
-  rmse <- sqrt(mse)
-  if (type == "sd") nrmse <- rmse/sd(obs)
-  if (type == "mean") nrmse <- rmse/mean(obs)
-  if (type == "maxmin") nrmse <- rmse/ (max(obs) - min(obs))
-  if (type == "iq") nrmse <- rmse/ (quantile(obs, 0.75) - quantile(obs, 0.25))
-  if (!type %in% c("mean", "sd", "maxmin", "iq")) message("Wrong type!")
-  nrmse <- round(nrmse, 3)
-  return(nrmse)
+#' Match deconvolved cell-types to ground truth cell-types based on transcriptional profiles
+#'
+#' @description Match deconvolved cell-types to ground truth cell-types by testing for
+#'     enrichment of ground truth marker gene sets in the deconvolved transcriptional profiles.
+#'     Uses `liger::iterative.bulk.gsea`.
+#'
+#' @param beta cell-type (rows) x gene (columns) matrix of deconvolved cell-type transcriptional profiles
+#' @param gset named list where each entry is a vector of marker genes for a given ground truth cell-type.
+#' @param qval adjusted p-value threshold (default: 0.05)
+#'
+#' @return A list that contains
+#' \itemize{
+#' \item results: A named list that contains sorted matrices for each deconvolved cell-type.
+#'     The matrix rows are the ground truth cell-types ordered by significance, edge-score, and enrichment score
+#'     of their gene sets in the deconvolved transcriptional profile of a given deconvolved cell-type.
+#' \item topMatches: a named vector where the names are the deconvolved cell-types and the values
+#'     are the best matched ground truth cell-type.
+#' }
+#'
+#' @export
+annotateCellTypesGSEA <- function(beta, gset, qval = 0.05) {
+  
+  results <- list()
+  top <- c()
+  
+  for (i in seq(nrow(beta))){
+    celltype <- i
+    vals <- sort(beta[celltype,], decreasing = TRUE)
+    
+    gsea.results <- liger::iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
+    
+    # filter for top hits
+    gsea.sig <- gsea.results[gsea.results$q.val < 0.05,]
+    gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
+    
+    ## order of selection:
+    ## 1. q-val
+    ## 2. edge (the leading edge subset of a gene set is the subset of genes that contribute most to the Expression Score)
+    ## 3. sscore (Expression Score)
+    gsea.sig <- gsea.sig[order(gsea.sig$q.val, rev(gsea.sig$edge), rev(gsea.sig$sscore)), ]
+    
+    results[[celltype]] <- gsea.sig
+    top <- append(top, rownames(gsea.sig)[1])
+    
+  }
+  
+  names(top) <- rownames(beta)
+  
+  return(list(results = results,
+              topMatches = top))
   
 }
 

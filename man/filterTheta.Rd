@@ -4,7 +4,7 @@
 \alias{filterTheta}
 \title{Function to filter out cell-types in pixels below a certain proportion}
 \usage{
-filterTheta(theta, perc.filt = 0.05)
+filterTheta(theta, perc.filt = 0.05, verbose = TRUE)
 }
 \arguments{
 \item{theta}{pixel (rows) by cell-types (columns) distribution matrix. Each row

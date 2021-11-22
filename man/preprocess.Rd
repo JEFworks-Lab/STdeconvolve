@@ -50,10 +50,10 @@ Removes genes present in this fraction or more of pixels (default: NA)}
 Removes genes present in this fraction or less of pixels (default: NA)}
 
 \item{min.reads}{\code{cleanCounts} param; minimum number of reads to keep
-a gene (default: 100)}
+a gene (default: 1)}
 
 \item{min.lib.size}{\code{cleanCounts} param; minimum number of counts a
-pixel needs to keep (default: 100)}
+pixel needs to keep (default: 1)}
 
 \item{min.detected}{\code{cleanCounts} param; minimum number of pixels a gene
 needs to have been detected in to keep (default: 1)}

@@ -7,7 +7,7 @@
 perplexityPlot(models, corpus = NULL, perc.rare.thresh = 0.05)
 }
 \arguments{
-\item{models}{models output from fitLDA()}
+\item{models}{list returned from fitLDA}
 
 \item{corpus}{If corpus is NULL, then it will use the original corpus that
 the model was fitted to. Otherwise, compute deconvolved topics from this

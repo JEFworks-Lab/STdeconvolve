@@ -4,7 +4,13 @@
 \alias{correlationPlot}
 \title{Generate heatmap of correlations}
 \usage{
-correlationPlot(mat, colLabs = NA, rowLabs = NA, title = NA)
+correlationPlot(
+  mat,
+  colLabs = NA,
+  rowLabs = NA,
+  title = NA,
+  annotation = FALSE
+)
 }
 \arguments{
 \item{mat}{matrix with correlation values from -1 to 1}
@@ -14,6 +20,8 @@ correlationPlot(mat, colLabs = NA, rowLabs = NA, title = NA)
 \item{rowLabs}{y-axis label for plot. These are the rows of the matrix, or specifically m1 from getCorrMtx. (default: NULL)}
 
 \item{title}{title of the plot. (default: NULL)}
+
+\item{annotation}{Boolean to show the correlation values in the squares of the heatmap (default; FALSE)}
 }
 \description{
 Visualize the correlations between topics stored in a matrix, typically one

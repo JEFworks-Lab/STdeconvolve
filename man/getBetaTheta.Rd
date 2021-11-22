@@ -5,7 +5,13 @@
 \title{Pull out cell-type proportions across pixels (theta) and
 cell-type gene probabilities (beta) matrices from fitted LDA models from fitLDA}
 \usage{
-getBetaTheta(lda, corpus = NULL)
+getBetaTheta(
+  lda,
+  corpus = NULL,
+  perc.filt = 0.05,
+  betaScale = 1,
+  verbose = TRUE
+)
 }
 \arguments{
 \item{lda}{an LDA model from \code{topicmodels}. From list of models returned by
@@ -15,6 +21,10 @@ fitLDA}
 the model was fitted to. Otherwise, compute deconvolved topics from this
 new corpus. Needs to be pixels x genes and nonnegative integer counts.
 Each row needs at least 1 nonzero entry (default: NULL)}
+
+\item{perc.filt}{proportion threshold to remove cell-types in pixels (default: 0.05)}
+
+\item{betaScale}{factor to scale the predicted cell-type gene expression profiles (default: 1)}
 }
 \value{
 A list that contains

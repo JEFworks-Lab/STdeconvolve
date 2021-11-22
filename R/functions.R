@@ -339,7 +339,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
 #'     new corpus. Needs to be pixels x genes and nonnegative integer counts. 
 #'     Each row needs at least 1 nonzero entry (default: NULL)
 #' @param perc.filt proportion threshold to remove cell-types in pixels (default: 0.05)
-#' @param betaScale factor to scale the predicted cell-type gene expression profiles (default: 1000)
+#' @param betaScale factor to scale the predicted cell-type gene expression profiles (default: 1)
 #' @verbose Boolean for verbosity (default: TRUE)
 #'
 #' @return A list that contains
@@ -352,7 +352,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
 #' }
 #'
 #' @export
-getBetaTheta <- function(lda, corpus = NULL, perc.filt = 0.05, betaScale = 1000, verbose = TRUE) {
+getBetaTheta <- function(lda, corpus = NULL, perc.filt = 0.05, betaScale = 1, verbose = TRUE) {
   
   ## If corpus is NULL, then it will use the original fitted data
   ## otherwise, use new corpus to predict topic proportions based on the 
