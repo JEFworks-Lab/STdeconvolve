@@ -81,10 +81,52 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1),
                verbose=TRUE)
 ```
 
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
+    ## loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
+    ## loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
+    ## loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
+    ## loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
+    ## loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
+    ## loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
+    ## loading
+
     ## [1] "Time to fit LDA models was 0.44mins"
     ## [1] "Computing perplexity for each fitted model..."
 
-    ## [1] "Time to compute perplexities was 0.14mins"
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
+    ## loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
+    ## loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
+    ## loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
+    ## loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
+    ## loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
+    ## loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
+    ## loading
+
+    ## [1] "Time to compute perplexities was 0.16mins"
     ## [1] "Getting predicted cell-types at low proportions..."
     ## [1] "Time to compute cell-types at low proportions was 0mins"
     ## [1] "Plotting..."
@@ -291,7 +333,7 @@ plt <- ggplot2::ggplot(data = dat) +
   ggplot2::scale_y_continuous(expand = c(0, 0), limits = c(min(log2fc) - 0.3, max(log2fc) + 0.3)) +
   ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(-2, NA)) +
   
-  ggplot2::labs(title = "Deconvolved cell-type X5 transcriptional profile",
+  ggplot2::labs(title = "Deconvolved cell-type X1 transcriptional profile",
                 x = "Gene expression rank",
                 y = "log2(FC)") +
   

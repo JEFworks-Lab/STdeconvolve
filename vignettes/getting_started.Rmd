@@ -227,7 +227,7 @@ plt <- ggplot2::ggplot(data = dat) +
   ggplot2::scale_y_continuous(expand = c(0, 0), limits = c(min(log2fc) - 0.3, max(log2fc) + 0.3)) +
   ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(-2, NA)) +
   
-  ggplot2::labs(title = "Deconvolved cell-type X5 transcriptional profile",
+  ggplot2::labs(title = "Deconvolved cell-type X1 transcriptional profile",
                 x = "Gene expression rank",
                 y = "log2(FC)") +
   
