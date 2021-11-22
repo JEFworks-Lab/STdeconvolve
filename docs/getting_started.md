@@ -81,50 +81,8 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1),
                verbose=TRUE)
 ```
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
     ## [1] "Time to fit LDA models was 0.44mins"
     ## [1] "Computing perplexity for each fitted model..."
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
 
     ## [1] "Time to compute perplexities was 0.16mins"
     ## [1] "Getting predicted cell-types at low proportions..."
