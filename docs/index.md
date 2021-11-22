@@ -33,17 +33,24 @@ corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
 ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1))
 ## get best model results
 optLDA <- optimalModel(models = ldas, opt = "min")
-results <- getBetaTheta(optLDA, t(as.matrix(corpus)))
+## extract deconvolved cell-type proportions (theta) and transcriptional profiles (beta)
+results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 deconProp <- results$theta
-deconGexp <- results$beta*1000
+deconGexp <- results$beta
 ## visualize deconvolved cell-type proportions
 vizAllTopics(deconProp, pos,
              groups = annot, 
              group_cols = rainbow(length(levels(annot))),
-             r=0.4)	     
+             r=0.4)	  
 ```
 
 <img src="https://github.com/JEFworks/STdeconvolve/blob/package/docs/getting_started_files/figure-markdown_github/getting_started_proportions-1.png?raw=true"/>
+
+More details can be found in the tutorials.
+
+## Tutorials
+- [Getting Started with STdeconvolve](getting_started.md)
+- [Additional Features with STdeconvolve](additional_features.md)
 
 ## Installation
 
@@ -53,10 +60,6 @@ To install `STdeconvolve`, we recommend using `remotes`:
 require(remotes)
 remotes::install_github('JEFworks-Lab/STdeconvolve')
 ```
-
-## Tutorials
-- [Getting Started with STdeconvolve](getting_started.md)
-- [Additional Features with STdeconvolve](additional_features.md)
 
 ## Contributing
 
