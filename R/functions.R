@@ -226,12 +226,14 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   out <- lapply(1:length(Ks), function(i) {
     ## if no splitting, then already fit to entire corpus and no need to refit
     if(is.null(testSize)){
-      apply(getBetaTheta(fitted_models[[i]], corpus = NULL)$theta, 2, mean)
+      ## note that we are including all cell-types when computing theta here because we are trying to
+      ## assess the best model by the number of rare cell-types predicted.
+      apply(getBetaTheta(fitted_models[[i]], corpus = NULL, perc.filt = 0, verbose = FALSE)$theta, 2, mean)
     } else {
       ## if splitting, then want to make sure that the rare celltypes
       ## are determined for the entire corpus to begin with and thus
       ## refit on the entire corpus to determine theta and rare cell-types
-      apply(getBetaTheta(fitted_models[[i]], corpus = corpus)$theta, 2, mean)
+      apply(getBetaTheta(fitted_models[[i]], corpus = corpus, perc.filt = 0, verbose = FALSE)$theta, 2, mean)
     }
   })
   ## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
@@ -249,24 +251,6 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
       print("Plotting...")
     }
     
-    # plot(Ks, pScores,
-    #      ylab = "perplexity",
-    #      xlab = "K",
-    #      main = "K vs perplexity")
-    # abline(v = kOpt1, col='blue')
-    # abline(v = kOpt2, col='red')
-    # legend(x = "top",
-    #        legend = c("kneed", "min"), col = c("blue", "red"), lty = 1, lwd = 1)
-    #
-    # plot(Ks, numrare,
-    #      ylab = paste0("number of cell-types", "\n","with < 5% mean proportion"),
-    #      xlab = "K",
-    #      main = "K vs number of rare predicted cell-types",
-    #      ylim = c(min=0, max=round((max(numrare)+1)*1.5)) )
-    # abline(v = kOpt3, col='red')
-    # legend(x = "top",
-    #        legend = c("kneed"), col = c("red"), lty = 1, lwd = 1)
-    
     dat <- data.frame(K = as.double(Ks),
                       rareCts = numrare,
                       perplexity = pScores,
@@ -275,7 +259,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
                       alphas = unlist(sapply(fitted_models, slot, "alpha")))
     dat[["alpha < 1"]] <- ifelse(dat$alphas < 1, 'gray90', 'gray50')
     dat$alphaBool <- ifelse(dat$alphas < 1, 0, 1)
-    
+
     prim_ax_labs <- seq(min(dat$rareCts), max(dat$rareCts))
     prim_ax_breaks <- scale0_1(prim_ax_labs)
     ## if number rareCts stays constant, then only one break. scale0_1(prim_ax_labs) would be NaN so change to 0
@@ -285,25 +269,25 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
       ## and its label will still be set to the constant value of rareCts
       dat$rareCtsAdj <- 0
     }
-    
+
     if(max(dat$rareCts) < 1){
       sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/1)
     } else {
       sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity), (max(dat$perplexity)-min(dat$perplexity))/max(dat$rareCts))
     }
     sec_ax_breaks <- scale0_1(sec_ax_labs)
-    
+
     if(length(sec_ax_labs) == 1){
       sec_ax_breaks <- 0
       dat$perplexAdj <- 0
     }
-    
+
     # print(dat)
     # print(prim_ax_labs)
     # print(prim_ax_breaks)
     # print(sec_ax_labs)
     # print(sec_ax_breaks)
-    
+
     plt <- ggplot2::ggplot(dat) +
       ggplot2::geom_point(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", lwd = 2) +
       ggplot2::geom_point(ggplot2::aes(y=perplexAdj, x=K), col="red", lwd = 2) +
@@ -314,7 +298,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
                                   sec.axis= ggplot2::sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
       ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
       ggplot2::labs(title = "Fitted model K's vs deconvolved cell-types and perplexity",
-                    subtitle = "models with poor alphas > 1 shaded") +
+                    subtitle = "LDA models with \u03b1 > 1 shaded") +
       ggplot2::theme_classic() +
       ggplot2::theme(
         panel.background = ggplot2::element_blank(),
@@ -331,6 +315,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
         axis.title.x = ggplot2::element_text(size=13)
       )
     print(plt)
+    
   }
   
   return(list(models = fitted_models,
@@ -353,6 +338,9 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
 #'     the model was fitted to. Otherwise, compute deconvolved topics from this
 #'     new corpus. Needs to be pixels x genes and nonnegative integer counts. 
 #'     Each row needs at least 1 nonzero entry (default: NULL)
+#' @param perc.filt proportion threshold to remove cell-types in pixels (default: 0.05)
+#' @param betaScale factor to scale the predicted cell-type gene expression profiles (default: 1000)
+#' @verbose Boolean for verbosity (default: TRUE)
 #'
 #' @return A list that contains
 #' \itemize{
@@ -364,7 +352,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
 #' }
 #'
 #' @export
-getBetaTheta <- function(lda, corpus = NULL) {
+getBetaTheta <- function(lda, corpus = NULL, perc.filt = 0.05, betaScale = 1000, verbose = TRUE) {
   
   ## If corpus is NULL, then it will use the original fitted data
   ## otherwise, use new corpus to predict topic proportions based on the 
@@ -391,6 +379,15 @@ getBetaTheta <- function(lda, corpus = NULL) {
   beta <- result$terms
   # topicFreqsOverall <- colSums(theta) / length(lda@documents)
   
+  ## filter out cell-types with low proportions in pixels
+  if(verbose){
+    cat("Filtering out cell-types in pixels that contribute less than", perc.filt, "of the pixel proportion.", "\n")
+  }
+  theta <- filterTheta(theta, perc.filt = perc.filt, verbose = verbose)
+  
+  ## scale the beta
+  beta <- beta * betaScale
+    
   return(list(beta = beta,
               theta = theta))
 }
@@ -706,11 +703,12 @@ lsatPairs <- function(mtx){
 #' @param theta pixel (rows) by cell-types (columns) distribution matrix. Each row
 #'     is the cell-type composition for a given pixel
 #' @param perc.filt proportion threshold to remove cell-types in pixels (default: 0.05)
+#' @verbose Boolean for verbosity (default: TRUE)
 #' 
 #' @return A filtered pixel (rows) by cell-types (columns) distribution matrix.
 #' 
 #' @export 
-filterTheta <- function(theta, perc.filt = 0.05){
+filterTheta <- function(theta, perc.filt = 0.05, verbose = TRUE){
   ## remove rare cell-types in pixels
   theta[theta < perc.filt] <- 0
   ## re-adjust pixel proportions to 1
@@ -718,7 +716,21 @@ filterTheta <- function(theta, perc.filt = 0.05){
   ## if NAs because all cts are 0 in a spot, replace with 0
   theta[is.na(theta)] <- 0
   ## drop any cts that are 0 for all pixels
+  dropped_cts <- names(which(colSums(theta) == 0))
+  if(length(dropped_cts) > 0){
+    if(verbose){
+      cat("Cell-types with no proportions in pixels after filtering dropped:\n", dropped_cts, "\n")
+    }
+  }
   theta <- theta[,which(colSums(theta) > 0)]
+  
+  empty_pixels <- names(which(rowSums(theta) == 0))
+  if(length(empty_pixels) > 0){
+    if(verbose){
+      cat(length(empty_pixels), "pixels with no cell-types after filtering.", "\n")
+    }
+  }
+  
   return(theta)
 }
 

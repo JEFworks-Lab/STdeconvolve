@@ -54,16 +54,16 @@ vizAllTopics <- function(theta, pos,
   # color of piechart groups (lines of piechart):
   if (is.na(groups[1]) == TRUE) {
     groups <- rep("0", dim(theta_ordered_pos)[1])
-    theta_ordered_pos$groups <- groups
+    theta_ordered_pos$Pixel.Groups <- groups
   } else {
-    theta_ordered_pos$groups <- as.character(groups)
+    theta_ordered_pos$Pixel.Groups <- as.character(groups)
   }
   if (is.na(group_cols[1]) == TRUE) {
     group_cols <- c("0" = "gray")
   }
   
-  print(cat("Plotting scatterpies for", dim(theta_ordered_pos)[1], "pixels with", length(topicColumns),
-            "cell-types...this could take a while if the dataset is large..."))
+  cat("Plotting scatterpies for", dim(theta_ordered_pos)[1], "pixels with", length(topicColumns),
+      "cell-types...this could take a while if the dataset is large.", "\n")
   
   if (is.na(overlay[1]) == FALSE){
     p <- ggplot2::ggplot(mapping = ggplot2::aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
@@ -81,7 +81,7 @@ vizAllTopics <- function(theta, pos,
       # geom_point(aes(x = c(0,dim(overlay)[2]), y = c(0, dim(overlay)[1]))) +
       ggplot2::annotation_raster(overlay, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) +
       # theme_classic() +
-      scatterpie::geom_scatterpie(ggplot2::aes(x=x, y=y, group=Row.names, r=r, color = groups),
+      scatterpie::geom_scatterpie(ggplot2::aes(x=x, y=y, group=Row.names, r=r, color = Pixel.Groups),
                                   lwd = lwd,
                                   data = theta_ordered_pos,
                                   cols = topicColumns,
@@ -101,7 +101,7 @@ vizAllTopics <- function(theta, pos,
         axis.title.y = ggplot2::element_blank(),
         panel.background = ggplot2::element_blank()) +
       # theme_classic() +
-      scatterpie::geom_scatterpie(ggplot2::aes(x=x, y=y, group=Row.names, r=r, color = groups),
+      scatterpie::geom_scatterpie(ggplot2::aes(x=x, y=y, group=Row.names, r=r, color = Pixel.Groups),
                                   lwd = lwd,
                                   data = theta_ordered_pos,
                                   cols = topicColumns,
@@ -480,9 +480,10 @@ transparentCol <- function(color, percent = 50, name = NULL) {
 #' @param rowLabs y-axis label for plot. These are the rows of the matrix, or specifically m1 from getCorrMtx. (default: NULL)
 #' @param colLabs x-axis label for plot. These are the columns of the matrix, or specifically m2 from getCorrMtx. (default: NULL)
 #' @param title title of the plot. (default: NULL)
+#' @param annotation Boolean to show the correlation values in the squares of the heatmap (default; FALSE)
 #' 
 #' @export
-correlationPlot <- function(mat, colLabs = NA, rowLabs = NA, title = NA){
+correlationPlot <- function(mat, colLabs = NA, rowLabs = NA, title = NA, annotation = FALSE){
   
   correlation_palette <- grDevices::colorRampPalette(c("blue", "white", "red"))(n = 209)
   correlation_breaks <- c(seq(-1,-0.01,length=100),
@@ -491,23 +492,47 @@ correlationPlot <- function(mat, colLabs = NA, rowLabs = NA, title = NA){
   
   dat <- reshape2::melt(mat)
   plt <- ggplot2::ggplot(data = dat) +
-    ggplot2::geom_tile(ggplot2::aes(x = Var1, y = Var2, fill=value)) +
-    ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1),
-                                  guide = ggplot2::guide_colorbar(title = "correlation", ticks = FALSE, label = FALSE)) +
-    ggplot2::scale_y_discrete(breaks = dat$Var2, labels = dat$Var2) +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = -90, size = 10),
-                   axis.text.y = ggplot2::element_text(angle = 0, size = 10),
-                   axis.title.y = ggplot2::element_text(size = 12),
-                   axis.title.x = ggplot2::element_text(size = 12),
-                   plot.title = ggplot2::element_text(size = 15),
-                   panel.grid = ggplot2::element_blank(),
-                   axis.line = ggplot2::element_blank(),
-                   axis.ticks = ggplot2::element_blank(),
-                   panel.background = ggplot2::element_blank()
-                   # legend.position = "bottom"
-    ) +
-    # ggplot2::guides(color = guide_colourbar(nbin = 10, raster = F, direction = "horizontal", barwidth = 20, barheight = 0.8)) +
-    ggplot2::coord_fixed()
+    ggplot2::geom_tile(ggplot2::aes(x = as.character(Var1), y = as.character(Var2), fill=value)) +
+    
+    # ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1),
+    #                               guide = ggplot2::guide_colorbar(title = "correlation", ticks = FALSE, label = FALSE)) +
+    
+    ggplot2::scale_y_discrete(breaks = dat$Var2, labels = dat$Var2)
+    
+    ## if correlation values are to be plotted in squares:
+    if(annotation){
+      plt <- plt + ggplot2::geom_text(ggplot2::aes(x = Var1, y = Var2, label = format(round(value, 2), nsmall = 2) ))
+    }
+    
+    plt <- plt + ggplot2::theme(axis.text.x = ggplot2::element_text(size=12, color = "black", hjust = 0, vjust = 0.5),
+                   axis.text.y = ggplot2::element_text(size=12, color = "black"),
+                   axis.title.y = ggplot2::element_text(size=13),
+                   axis.title.x = ggplot2::element_text(size=13),
+                   plot.title = ggplot2::element_text(size=15),
+                   legend.text = ggplot2::element_text(size = 15, colour = "black"),
+                   legend.title = ggplot2::element_text(size = 15, colour = "black", angle = 90),
+                   panel.background = ggplot2::element_blank(),
+                   ## border around plot
+                   panel.border = ggplot2::element_rect(fill = NA, color = "black", size = 2),
+                   plot.background = ggplot2::element_blank()
+                   # legend.position="none"
+      ) +
+      ## fix up colorbar legend
+      ggplot2::scale_fill_gradientn(limits = c(-1,1),
+                                    breaks = c(-1,0,1),
+                                    colors=(grDevices::colorRampPalette(c("blue","white","red")))(n = 209)
+      ) +
+      ggplot2::guides(fill = ggplot2::guide_colorbar(title = "Correlation",
+                                                     title.position = "left",
+                                                     title.hjust = 0.5,
+                                                     ticks.colour = "black",
+                                                     ticks.linewidth = 2,
+                                                     frame.colour= "black",
+                                                     frame.linewidth = 2,
+                                                     label.hjust = 0
+      )) +
+      
+      ggplot2::coord_fixed()
   
   if (is.na(colLabs) == FALSE){
     plt <- plt + ggplot2::xlab(colLabs)
@@ -570,7 +595,7 @@ correlationPlot_2 <- function(mat, rowLabs = NA, colLabs = NA, rowv = NA, colv =
 #' @description the same plot returned by fitLDA() but now callable as a 
 #'     separate function. 
 #'     
-#' @param models models output from fitLDA()
+#' @param models list returned from fitLDA
 #' @param corpus If corpus is NULL, then it will use the original corpus that
 #'     the model was fitted to. Otherwise, compute deconvolved topics from this
 #'     new corpus. Needs to be pixels x genes and nonnegative integer counts. 
@@ -586,7 +611,7 @@ perplexityPlot <- function(models, corpus = NULL, perc.rare.thresh = 0.05){
   pScores <- models$perplexities
   
   out <- lapply(1:length(Ks), function(i) {
-    apply(getBetaTheta(fitted_models[[i]], corpus = corpus)$theta, 2, mean)
+    apply(getBetaTheta(fitted_models[[i]], corpus = corpus, verbose = FALSE)$theta, 2, mean)
   })
   ## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
   numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))
@@ -632,7 +657,7 @@ perplexityPlot <- function(models, corpus = NULL, perc.rare.thresh = 0.05){
                                 sec.axis= ggplot2::sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
     ggplot2::scale_x_continuous(breaks = min(dat$K):max(dat$K)) +
     ggplot2::labs(title = "Fitted model K's vs deconvolved cell-types and perplexity",
-                  subtitle = "models with poor alphas > 1 shaded") +
+                  subtitle = "LDA models with \u03b1 > 1 shaded") +
     ggplot2::theme_classic() +
     ggplot2::theme(
       panel.background = ggplot2::element_blank(),
