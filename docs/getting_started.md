@@ -81,52 +81,10 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1),
                verbose=TRUE)
 ```
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
     ## [1] "Time to fit LDA models was 0.44mins"
     ## [1] "Computing perplexity for each fitted model..."
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available when
-    ## loading
-
-    ## [1] "Time to compute perplexities was 0.17mins"
+    ## [1] "Time to compute perplexities was 0.14mins"
     ## [1] "Getting predicted cell-types at low proportions..."
     ## [1] "Time to compute cell-types at low proportions was 0mins"
     ## [1] "Plotting..."
@@ -261,13 +219,13 @@ ps <- lapply(markers, function(marker) {
               gene = marker,
               # groups = annot,
               # group_cols = rainbow(length(levels(annot))),
-              size = 7, stroke = 0.1,
+              size = 3, stroke = 0.1,
               plotTitle = marker,
               winsorize = 0.05,
               showLegend = TRUE) +
     
     ## remove the pixel "groups", which is the color aesthetic for the pixel borders
-    ggplot2::guides(colour = FALSE) +
+    ggplot2::guides(colour = "none") +
     
     ## change some plot aesthetics
     ggplot2::theme(axis.text.x = ggplot2::element_text(size=0, color = "black", hjust = 0, vjust = 0.5),
@@ -292,21 +250,6 @@ ps <- lapply(markers, function(marker) {
                                                    label.hjust = 0
                                                    ))
 })
-```
-
-    ## Warning: `guides(<scale> = FALSE)` is deprecated. Please use `guides(<scale> =
-    ## "none")` instead.
-
-    ## Warning: `guides(<scale> = FALSE)` is deprecated. Please use `guides(<scale> =
-    ## "none")` instead.
-
-    ## Warning: `guides(<scale> = FALSE)` is deprecated. Please use `guides(<scale> =
-    ## "none")` instead.
-
-    ## Warning: `guides(<scale> = FALSE)` is deprecated. Please use `guides(<scale> =
-    ## "none")` instead.
-
-``` r
 gridExtra::grid.arrange(
   grobs = ps,
   layout_matrix = rbind(c(1, 2),
@@ -386,13 +329,13 @@ ps <- lapply(markers, function(marker) {
               gene = marker,
               # groups = annot,
               # group_cols = rainbow(length(levels(annot))),
-              size = 7, stroke = 0.1,
+              size = 3, stroke = 0.1,
               plotTitle = marker,
               winsorize = 0.05,
               showLegend = TRUE) +
     
     ## remove the pixel "groups", which is the color aesthetic for the pixel borders
-    ggplot2::guides(colour = FALSE) +
+    ggplot2::guides(colour = "none") +
     
     ## change some plot aesthetics
     ggplot2::theme(axis.text.x = ggplot2::element_text(size=0, color = "black", hjust = 0, vjust = 0.5),
@@ -417,21 +360,6 @@ ps <- lapply(markers, function(marker) {
                                                    label.hjust = 0
                                                    ))
 })
-```
-
-    ## Warning: `guides(<scale> = FALSE)` is deprecated. Please use `guides(<scale> =
-    ## "none")` instead.
-
-    ## Warning: `guides(<scale> = FALSE)` is deprecated. Please use `guides(<scale> =
-    ## "none")` instead.
-
-    ## Warning: `guides(<scale> = FALSE)` is deprecated. Please use `guides(<scale> =
-    ## "none")` instead.
-
-    ## Warning: `guides(<scale> = FALSE)` is deprecated. Please use `guides(<scale> =
-    ## "none")` instead.
-
-``` r
 gridExtra::grid.arrange(
   grobs = ps,
   layout_matrix = rbind(c(1, 2),
