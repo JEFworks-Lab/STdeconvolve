@@ -107,7 +107,7 @@ reference.
 
 ``` r
 corMtx_beta <- getCorrMtx(m1 = as.matrix(deconGexp), # the deconvolved cell-type `beta` (celltypes x genes)
-                          m2 = as.matrix(t(mobProxyGexp)), # the reference `beta` (celltypes x genes)
+                          m2 = t(as.matrix(mobProxyGexp)), # the reference `beta` (celltypes x genes)
                           type = "b") # "b" = comparing beta matrices, "t" for thetas
 ```
 
