@@ -59,3 +59,9 @@ More details can be found in the tutorials.
 - [Getting Started with STdeconvolve](https://github.com/JEFworks/STdeconvolve/blob/package/docs/getting_started.md)
 - [Additional Features with STdeconvolve](https://github.com/JEFworks/STdeconvolve/blob/package/docs/additional_features.md)
 - [Annotating deconvolved cell-types](https://github.com/JEFworks/STdeconvolve/blob/package/docs/celltype_annotation.md)
+
+## Preprocessing datasets
+
+For commands to reproduce the preprocessing of certain datasets used in the manuscript, check out:
+
+[https://jef.works/STdeconvolve/](https://jef.works/STdeconvolve/)
