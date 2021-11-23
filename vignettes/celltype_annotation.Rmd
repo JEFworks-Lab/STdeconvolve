@@ -2,10 +2,10 @@
 title: "Annotation of cell types"
 author: "Brendan F. Miller"
 date: "11/22/2021"
-# output: rmarkdown::html_document
-output:
-  md_document:
-    variant: markdown_github
+output: rmarkdown::html_document
+# output:
+#   md_document:
+#     variant: markdown_github
 vignette: >
   %\VignetteIndexEntry{Annotation of cell types}
   %\VignetteEncoding{UTF-8}
@@ -75,7 +75,7 @@ First, we can find the Pearson's correlation between the transcriptional profile
 ```{r, fig.width=6, fig.height=5}
 
 corMtx_beta <- getCorrMtx(m1 = as.matrix(deconGexp), # the deconvolved cell-type `beta` (celltypes x genes)
-                          m2 = as.matrix(t(mobProxyGexp)), # the reference `beta` (celltypes x genes)
+                          m2 = t(as.matrix(mobProxyGexp)), # the reference `beta` (celltypes x genes)
                           type = "b") # "b" = comparing beta matrices, "t" for thetas
 
 correlationPlot(mat = corMtx_beta,
