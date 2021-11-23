@@ -176,7 +176,7 @@ list of gene sets for each tissue layer.
 mobProxyLayerMarkers <- list()
 
 ## make the tissue layers the rows and genes the columns
-gexp <- t(mobProxyGexp)
+gexp <- t(as.matrix(mobProxyGexp))
 
 for (i in seq(length(rownames(gexp)))){
   celltype <- i

@@ -125,7 +125,7 @@ First, let's identify marker genes for each tissue layer based on log2(fold-chan
 mobProxyLayerMarkers <- list()
 
 ## make the tissue layers the rows and genes the columns
-gexp <- t(mobProxyGexp)
+gexp <- t(as.matrix(mobProxyGexp))
 
 for (i in seq(length(rownames(gexp)))){
   celltype <- i
