@@ -1,4 +1,4 @@
-The following code demonstrates how to create the BCL ST input data matrix for STdeconvolve
+The following code demonstrates how to create the BCL ST input data matrix for `STdeconvolve`
 
 ```{r}
 library(STdeconvolve)

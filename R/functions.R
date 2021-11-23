@@ -582,6 +582,7 @@ optimalModel <- function(models, opt) {
 #'     the model was fitted to. Otherwise, compute deconvolved topics from this
 #'     new corpus. Needs to be pixels x genes and nonnegative integer counts. 
 #'     Each row needs at least 1 nonzero entry (default: NULL)
+#' @param perc.filt proportion threshold to remove cell-types in pixels (default: 0.05)
 #' @param clustering Clustering agglomeration method to be used (default: ward.D)
 #' @param dynamic Dynamic tree cutting method to be used (default: hybrid)
 #' @param deepSplit parameter for `clusterTopics` for dynamic tree splitting
@@ -609,6 +610,7 @@ optimalModel <- function(models, opt) {
 #' @export
 buildLDAobject <- function(LDAmodel,
                            corpus = NULL,
+                           perc.filt = 0.05,
                            clustering = "ward.D",
                            dynamic = "hybrid",
                            deepSplit = 4,
@@ -616,7 +618,7 @@ buildLDAobject <- function(LDAmodel,
                            plot = TRUE){
   
   # get beta and theta list object from the LDA model
-  m <- getBetaTheta(LDAmodel, corpus = corpus)
+  m <- getBetaTheta(LDAmodel, corpus = corpus, perc.filt = perc.filt)
   
   # cluster cell-types
   clust <- clusterTopics(beta = m$beta,

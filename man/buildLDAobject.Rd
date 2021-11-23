@@ -9,6 +9,7 @@ for an LDA model in \code{fitLDA} output list.}
 buildLDAobject(
   LDAmodel,
   corpus = NULL,
+  perc.filt = 0.05,
   clustering = "ward.D",
   dynamic = "hybrid",
   deepSplit = 4,
@@ -23,6 +24,8 @@ buildLDAobject(
 the model was fitted to. Otherwise, compute deconvolved topics from this
 new corpus. Needs to be pixels x genes and nonnegative integer counts.
 Each row needs at least 1 nonzero entry (default: NULL)}
+
+\item{perc.filt}{proportion threshold to remove cell-types in pixels (default: 0.05)}
 
 \item{clustering}{Clustering agglomeration method to be used (default: ward.D)}
 
