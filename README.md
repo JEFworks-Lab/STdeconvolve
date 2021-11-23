@@ -58,3 +58,4 @@ More details can be found in the tutorials.
 ## Tutorials
 - [Getting Started with STdeconvolve](https://github.com/JEFworks/STdeconvolve/blob/package/docs/getting_started.md)
 - [Additional Features with STdeconvolve](https://github.com/JEFworks/STdeconvolve/blob/package/docs/additional_features.md)
+- [Annotating deconvolved cell-types](https://github.com/JEFworks/STdeconvolve/blob/package/docs/celltype_annotation.md)

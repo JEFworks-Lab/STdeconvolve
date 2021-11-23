@@ -497,11 +497,11 @@ correlationPlot <- function(mat, colLabs = NA, rowLabs = NA, title = NA, annotat
     # ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1),
     #                               guide = ggplot2::guide_colorbar(title = "correlation", ticks = FALSE, label = FALSE)) +
     
-    ggplot2::scale_y_discrete(breaks = dat$Var2, labels = dat$Var2)
+    ggplot2::scale_y_discrete(breaks = as.character(dat$Var2), labels = as.character(dat$Var2))
     
     ## if correlation values are to be plotted in squares:
     if(annotation){
-      plt <- plt + ggplot2::geom_text(ggplot2::aes(x = Var1, y = Var2, label = format(round(value, 2), nsmall = 2) ))
+      plt <- plt + ggplot2::geom_text(ggplot2::aes(x = as.character(Var1), y = as.character(Var2), label = format(round(value, 2), nsmall = 2) ))
     }
     
     plt <- plt + ggplot2::theme(axis.text.x = ggplot2::element_text(size=12, color = "black", hjust = 0, vjust = 0.5),

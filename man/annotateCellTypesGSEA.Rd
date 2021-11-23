@@ -19,8 +19,8 @@ A list that contains
 \item results: A named list that contains sorted matrices for each deconvolved cell-type.
 The matrix rows are the ground truth cell-types ordered by significance, edge-score, and enrichment score
 of their gene sets in the deconvolved transcriptional profile of a given deconvolved cell-type.
-\item topMatches: a named vector where the names are the deconvolved cell-types and the values
-are the best matched ground truth cell-type.
+\item predictions: a named vector where the names are the deconvolved cell-types and the values
+are the best matched ground truth cell-type that is also positively enriched.
 }
 }
 \description{

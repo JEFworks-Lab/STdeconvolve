@@ -9,7 +9,7 @@ data("mOB") # data for MOB replicate #8 used primarily in the analyses
 ```
 
 ```{r}
-## remove poor pixels and genes and create a gene counts matrix 
+## Remove poor pixels and genes and create a gene counts matrix 
 ## for the remaining 7365 genes and 260 pixels
 mobClean <- cleanCounts(mOB$counts,
                         min.lib.size = 100,
@@ -19,7 +19,9 @@ mobClean <- cleanCounts(mOB$counts,
                         verbose = TRUE,
                         plot=TRUE)
 
-## wrapper around cleanCounts and feature selection of overdispersed genes
+## Wrapper around `cleanCounts`, `restrictCorpus` and additional
+## filtering options for feature selection of overdispersed genes
+## (see Tutorial `additional_features` for more information)
 mobCorpus <- preprocess(t(mOB$counts),
                        alignFile = NA,
                        extractPos = FALSE,

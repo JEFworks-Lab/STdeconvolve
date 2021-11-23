@@ -51,6 +51,7 @@ More details can be found in the tutorials.
 ## Tutorials
 - [Getting Started with STdeconvolve](getting_started.md)
 - [Additional Features with STdeconvolve](additional_features.md)
+- [Annotating deconvolved cell-types](celltype_annotation.md)
 
 ## Installation
 

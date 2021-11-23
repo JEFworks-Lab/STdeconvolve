@@ -390,15 +390,15 @@ preprocess <- function(dat,
 #' \item results: A named list that contains sorted matrices for each deconvolved cell-type.
 #'     The matrix rows are the ground truth cell-types ordered by significance, edge-score, and enrichment score
 #'     of their gene sets in the deconvolved transcriptional profile of a given deconvolved cell-type.
-#' \item topMatches: a named vector where the names are the deconvolved cell-types and the values
-#'     are the best matched ground truth cell-type.
+#' \item predictions: a named vector where the names are the deconvolved cell-types and the values
+#'     are the best matched ground truth cell-type that is also positively enriched.
 #' }
 #'
 #' @export
 annotateCellTypesGSEA <- function(beta, gset, qval = 0.05) {
   
   results <- list()
-  top <- c()
+  top.pos.enrich <- c()
   
   for (i in seq(nrow(beta))){
     celltype <- i
@@ -407,8 +407,7 @@ annotateCellTypesGSEA <- function(beta, gset, qval = 0.05) {
     gsea.results <- liger::iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
     
     # filter for top hits
-    gsea.sig <- gsea.results[gsea.results$q.val < 0.05,]
-    gsea.sig <- gsea.sig[order(gsea.sig$p.val),]
+    gsea.sig <- gsea.results[gsea.results$q.val < qval,]
     
     ## order of selection:
     ## 1. q-val
@@ -416,15 +415,18 @@ annotateCellTypesGSEA <- function(beta, gset, qval = 0.05) {
     ## 3. sscore (Expression Score)
     gsea.sig <- gsea.sig[order(gsea.sig$q.val, rev(gsea.sig$edge), rev(gsea.sig$sscore)), ]
     
-    results[[celltype]] <- gsea.sig
-    top <- append(top, rownames(gsea.sig)[1])
+    results[[ rownames(beta)[celltype] ]] <- gsea.sig
+    
+    ## the top entry that is also positiviely enriched in the txn profile is predicted to be the best matching
+    gsea.sig.pos <- gsea.sig[which(gsea.sig$sscore > 0), ]
+    top.pos.enrich <- append(top.pos.enrich, rownames(gsea.sig.pos)[1])
     
   }
   
-  names(top) <- rownames(beta)
+  names(top.pos.enrich) <- rownames(beta)
   
   return(list(results = results,
-              topMatches = top))
+              predictions = top.pos.enrich))
   
 }
 
