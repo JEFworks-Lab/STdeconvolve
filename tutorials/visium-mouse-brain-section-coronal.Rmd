@@ -1,0 +1,82 @@
+---
+title: "Tutorial of analysing 10x Visium mouse brain section (coronal)"
+author: "Feiyang Huang"
+date: "01/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Motivation
+
+This tutorial demonstrates an analysis workflow using STdeconvolve on the 10x [visium mouse brain section (coronal) dataset](https://www.10xgenomics.com/resources/datasets/mouse-brain-section-coronal-1-standard-1-1-0) 
+
+```{r}
+library(here)
+library(STdeconvolve)
+library(BayesSpace)
+```
+
+# Data
+
+## Set up folder
+```{r}
+if(!file.exists(here("tutorialdata"))){
+      dir.create(here("tutorialdata"))
+  }
+```
+
+## Download data
+```{r}
+if(!file.exists(here("tutorialdata", "V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.tar.gz"))){
+  tar_gz_file <- "http://cf.10xgenomics.com/samples/spatial-exp/1.1.0/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.tar.gz"
+  download.file(tar_gz_file, 
+                destfile = here("tutorialdata", "V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.tar.gz"), 
+                method = "auto")
+}
+untar(tarfile = here("tutorialdata", "V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.tar.gz"), 
+      exdir = here("tutorialdata"))
+
+
+if(!file.exists(here("tutorialdata", "V1_Adult_Mouse_Brain_raw_feature_bc_matrix.tar.gz"))){
+  tar_gz_file <- "http://cf.10xgenomics.com/samples/spatial-exp/1.1.0/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_raw_feature_bc_matrix.tar.gz"
+  download.file(tar_gz_file, 
+                destfile = here("tutorialdata", "V1_Adult_Mouse_Brain_raw_feature_bc_matrix.tar.gz"), 
+                method = "auto")
+}
+untar(tarfile = here("tutorialdata", "V1_Adult_Mouse_Brain_raw_feature_bc_matrix.tar.gz"), 
+      exdir = here("tutorialdata"))
+
+if(!file.exists(here("tutorialdata", "V1_Adult_Mouse_Brain_spatial.tar.gz"))){
+spatial_imaging_data <- "http://cf.10xgenomics.com/samples/spatial-exp/1.1.0/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_spatial.tar.gz"
+  download.file(spatial_imaging_data, 
+                destfile = here("tutorialdata", "V1_Adult_Mouse_Brain_spatial.tar.gz"), 
+                method = "auto")
+}
+untar(tarfile = here("tutorialdata", "V1_Adult_Mouse_Brain_spatial.tar.gz"), 
+      exdir = here("tutorialdata"))
+
+if(!file.exists(here("tutorialdata", "V1_Adult_Mouse_Brain_image.tiff"))){
+  tif_file <- "https://cf.10xgenomics.com/samples/spatial-exp/1.1.0/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_image.tif"
+  download.file(tif_file, 
+                destfile = here("tutorialdata", "V1_Adult_Mouse_Brain_image.tiff"), 
+                method = "auto")
+}
+```
+
+## Read data
+
+Read visium data into a `SingleCellExperiment` object using the `readVisium()` function in the package [BayesSpace](https://www.bioconductor.org/packages/release/bioc/vignettes/BayesSpace/inst/doc/BayesSpace.html)
+
+For our analysis, we are interested in the `counts` matrix 
+
+```{r}
+mouseCoronalSCE <- readVisium(here("tutorialdata"))
+
+counts <- mouseCoronalSCE@assays@data@listData$counts
+pos <- data.frame("x" = mouseCoronalSCE$imagecol, "y" = mouseCoronalSCE$imagerow)
+rownames(pos) <- mouseCoronalSCE$spot
+```
+
