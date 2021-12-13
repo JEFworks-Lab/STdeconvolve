@@ -3,17 +3,21 @@ title: "Tutorial of analysing 10x Visium mouse brain section (coronal)"
 author: "Feiyang Huang"
 date: "01/12/2021"
 output: html_document
+    keep_md: yes
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(dev = 'png',
+                      dpi = 300,
+                      echo = FALSE,
+                      cache = TRUE)
 ```
 
 # Motivation
 
-This tutorial demonstrates an analysis workflow using STdeconvolve on the 10x [visium mouse brain section (coronal) dataset](https://www.10xgenomics.com/resources/datasets/mouse-brain-section-coronal-1-standard-1-1-0) 
+This tutorial demonstrates an analysis workflow using STdeconvolve on the 10x [visium mouse brain section (coronal) dataset](https://www.10xgenomics.com/resources/datasets/mouse-brain-section-coronal-1-standard-1-1-0)
 
-```{r}
+```{r imports}
 library(here)
 library(STdeconvolve)
 library(BayesSpace)
@@ -22,14 +26,16 @@ library(BayesSpace)
 # Data
 
 ## Set up folder
-```{r}
+
+```{r setup-folder}
 if(!file.exists(here("tutorialdata"))){
       dir.create(here("tutorialdata"))
   }
 ```
 
 ## Download data
-```{r}
+
+```{r download-files}
 if(!file.exists(here("tutorialdata", "V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.tar.gz"))){
   tar_gz_file <- "http://cf.10xgenomics.com/samples/spatial-exp/1.1.0/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.tar.gz"
   download.file(tar_gz_file, 
@@ -70,11 +76,11 @@ if(!file.exists(here("tutorialdata", "V1_Adult_Mouse_Brain_image.tiff"))){
 
 Read visium data into a `SingleCellExperiment` object using the `readVisium()` function in the package [BayesSpace](https://www.bioconductor.org/packages/release/bioc/vignettes/BayesSpace/inst/doc/BayesSpace.html)
 
-
 TODO: specify directory structure that BayesSpace expects
 
 For our analysis, we are interested in the `counts` matrix
-```{r}
+
+```{r read-visium}
 mouseCoronalSCE <- readVisium(here("tutorialdata"))
 
 counts <- mouseCoronalSCE@assays@data@listData$counts
@@ -83,7 +89,8 @@ rownames(pos) <- mouseCoronalSCE$spot
 ```
 
 ## filter and pre-process
-```{r}
+
+```{r filter-preprocess}
 filtered <- STdeconvolve::preprocess(dat = t(as.matrix(counts)),
                                              alignFile = NA,
                                              extractPos = FALSE,
@@ -102,19 +109,24 @@ filtered <- STdeconvolve::preprocess(dat = t(as.matrix(counts)),
                                              verbose = TRUE)
 filtered$pos <- pos[rownames(filtered$corpus), ]
 ```
-Try with and without CPM normalization
 
-first without:
-```{r}
+#Analysis
+
+First, we demonstrate a previously published workflow using the [MERINGUE]{https://jef.works/MERINGUE/} package. PCA was used for dimensional reduction and t-SNE was used to generate a 2D embedding. Graph-based clustering is used to infer sub-populations of spatial transcriptomics spots.
+
+```{r pca}
+# CPM normalize
+mat <- normalizeCounts(counts = counts, 
+                       log=FALSE,
+                       verbose=TRUE)
+
 # Dimensionality reduction by PCA on log10 CPM expression values
-# Takes quite a few minutes
-
-pcs.info <- prcomp(t(log10(as.matrix(counts)+1)), center=TRUE)
+pcs.info <- prcomp(t(log10(as.matrix(mat)+1)), center=TRUE)
 nPcs <- 5
 pcs <- pcs.info$x[,1:nPcs]
 ```
 
-```{r}
+```{r tsne-clustering, fig.width=5, fig.height=5}
 # 2D embedding by tSNE
 emb <- Rtsne::Rtsne(pcs,
              is_distance=FALSE,
@@ -130,27 +142,46 @@ com <- getClusters(pcs, k, weight=TRUE)
 # Plot
 par(mfrow=c(1,2), mar=rep(1,4))
 plotEmbedding(emb, 
-              # groups=annot, 
+              groups=com,
               show.legend=TRUE, xlab=NA, ylab=NA,
               verbose=FALSE)
 plotEmbedding(pos, 
-              # groups=annot, 
+              groups=com, 
               cex=1, xlab=NA, ylab=NA,
               verbose=FALSE)
 ```
 
+Now, we demonstrate a workflow with STdeconvolve. We fit a Latent Dirichlet Allocation (LDA) model over the pre-filtered spots and genes. The model assigns spots to a user-specific number of "topics". The "topics" can be interpreted as inferred cell type. 
 
-De-convolve clusters:
-```{r}
-# try to deconvolve 20 clusters, which is the number that 10x Genomics demonstrated in their web applet
-ldas <- fitLDA(as.matrix(filtered$corpus), Ks = 20, plot=TRUE, verbose=TRUE)
-
+```{r fitLDA}
+# try to deconvolve 20 cell types, which is the number that 10x Genomics demonstrated in their web applet
+ldas <- fitLDA(as.matrix(filtered$corpus), Ks = 20, plot=FALSE, verbose=TRUE)
+optLDA <- ldas$models$'20'
 ```
 
+```{r plot-topics, fig.width=5, fig.height=5}
+## extract pixel cell-type proportions (theta) and cell-type gene expression profiles (beta) for the given dataset
+results <- getBetaTheta(optLDA, corpus = as.matrix(filtered$corpus))
+deconProp <- results$theta
+deconGexp <- results$beta*1000
+
+vizAllTopics(deconProp, pos, r=50)
+```
+Visually, we can find some strong correlation between graph-based clustering and LDA deconvolution. 
+- similarity between topic 11 and pink cluster (middle of tissue)
+- red topics and light blue cluster etc
+
+We would like to compare the similarity between STdeconvolve cell types and graph-based clusters
 
 
+Matching de-convolved cell types with clusters
+
+Examples of interesting de-convolved cell types - present in multiple clusters/split one cluster - gradient of cell type in cluster - interesting features corresponding to biological layers
 
 # Apppendix: MERINGUE Functions
+
+Remove for Github version
+
 ```{r}
 normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseudo=1, log=TRUE, verbose = TRUE) {
   if (!any(class(counts) %in% c("dgCMatrix", "dgTMatrix"))) {
@@ -332,6 +363,3 @@ fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=F,un
   }
 }
 ```
-
-
-
