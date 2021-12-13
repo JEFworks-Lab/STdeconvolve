@@ -70,8 +70,10 @@ if(!file.exists(here("tutorialdata", "V1_Adult_Mouse_Brain_image.tiff"))){
 
 Read visium data into a `SingleCellExperiment` object using the `readVisium()` function in the package [BayesSpace](https://www.bioconductor.org/packages/release/bioc/vignettes/BayesSpace/inst/doc/BayesSpace.html)
 
-For our analysis, we are interested in the `counts` matrix 
 
+TODO: specify directory structure that BayesSpace expects
+
+For our analysis, we are interested in the `counts` matrix
 ```{r}
 mouseCoronalSCE <- readVisium(here("tutorialdata"))
 
@@ -79,4 +81,257 @@ counts <- mouseCoronalSCE@assays@data@listData$counts
 pos <- data.frame("x" = mouseCoronalSCE$imagecol, "y" = mouseCoronalSCE$imagerow)
 rownames(pos) <- mouseCoronalSCE$spot
 ```
+
+## filter and pre-process
+```{r}
+filtered <- STdeconvolve::preprocess(dat = t(as.matrix(counts)),
+                                             alignFile = NA,
+                                             extractPos = FALSE,
+                                             selected.genes = NA,
+                                             nTopGenes = NA,
+                                             genes.to.remove = NA, # c("mt-")
+                                             removeAbove = 0.9,
+                                             removeBelow = 0.01,
+                                             min.reads = 100,
+                                             min.lib.size = 100,
+                                             min.detected = 100,
+                                             ODgenes = TRUE,
+                                             nTopOD = 1000,
+                                             od.genes.alpha = 0.01, # be a little more conservative on the OD genes
+                                             gam.k = 5,
+                                             verbose = TRUE)
+filtered$pos <- pos[rownames(filtered$corpus), ]
+```
+Try with and without CPM normalization
+
+first without:
+```{r}
+# Dimensionality reduction by PCA on log10 CPM expression values
+# Takes quite a few minutes
+
+pcs.info <- prcomp(t(log10(as.matrix(counts)+1)), center=TRUE)
+nPcs <- 5
+pcs <- pcs.info$x[,1:nPcs]
+```
+
+```{r}
+# 2D embedding by tSNE
+emb <- Rtsne::Rtsne(pcs,
+             is_distance=FALSE,
+             perplexity=30,
+             num_threads=1,
+             verbose=FALSE)$Y
+rownames(emb) <- rownames(pcs)
+
+# Graph-based cluster detection
+k <- 30
+com <- getClusters(pcs, k, weight=TRUE)
+
+# Plot
+par(mfrow=c(1,2), mar=rep(1,4))
+plotEmbedding(emb, 
+              # groups=annot, 
+              show.legend=TRUE, xlab=NA, ylab=NA,
+              verbose=FALSE)
+plotEmbedding(pos, 
+              # groups=annot, 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+```
+
+
+De-convolve clusters:
+```{r}
+# try to deconvolve 20 clusters, which is the number that 10x Genomics demonstrated in their web applet
+ldas <- fitLDA(as.matrix(filtered$corpus), Ks = 20, plot=TRUE, verbose=TRUE)
+
+```
+
+
+
+
+# Apppendix: MERINGUE Functions
+```{r}
+normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseudo=1, log=TRUE, verbose = TRUE) {
+  if (!any(class(counts) %in% c("dgCMatrix", "dgTMatrix"))) {
+    if (verbose) {
+      message("Converting to sparse matrix ...")
+    }
+    counts <- Matrix::Matrix(counts, sparse = TRUE)
+  }
+  if (verbose) {
+    message("Normalizing matrix with ", ncol(counts), " cells and ", nrow(counts), " genes.")
+  }
+  if(is.null(normFactor)) {
+    if (verbose) {
+      message('normFactor not provided. Normalizing by library size.')
+    }
+    normFactor <- Matrix::colSums(counts)
+  }
+  if (verbose) {
+    message(paste0("Using depthScale ", depthScale))
+  }
+  counts <- Matrix::t(Matrix::t(counts)/normFactor)
+  counts <- counts * depthScale
+  if(log) {
+    if (verbose) {
+      message("Log10 transforming with pseudocount ", pseudo,".")
+    }
+    counts <- log10(counts + pseudo)
+  }
+
+  return(counts)
+}
+
+getClusters <- function (pcs, k,
+                         method = igraph::cluster_louvain,
+                         weight = FALSE,
+                         verbose = FALSE,
+                         details = FALSE) {
+  if (verbose) {
+    print("finding approximate nearest neighbors ...")
+  }
+  # nearest neighbors in PC space
+  nn = RANN::nn2(pcs, k = k) ## KNN
+  names(nn) <- c('idx', 'dists')
+
+  if(weight) {
+    if(verbose) {
+      print('using transcriptional distance weighting')
+    }
+    weight <- 1/(1+ as.vector(nn$dists))
+  } else {
+    if(verbose) {
+      print('using equal weighting')
+    }
+    weight <- rep(1, nrow(pcs))
+  }
+
+  if (verbose) {
+    print("calculating clustering ...")
+  }
+  nn.df = data.frame(from = rep(1:nrow(nn$idx), k),
+                     to = as.vector(nn$idx),
+                     weight = weight
+  )
+  g <- igraph::graph_from_data_frame(nn.df, directed = FALSE)
+  g <- igraph::simplify(g)
+  km <- method(g)
+  if (verbose) {
+    mod <- igraph::modularity(km)
+    if (mod < 0.3) {
+      print("WARNING")
+    }
+    print(paste0("graph modularity: ", mod))
+  }
+  com <- km$membership
+  names(com) <- rownames(pcs)
+  com <- factor(com)
+  if (verbose) {
+    print("identifying cluster membership ...")
+    print(table(com))
+  }
+  if (details) {
+    return(list(com = com, mod = mod, g = g))
+  }
+  else {
+    return(com)
+  }
+}
+
+
+plotEmbedding <- function(emb, groups=NULL, colors=NULL, cex=0.6, alpha=0.4, gradientPalette=NULL, zlim=NULL,
+                          s=1, v=0.8, min.group.size=1, show.legend=FALSE, mark.clusters=FALSE, mark.cluster.cex=2,
+                          shuffle.colors=FALSE, legend.x='topright', gradient.range.quantile=0.95, verbose=FALSE,
+                          unclassified.cell.color='lightgrey', group.level.colors=NULL, xlab=NA, ylab=NA, ...) {
+
+  if(!is.null(colors)) {
+    ## use clusters information
+    if(!all(rownames(emb) %in% names(colors))) { warning("provided cluster vector doesn't list colors for all of the cells; unmatched cells will be shown in gray. ")}
+    if(all(areColors(colors))) {
+      if(verbose) cat("using supplied colors as is\n")
+      cols <- colors[match(rownames(emb),names(colors))]; cols[is.na(cols)] <- unclassified.cell.color;
+      names(cols) <- rownames(emb)
+    } else {
+      if(is.numeric(colors)) { # treat as a gradient
+        if(verbose) cat("treating colors as a gradient")
+        if(is.null(gradientPalette)) { # set up default gradients
+          if(all(sign(colors)>=0)) {
+            gradientPalette <- colorRampPalette(c('grey','red'))(100)
+          } else {
+            gradientPalette <- colorRampPalette(c("blue", "grey", "red"))(100)
+          }
+        }
+        cols <- map2col(x=colors, pal=gradientPalette, limits=zlim)
+        names(cols) <- rownames(emb)
+      } else {
+        stop("colors argument must be a cell-named vector of either character colors or numeric values to be mapped to a gradient")
+      }
+    }
+  } else {
+    if(!is.null(groups)) {
+      if(min.group.size>1) { groups[groups %in% levels(groups)[unlist(tapply(groups,groups,length))<min.group.size]] <- NA; groups <- droplevels(groups); }
+      groups <- as.factor(groups)[rownames(emb)]
+      if(verbose) cat("using provided groups as a factor\n")
+      
+      
+      #FIXME: add back these functionality after grouping with deconvolved clusters
+      # factor.mapping = TRUE;
+      
+      ## set up a rainbow color on the factor
+      factor.colors <- fac2col(groups,s=s,v=v,shuffle=shuffle.colors,min.group.size=min.group.size,unclassified.cell.color=unclassified.cell.color,level.colors=group.level.colors,return.details=T)
+      cols <- factor.colors$colors;
+      names(cols) <- rownames(emb)
+    } else {
+      cols <- rep(unclassified.cell.color, nrow(emb))
+      names(cols) <- rownames(emb)
+    }
+  }
+
+  plot(emb,col=adjustcolor(cols,alpha.f=alpha),cex=cex,pch=19,axes=F,xlab=xlab,ylab=ylab, ...); box();
+  if(mark.clusters) {
+    if(!is.null(groups)) {
+      cent.pos <- do.call(rbind,tapply(1:nrow(emb),groups,function(ii) apply(emb[ii,,drop=F],2,median)))
+      cent.pos <- na.omit(cent.pos);
+      text(cent.pos[,1],cent.pos[,2],labels=rownames(cent.pos),cex=mark.cluster.cex)
+    }
+  }
+  if(show.legend) {
+    
+    #FIXME add back functionality
+    # if(factor.mapping) {
+    #   legend(x=legend.x,pch=rep(19,length(levels(groups))),bty='n',col=factor.colors$palette,legend=names(factor.colors$palette))
+    # }
+    
+  }
+}
+
+
+# Helper function to translate factor into colors
+fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=F,unclassified.cell.color='lightgrey',level.colors=NULL) {
+  x <- as.factor(x);
+  if(min.group.size>1) {
+    x <- factor(x,exclude=levels(x)[unlist(tapply(rep(1,length(x)),x,length))<min.group.size])
+    x <- droplevels(x)
+  }
+  if(is.null(level.colors)) {
+    col <- rainbow(length(levels(x)),s=s,v=v);
+  } else {
+    col <- level.colors[1:length(levels(x))];
+  }
+  names(col) <- levels(x);
+
+  if(shuffle) col <- sample(col);
+
+  y <- col[as.integer(x)]; names(y) <- names(x);
+  y[is.na(y)] <- unclassified.cell.color;
+  if(return.details) {
+    return(list(colors=y,palette=col))
+  } else {
+    return(y);
+  }
+}
+```
+
+
 
