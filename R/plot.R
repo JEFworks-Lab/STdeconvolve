@@ -509,8 +509,17 @@ vizGeneCounts <- function(df, gene,
       axis.ticks = ggplot2::element_blank(),
       axis.title.x = ggplot2::element_blank(),
       axis.title.y = ggplot2::element_blank(),
-      panel.background = ggplot2::element_blank())
-  # theme_classic()
+      panel.background = ggplot2::element_blank()) + 
+    
+    ggplot2::guides(fill = ggplot2::guide_colorbar(title = "Counts",
+                                                   title.position = "left",
+                                                   title.hjust = 0.5,
+                                                   ticks.colour = "black",
+                                                   ticks.linewidth = 2,
+                                                   frame.colour= "black",
+                                                   frame.linewidth = 2,
+                                                   label.hjust = 0
+    ))
   
   if (showLegend == FALSE) {
     # p <- p + ggplot2::guides(fill=FALSE)
