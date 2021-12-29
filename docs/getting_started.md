@@ -52,21 +52,27 @@ corpus <- restrictCorpus(counts,
                          verbose = TRUE)
 ```
 
-    ## [1] "Removing 124 genes present in 100% or more of pixels..."
-    ## [1] "14704 genes remaining..."
-    ## [1] "Removing 3009 genes present in 5% or less of pixels..."
-    ## [1] "11695 genes remaining..."
-    ## [1] "Restricting to overdispersed genes with alpha = 0.05..."
-    ## [1] "Calculating variance fit ..."
-    ## [1] "Using gam with k=5..."
-    ## [1] "232 overdispersed genes ... "
+    ## Removing 124 genes present in 100% or more of pixels...
 
-![](getting_started_files/figure-markdown_github/getting_started_feature-2.png)
+    ## 14704 genes remaining...
 
-    ##  Using top 1000 overdispersed genes. 
+    ## Removing 3009 genes present in 5% or less of pixels...
+
+    ## 11695 genes remaining...
+
+    ## Restricting to overdispersed genes with alpha = 0.05...
+
+    ## Calculating variance fit ...
+
+    ## Using gam with k=5...
+
+    ## 232 overdispersed genes ...
+
+    ##  Using top 1000 overdispersed genes.
+
     ##  number of top overdispersed genes available: 232
 
-![](getting_started_files/figure-markdown_github/getting_started_feature-3.png)
+![](getting_started_files/figure-markdown_github/getting_started_feature-2.png)![](getting_started_files/figure-markdown_github/getting_started_feature-3.png)
 
 `STdeconvolve` then applies latent Dirichlet allocation (LDA), a
 generative statistical model commonly used in natural language
@@ -81,13 +87,17 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1),
                verbose=TRUE)
 ```
 
-    ## [1] "Time to fit LDA models was 0.44mins"
-    ## [1] "Computing perplexity for each fitted model..."
+    ## Time to fit LDA models was 0.55 mins
 
-    ## [1] "Time to compute perplexities was 0.16mins"
-    ## [1] "Getting predicted cell-types at low proportions..."
-    ## [1] "Time to compute cell-types at low proportions was 0mins"
-    ## [1] "Plotting..."
+    ## Computing perplexity for each fitted model...
+
+    ## Time to compute perplexities was 0.24 mins
+
+    ## Getting predicted cell-types at low proportions...
+
+    ## Time to compute cell-types at low proportions was 0 mins
+
+    ## Plotting...
 
 ![](getting_started_files/figure-markdown_github/getting_started_opt-1.png)
 
@@ -142,6 +152,39 @@ vizAllTopics(deconProp, pos,
     ## Plotting scatterpies for 260 pixels with 8 cell-types...this could take a while if the dataset is large.
 
 ![](getting_started_files/figure-markdown_github/getting_started_proportions-1.png)
+
+For faster plotting, we can visualize the pixel proportions of a single
+cell-type separately using `vizTopic()`:
+
+``` r
+vizTopic(theta = deconProp, pos = pos, topic = "5", plotTitle = "X5",
+         size = 5, stroke = 1, alpha = 0.5,
+         low = "white",
+         high = "red")
+```
+
+![](getting_started_files/figure-markdown_github/getting_started_proportions_2-1.png)
+
+We can loop through all cell-types to visualize them all together:
+
+``` r
+ps <- lapply(colnames(deconProp), function(celltype) {
+  
+  vizTopic(theta = deconProp, pos = pos, topic = celltype, plotTitle = paste0("X", celltype),
+         size = 2, stroke = 1, alpha = 0.5,
+         low = "white",
+         high = "red")
+  
+})
+gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2, 3),
+                        c(4, 5, 6),
+                        c(7, 8, 9))
+)
+```
+
+![](getting_started_files/figure-markdown_github/getting_started_proportions_3-1.png)
 
 We can also visualize the top marker genes for each deconvolved
 cell-type. We will use deconvolved cell-types `5` and `1` as examples

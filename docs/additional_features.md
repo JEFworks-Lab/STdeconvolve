@@ -43,17 +43,6 @@ poor pixels or genes itself.
 The second is `preprocess()`, which is a wrapper function and allows for
 more feature selection options.
 
-``` r
-library(STdeconvolve)
-```
-
-``` r
-data(mOB)
-pos <- mOB$pos
-cd <- mOB$counts
-annot <- mOB$annot
-```
-
 In general, `preprocess()` includes options for:
 
 -   a step to remove poor pixels and genes,
@@ -91,6 +80,20 @@ The order of filtering options in which they occur in `preprocess()`:
 
 7.  Choice to use the top overdispersed genes based on -log10(adjusted
     p-value)
+
+To demonstrate, let’s use the mouse olfactory bulb (mOB) dataset
+provided with `STdeconvolve`:
+
+``` r
+library(STdeconvolve)
+```
+
+``` r
+data(mOB)
+pos <- mOB$pos
+cd <- mOB$counts
+annot <- mOB$annot
+```
 
 ``` r
 mobCorpus1 <- preprocess(t(cd),
@@ -140,7 +143,7 @@ mobCorpus1 <- preprocess(t(cd),
 
     ## 171 overdispersed genes ...
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-15-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-2-1.png)
 
     ## - Using top 100 overdispersed genes.
 
@@ -152,11 +155,20 @@ mobCorpus1 <- preprocess(t(cd),
 
     ## Preprocess complete.
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-15-2.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-2-2.png)
 
 ``` r
 mobCorpus1$pos <- pos[rownames(mobCorpus1$corpus), ] # because positions were not available in the counts matrix itself, append after.
 ```
+
+Let’s check out the different objects stored in the output list
+`mobCorpus1`:
+
+`$slm` is the corpus as a simple triplet matrix.
+
+`$corpus` is the corpus as a matrix.
+
+`$pos` is a matrix of the x and y coordinates of the pixels.
 
 ``` r
 mobCorpus1$slm
@@ -196,8 +208,15 @@ print(mobCorpus1$pos[1:10,])
     ## ACCTGACAGCGGAAACTT  9.039 13.047
     ## ACGGAAATCAGTGGTATT 20.959 15.073
 
-preprocess can also be used to build a corpus using a specific list of
-genes:
+`preprocess()` can also be used to build a corpus using a specific list
+of genes. As an example, we will take the cleaned count matrix of the
+entire transcriptome of the mOB dataset and filter for just the
+overdispersed genes. We can use this vector of genes to select for only
+these genes in the corpus. (Note that this is for demonstration
+purposes. Overdispersed gene can be obtained in `preprocess()` by
+setting the parameter `ODgenes = TRUE`. In reality, one may already have
+a list of marker genes in mind and can select for these genes
+specifically).
 
 ``` r
 ## get list of genes of interest, for an example.
@@ -207,7 +226,7 @@ counts <- cleanCounts(counts = cd,
                       min.detected = 1)
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-17-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-4-1.png)
 
 ``` r
 odGenes <- getOverdispersedGenes(as.matrix(counts),
@@ -264,7 +283,7 @@ mobCorpus2 <- preprocess(t(cd),
 
     ## Preprocess complete.
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-17-2.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-4-2.png)
 
 # Selecting Optimal K
 
@@ -304,9 +323,9 @@ ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
                plot=TRUE, verbose=FALSE)
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-18-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-5-1.png)
 
-While technically the lowest perplexity computed is when K=18,
+While technically the lowest perplexity computed here is when K=18,
 perplexity appears to stabilize and decreases gradually after K=7.
 
 We could use the “knee” metric (maximum second derivative) to determine
@@ -426,7 +445,7 @@ plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-21-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-8-1.png)
 
 Scatterpies can be labeled as belonging to different groups and their
 borders colored to designate the group membership.
@@ -456,7 +475,7 @@ plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-22-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-9-1.png)
 
 Color scatter pies based on group membership (let’s use the coarse cell
 layers of the MOB)
@@ -484,7 +503,7 @@ plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-23-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-10-1.png)
 
 Can filter the `theta` matrix to only visualize certain cell-types:
 
@@ -497,20 +516,20 @@ colnames(m) <- c("3", "12", "Other")
 vizAllTopics(theta = m,
              pos = p,
              topicOrder=seq(ncol(m)),
-             topicCols=c(transparentCol("red", percent = 50), # BONUS: can make colors transparent if overlaying on top of an image
-                         "black",
-                         "white"), 
+             # BONUS: `transparentCol` can make colors transparent, perhaps if overlaying scatterpies on top of an H&E image
+             topicCols=c(transparentCol("red", percent = 50), "black", "white"), # colors for cell-type 3, 12, and "other"
              groups = rep("0", dim(m)[1]),
-             group_cols = c("0" = "white"), # make scatterpie borders white to focus directly on the cell-type.
+             group_cols = c("0" = "white"), # make scatterpie borders white to only show the cell-type proportions.
              r = 0.4,
              lwd = 0.1,
              showLegend = TRUE,
-             overlay = NA) # BONUS: plot the scatterpies on top of a raster image of the H&E tissue, if this argument is equal to the rgb matrix of the image
+             # BONUS: plot the scatterpies on top of a raster image of the H&E tissue, if this argument is equal to the rgb matrix representing the image
+             overlay = NA) 
 ```
 
     ## Plotting scatterpies for 260 pixels with 3 cell-types...this could take a while if the dataset is large.
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-24-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-11-1.png)
 
 ## Faster plotting via `vizTopic`
 
@@ -529,10 +548,10 @@ vizTopic(theta = m, pos = p, topic = "12", plotTitle = "X12",
          high = "red")
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-25-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-12-1.png)
 
 Again, we can also label the coarse cell layers for which the pixels
-were assigned to
+were assigned to.
 
 ``` r
 m <- deconProp
@@ -546,7 +565,7 @@ vizTopic(theta = m, pos = p, topic = "12", plotTitle = "X12",
          high = "red")
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-26-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-13-1.png)
 
 One last note: `vizAllTopics()` and `vizTopic()` return `ggplot2`
 objects, and so additional `ggplot2` aesthetics and themes can be added
