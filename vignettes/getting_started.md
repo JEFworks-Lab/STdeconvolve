@@ -1,45 +1,48 @@
----
-title: "Getting Started with STdeconvolve"
-author: "Jean Fan and Brendan Miller"
-date: "11/22/2021"
-output: rmarkdown::html_document
-# output:
-#   md_document:
-#     variant: markdown_github
-vignette: >
-  %\VignetteIndexEntry{Getting Started with STdeconvolve}
-  %\VignetteEncoding{UTF-8}
-  %\VignetteEngine{knitr::rmarkdown}
----
+In this tutorial, we will walk through some of the main functionalities
+of `STdeconvolve`.
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
-In this tutorial, we will walk through some of the main functionalities of `STdeconvolve`. 
-
-```{r, getting_started_package}
+``` r
 library(STdeconvolve)
 ```
 
-Given a counts matrix from pixel-resolution spatial transcriptomics data where each spatially resolved measurement may represent mixtures from potentially multiple cell-types, STdeconvolve infers the putative transcriptomic profiles of cell-types and their proportional representation within each multi-cellular spatially resolved pixel. Such a pixel-resolution spatial transcriptomics dataset of the mouse olfactory bulb is built in and can be loaded. 
+Given a counts matrix from pixel-resolution spatial transcriptomics data
+where each spatially resolved measurement may represent mixtures from
+potentially multiple cell-types, STdeconvolve infers the putative
+transcriptomic profiles of cell-types and their proportional
+representation within each multi-cellular spatially resolved pixel. Such
+a pixel-resolution spatial transcriptomics dataset of the mouse
+olfactory bulb is built in and can be loaded.
 
-```{r, data}
+``` r
 data(mOB)
 pos <- mOB$pos ## x and y positions of each pixel
 cd <- mOB$counts ## matrix of gene counts in each pixel
 annot <- mOB$annot ## annotated tissue layers assigned to each pixel
 ```
 
-`STdeconvolve` first feature selects for genes most likely to be relevant for distinguishing between cell-types by looking for highly overdispersed genes across ST pixels. Pixels with too few genes or genes with too few reads can also be removed. 
+`STdeconvolve` first feature selects for genes most likely to be
+relevant for distinguishing between cell-types by looking for highly
+overdispersed genes across ST pixels. Pixels with too few genes or genes
+with too few reads can also be removed.
 
-```{r, getting_started_feature, fig.width=6, fig.height=3}
+``` r
 ## remove pixels with too few genes
 counts <- cleanCounts(counts = cd,
                       min.lib.size = 100,
                       min.reads = 1,
                       min.detected = 1,
                       verbose = TRUE)
+```
+
+    ## Converting to sparse matrix ...
+
+    ## Filtering matrix with 262 cells and 15928 genes ...
+
+    ## Resulting matrix has 260 cells and 14828 genes
+
+![](getting_started_files/figure-markdown_github/getting_started_feature-1.png)
+
+``` r
 ## feature select for genes
 corpus <- restrictCorpus(counts,
                          removeAbove = 1.0,
@@ -49,9 +52,34 @@ corpus <- restrictCorpus(counts,
                          verbose = TRUE)
 ```
 
-`STdeconvolve` then applies latent Dirichlet allocation (LDA), a generative statistical model commonly used in natural language processing, to discover `K` latent cell-types. `STdeconvolve` fits a range of LDA models to inform the choice of an optimal `K`.  
+    ## Removing 124 genes present in 100% or more of pixels...
 
-```{r, getting_started_opt, fig.width=6, fig.height=4}
+    ## 14704 genes remaining...
+
+    ## Removing 3009 genes present in 5% or less of pixels...
+
+    ## 11695 genes remaining...
+
+    ## Restricting to overdispersed genes with alpha = 0.05...
+
+    ## Calculating variance fit ...
+
+    ## Using gam with k=5...
+
+    ## 232 overdispersed genes ...
+
+    ##  Using top 1000 overdispersed genes.
+
+    ##  number of top overdispersed genes available: 232
+
+![](getting_started_files/figure-markdown_github/getting_started_feature-2.png)![](getting_started_files/figure-markdown_github/getting_started_feature-3.png)
+
+`STdeconvolve` then applies latent Dirichlet allocation (LDA), a
+generative statistical model commonly used in natural language
+processing, to discover `K` latent cell-types. `STdeconvolve` fits a
+range of LDA models to inform the choice of an optimal `K`.
+
+``` r
 ## Note: the input corpus needs to be an integer count matrix of pixels x genes
 ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1),
                perc.rare.thresh = 0.05,
@@ -59,13 +87,40 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1),
                verbose=TRUE)
 ```
 
+    ## Time to fit LDA models was 0.55 mins
+
+    ## Computing perplexity for each fitted model...
+
+    ## Time to compute perplexities was 0.24 mins
+
+    ## Getting predicted cell-types at low proportions...
+
+    ## Time to compute cell-types at low proportions was 0 mins
+
+    ## Plotting...
+
+![](getting_started_files/figure-markdown_github/getting_started_opt-1.png)
+
 In this example, we will use the model with the lowest model perplexity.
 
-The shaded region indicates where a fitted model for a given K had an `alpha` > 1. `alpha` is an LDA parameter that is solved for during model fitting and corresponds to the shape parameter of a symmetric Dirichlet distribution. In the model, this Dirichlet distribution describes the cell-type proportions in the pixels. A symmetric Dirichlet with alpha > 1 would lead to more uniform cell-type distributions in the pixels and difficulty identifying distinct cell-types. Instead, we want models with alphas < 1, resulting in sparse distributions where only a few cell-types are represented in a given pixel. 
+The shaded region indicates where a fitted model for a given K had an
+`alpha` \> 1. `alpha` is an LDA parameter that is solved for during
+model fitting and corresponds to the shape parameter of a symmetric
+Dirichlet distribution. In the model, this Dirichlet distribution
+describes the cell-type proportions in the pixels. A symmetric Dirichlet
+with alpha \> 1 would lead to more uniform cell-type distributions in
+the pixels and difficulty identifying distinct cell-types. Instead, we
+want models with alphas \< 1, resulting in sparse distributions where
+only a few cell-types are represented in a given pixel.
 
-The resulting `theta` matrix can be interpreted as the proportion of each deconvolved cell-type across each spatially resolved pixel. The resulting `beta` matrix can be interpreted as the putative gene expression profile for each deconvolved cell-type normalized to a library size of 1. This `beta` matrix can be scaled by a depth factor (ex. 1000) for interpretability. 
+The resulting `theta` matrix can be interpreted as the proportion of
+each deconvolved cell-type across each spatially resolved pixel. The
+resulting `beta` matrix can be interpreted as the putative gene
+expression profile for each deconvolved cell-type normalized to a
+library size of 1. This `beta` matrix can be scaled by a depth factor
+(ex. 1000) for interpretability.
 
-```{r, getting_started_model}
+``` r
 ## select model with minimum perplexity
 optLDA <- optimalModel(models = ldas, opt = "min")
 
@@ -75,32 +130,44 @@ optLDA <- optimalModel(models = ldas, opt = "min")
 results <- getBetaTheta(optLDA,
                         perc.filt = 0.05,
                         betaScale = 1000)
+```
 
+    ## Filtering out cell-types in pixels that contribute less than 0.05 of the pixel proportion.
+
+``` r
 deconProp <- results$theta
 deconGexp <- results$beta
 ```
 
-We can now visualize the proportion of each deconvolved cell-type across the original spatially resolved pixels. 
+We can now visualize the proportion of each deconvolved cell-type across
+the original spatially resolved pixels.
 
-```{r, getting_started_proportions, fig.width=8, fig.height=4}
+``` r
 vizAllTopics(deconProp, pos, 
              groups = annot, 
              group_cols = rainbow(length(levels(annot))),
              r=0.4)
 ```
 
-For faster plotting, we can visualize the pixel proportions of a single cell-type separately using `vizTopic()`:
+    ## Plotting scatterpies for 260 pixels with 8 cell-types...this could take a while if the dataset is large.
 
-```{r, getting_started_proportions_2, fig.width=8, fig.height=4}
+![](getting_started_files/figure-markdown_github/getting_started_proportions-1.png)
+
+For faster plotting, we can visualize the pixel proportions of a single
+cell-type separately using `vizTopic()`:
+
+``` r
 vizTopic(theta = deconProp, pos = pos, topic = "5", plotTitle = "X5",
          size = 5, stroke = 1, alpha = 0.5,
          low = "white",
          high = "red")
 ```
 
+![](getting_started_files/figure-markdown_github/getting_started_proportions_2-1.png)
+
 We can loop through all cell-types to visualize them all together:
 
-```{r, getting_started_proportions_3, fig.width=12, fig.height=8}
+``` r
 ps <- lapply(colnames(deconProp), function(celltype) {
   
   vizTopic(theta = deconProp, pos = pos, topic = celltype, plotTitle = paste0("X", celltype),
@@ -117,11 +184,17 @@ gridExtra::grid.arrange(
 )
 ```
 
+![](getting_started_files/figure-markdown_github/getting_started_proportions_3-1.png)
 
+We can also visualize the top marker genes for each deconvolved
+cell-type. We will use deconvolved cell-types `5` and `1` as examples
+here. We will define the top marker genes here as genes highly expressed
+in the deconvolved cell-type (count \> 5) that also have the top 4
+highest log2(fold change) when comparing the deconvolved cell-type’s
+expression profile to the average of all other deconvolved cell-types’
+expression profiles.
 
-We can also visualize the top marker genes for each deconvolved cell-type. We will use deconvolved cell-types `5` and `1` as examples here. We will define the top marker genes here as genes highly expressed in the deconvolved cell-type (count > 5) that also have the top 4 highest log2(fold change) when comparing the deconvolved cell-type's expression profile to the average of all other deconvolved cell-types' expression profiles. 
-
-```{r, getting_started_expression_1, fig.width=5, fig.height=3}
+``` r
 celltype <- 5
 ## highly expressed in cell-type of interest
 highgexp <- names(which(deconGexp[celltype,] > 5))
@@ -175,9 +248,11 @@ plt <- ggplot2::ggplot(data = dat) +
 plt
 ```
 
+![](getting_started_files/figure-markdown_github/getting_started_expression_1-1.png)
+
 Now lets visualize the spatial expression of the top 4 genes.
 
-```{r, getting_started_expression_2, fig.width=8, fig.height=5}
+``` r
 ## visualize spatial expression of top genes
 df <- merge(as.data.frame(pos), 
             as.data.frame(t(as.matrix(counts[markers,]))), 
@@ -225,9 +300,11 @@ gridExtra::grid.arrange(
 )
 ```
 
+![](getting_started_files/figure-markdown_github/getting_started_expression_2-1.png)
+
 And now for cell-type 1:
 
-```{r, getting_started_expression_3, fig.width=5, fig.height=3}
+``` r
 celltype <- 1
 ## highly expressed in cell-type of interest
 highgexp <- names(which(deconGexp[celltype,] > 5))
@@ -281,9 +358,11 @@ plt <- ggplot2::ggplot(data = dat) +
 plt
 ```
 
+![](getting_started_files/figure-markdown_github/getting_started_expression_3-1.png)
+
 And the spatial expression of the top genes:
 
-```{r, getting_started_expression_4, fig.width=8, fig.height=5}
+``` r
 ## visualize spatial expression of top genes
 df <- merge(as.data.frame(pos), 
             as.data.frame(t(as.matrix(counts[markers,]))), 
@@ -330,3 +409,5 @@ gridExtra::grid.arrange(
                         c(3, 4))
 )
 ```
+
+![](getting_started_files/figure-markdown_github/getting_started_expression_4-1.png)
