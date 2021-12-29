@@ -12,27 +12,59 @@ vignette: >
   %\VignetteIndexEntry{Additional Features with STdeconvolve}
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-In this tutorial, we will describe additional functionalities and advanced features of `STdeconvolve`. 
+In this tutorial, we will describe additional functionality and features
+of `STdeconvolve`.
 
-# Preprocessing
+These are organized as additional options for **pre-processing and
+feature selection of genes**, and useful ways to **visualize the
+predicted cell-type pixel proportions**.
 
-For LDA model fitting, STdeconvolve requires a "corpus of documents", which is represented as a pixel (rows) x feature (columns) matrix of non-negative integer gene counts. To effectively deconvolve latent cell-types, the features in the corpus should be limited to genes that are variable across cell-types. Without prior knowledge of cell-types and their marker genes, one could look for over dispersed genes across the pixels, assuming that the underlying cell-types are present at variable proportions.
+# Pre-processing
 
-Additionally, it is useful to reduce the number of features in the corpus to those which are the most informative, to not only improve deconvolution but also increase speed of model fitting. To this end, one may wish to remove genes that are present in most or all pixels, or occur in only a small fraction of the pixels. This is because LDA identifies latent topics, or cell-types, by looking for sets of genes that occur frequently together in pixels. Therefore, removing genes that are present in most or all pixels will help restrict to gene that are cell-type specific, assuming that cell-types are not present across all pixels. Conversely, genes that are present in only a few pixels could represent noise and may not actually represent robust cell-type specific signatures.
+For LDA model fitting, `STdeconvolve` requires a "corpus of documents",
+which is represented as a pixel (rows) x feature/gene (columns) matrix
+of non-negative integer gene counts. To effectively deconvolve latent
+cell-types, the features in the corpus should be limited to genes that
+are variable across cell-types. Without prior knowledge of cell-types
+and their marker genes, one could look for **overdispersed genes**
+across the pixels, assuming that the underlying cell-types are present
+at variable proportions.
 
-As previously mentioned, a set of marker genes may be known a priori and a user may want to include these in the final corpus.
+It is useful to reduce the number of features in the corpus to those
+which are the most informative, to improve deconvolution and increase
+speed of model fitting. **Removing genes that are present in most or all
+pixels** will help restrict to genes that are cell-type specific,
+assuming that cell-types are variable across pixels. Conversely, **genes
+that are present in only a few pixels may not actually represent robust
+cell-type specific signatures**.
 
-We include 2 different functions with STdeconvolve.
+As previously mentioned, a set of marker genes may be known *a priori*
+and a user may want to include these in the final corpus.
 
-The first is `restrictCorpus()`, which is highlighted in the `getting_started` tutorial. This function first feature selects for over dispersed genes in the corpus and then allows a user to restrict the over dispersed genes to those present in less than or more than specified fractions of pixels in the dataset. This function does not filter for poor pixels or genes itself.
+We include 2 different functions with `STdeconvolve`:
 
-The second is `preprocess()`, which is a larger wrapper function and allows for a much greater and specified range of filtered and feature selection.
+1.  `restrictCorpus()`
+
+The first is `restrictCorpus()`, which is highlighted in the
+`getting_started` tutorial. This function first feature selects for
+overdispersed genes in the corpus and then allows a user to restrict the
+overdispersed genes to those present in less than or more than specified
+fractions of pixels in the dataset. This function does not filter for
+poor pixels or genes itself.
+
+2.  `preprocess()`
+
+The second is `preprocess()`, which is a wrapper function and allows for
+more feature selection options.
 
 ```{r}
 library(STdeconvolve)
@@ -45,19 +77,43 @@ cd <- mOB$counts
 annot <- mOB$annot
 ```
 
-In general, `preprocess()` includes a step to remove poor pixels and genes, allows one to select for specific genes to include or remove, allows an option to select for over dispersed genes, and options to remove top expressed genes, or genes present in less than or more than specified fractions of pixels in the dataset. Further, it returns an organized list that contains the filtered corpus, and the positions of the pixels retained in the filtered corpus if the information is present in the pixel names originally (for example, if the name of a pixel is in the format "XxY"). Otherwise this can be appended after.
+In general, `preprocess()` includes options for:
 
-Lastly, `preprocess()` can take as input a pixel (row) x gene (columns) matrix or a path to the file.
+-   a step to remove poor pixels and genes,
 
-Order of filtering options in which they occur:
-              1. Selection to use specific genes only
-              2. `cleanCounts` to remove poor pixels and genes
-              3. Remove top expressed genes in matrix
-              4. Remove specific genes based on grepl pattern matching
-              5. Remove genes that appear in more/less than a percentage of pixels
-              6. Use the over dispersed genes computed from the remaining genes
-                 after filtering steps 1-5 (if selected)
-              7. Choice to use the top over dispersed genes based on -log10(p.adj)
+-   select specific genes to include or remove,
+
+-   select for overdispersed genes,
+
+-   and options to remove top expressed genes, or genes present in less
+    than or more than specified fractions of pixels in the dataset.
+
+Further, it returns a list object that contains the filtered corpus, and
+the positions of the pixels retained in the filtered corpus if the
+information is present in the pixel names originally (for example, if
+the name of a pixel is in the format "XxY"). Otherwise these pixel
+positions can be appended after.
+
+Lastly, `preprocess()` can take as input a pixel (row) x gene (columns)
+matrix or a path to the file.
+
+The order of filtering options in which they occur in `preprocess()`:
+
+1.  Option to use specific genes only
+
+2.  `cleanCounts` to remove poor pixels and genes
+
+3.  Remove top expressed genes in matrix
+
+4.  Remove specific genes based on pattern matching
+
+5.  Remove genes that appear in more/less than a percentage of pixels
+
+6.  Option to use the overdispersed genes computed from the remaining
+    genes after filtering steps 1-5
+
+7.  Choice to use the top overdispersed genes based on -log10(adjusted
+    p-value)
 
 ```{r}
 mobCorpus1 <- preprocess(t(cd),
@@ -85,7 +141,8 @@ print(mobCorpus1$corpus[1:10,1:10])
 print(mobCorpus1$pos[1:10,])
 ```
 
-preprocess can also be used to build a corpus using a specific list of genes:
+preprocess can also be used to build a corpus using a specific list of
+genes:
 
 ```{r, fig.width=6, fig.height=3}
 ## get list of genes of interest, for an example.
@@ -120,13 +177,32 @@ mobCorpus2 <- preprocess(t(cd),
 
 # Selecting Optimal K
 
-One limitation of LDA is that one must select the number of predicted cell-types (K) to be returned, a priori. Thus, one must either have knowledge of the number of cell-types present in the dataset of interest, or a way to select the model with the "optimal K", or the model that best describes the dataset and captures the latent cell-types. 
+One limitation of LDA is that one must select the number of predicted
+cell-types (K) to be returned, *a priori*. Thus, one must either have
+knowledge of the number of cell-types present in the dataset of
+interest, or a way to select the model with the "optimal K", i.e., the
+model that best describes the dataset and captures the latent
+cell-types.
 
-To do this, STdeconvolve fits a number of different LDA models with different K's to the dataset and computes several different metrics to help guide users in the choice of K. 
+To do this, `STdeconvolve` fits a number of different LDA models with
+different K's to the dataset and computes several different metrics to
+help guide users in the choice of K.
 
-First, the perplexity of each fitted model is computed with respect to it's K. This can be done using the entire real dataset the model was fitted to, or, users can chose a certain fraction of randomly selected pixels to be held out and used as a test set to compute model perplexity. The optimal K can either be the model with the K that returns the lowest perplexity ("min"), or we compute a "knee" metric (similar to choosing the number of principle components in PCA), which is the maximum second derivative, a reasonable choice for the inflection point (the elbow or knee).
+First, the **perplexity** of each fitted model is computed with respect
+to it's K. The optimal K can either be the model with the K that returns
+the lowest perplexity ("min"), or we compute a "knee" metric (similar to
+choosing the number of principle components in PCA), which is the
+maximum second derivative, a reasonable choice for the inflection point
+(the elbow or knee).
 
-Second, as K increases, the additional cell-types that are predicted tend to be represented present at small proportions in the pixels and thus contribute little to the predicted pixel cell-type profiles. To help put an upper limit on K, we also measure the number of predicted cell-types with mean pixel proportion less than 5%. After a certain K, the number of "rare" predicted cell-types, or those with low proportions across the pixels, steadily increases, suggesting that increasing K is no longer returning informative topics, or cell-types.
+Second, as K increases, the additional cell-types that are predicted
+tend to be represented at small proportions in the pixels and thus
+contribute little to the predicted pixel cell-type profiles. To help put
+an upper limit on K, we measure the number of predicted cell-types with
+mean pixel proportion less than 5% (by default). After a certain K, the
+number of "rare" predicted cell-types, or those with low proportions
+across the pixels, steadily increases, suggesting that increasing K is
+no longer returning informative topics, or cell-types.
 
 ```{r}
 ## fit LDA models to the corpus
@@ -134,15 +210,21 @@ ks <- seq(from = 2, to = 18, by = 1) # range of K's to fit LDA models with given
 ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
                Ks = ks,
                ncores = parallel::detectCores(logical = TRUE) - 1, # number of cores to fit LDA models in parallel
-               testSize = 0.2, # fraction of pixels to set aside for test corpus when computing perplexity
                plot=TRUE, verbose=FALSE)
 ```
 
-While technically the lowest perplexity computed is when K=8, perplexity appears to be relatively stable between K=7 and K=18. Additionally, we expect there to be more than 4 cell-types and thus K should be greater than 4 (based on "knee" metric).
+While technically the lowest perplexity computed is when K=8, perplexity
+appears to be relatively stable between K=7 and K=18. Additionally, we
+expect there to be more than 4 cell-types and thus K should be greater
+than 4 (based on "knee" metric).
 
-However, the number of cell-types with mean proportion <5% doesn't start steadily increasing until around K=15, suggesting that the number of predicted cell-types are likely informative until this chosen K.
+However, the number of cell-types with mean proportion \<5% doesn't
+start steadily increasing until around K=15, suggesting that the number
+of predicted cell-types are likely informative until this chosen K.
 
-Once the LDA models are fitted, beta and theta matrices can be extracted for a given model. The simplest way to do this is with `optimalModel()` to get the specific model of interest:
+Once the LDA models are fitted, **beta** and **theta** matrices can be
+extracted for a given model. The simplest way to do this is with
+`optimalModel()` to get the specific model of interest:
 
 ```{r}
 ## `optimalModel()` can take as arguments:
@@ -151,70 +233,31 @@ optimalModel(models = ldas, opt = "kneed") # "kneed" = K that resulted in inflec
 optimalModel(models = ldas, opt = 15) # or extract the model for any K that was used
 ```
 
-Then, `getBetaTheta()` can be used to get the beta (cell-type gene expression profiles) and theta (pixel cell-type proportions) matrices.
+Then, `getBetaTheta()` can be used to get the **beta** (cell-type gene
+expression profiles) and **theta** (pixel cell-type proportions)
+matrices.
 
 ```{r}
-results <- getBetaTheta(lda = optimalModel(models = ldas, opt = "15"),
-                        corpus = mobCorpus2$corpus)
+optLDA <- optimalModel(models = ldas, opt = 15)
+results <- getBetaTheta(lda = optLDA,
+                        perc.filt = 0.05, # remove cell-types from pixels that are predicted to be present at less than 5%. Then readjusut pixel proportions to 100%
+                        betaScale = 1000) # scale the cell-type transcriptional profiles
 print(names(results))
-```
 
-Alternatively, `buildLDAobject()` is a wrapper around `getBetaTheta()`, `clusterTopics()`, and `combineTopics()`. Cell-types with similar gene expression profiles are clustered, and an alternative set of "cell-type clusters" is provided, where a cell-type cluster is an aggregated beta and theta matrix of the cell-types within the given cluster.
+deconProp <- results$theta
+deconGexp <- results$beta
 
-```{r}
-results <- buildLDAobject(LDAmodel = optimalModel(models = ldas, opt = "15"),
-                          corpus = mobCorpus2$corpus,
-                          deepSplit = 4,
-                          colorScheme = "rainbow")
-print(names(results))
-```
-
-Here, `results` is a list that contains the beta and theta matrix for the individual predicted cell-types, combined beta and theta matrices of the cell-type clusters. "clusters" is a factor indicating the assigned cluster of each predicted cell-type, "dendro" is a dendrogram of the clustered cell-types with respect to their predicted gene expression profiles. "cols" and "clustCols" are factors indicating color labels for either the cell-types or the clusters that can be used optionally for visualization purposes.
-
-# Clustering Cell-types
-
-As indicated above, predicted cell-types can be clustered into "cell-type clusters" based on their predicted gene expression profiles (beta matrix). A set of predicted cell-types may represent components of a larger cell-layer in a tissue and thus it may be useful to cluster the cell-types together to visualize and assess this layer as a single feature. 
-
-As shown previously in this tutorial, the easiest way to do this is with `buildLDAobject()`, which not only returns beta and theta matrices for the individual cell-types, but also returns cell-type clusters and their associated beta and theta matrices.
-
-However, with the beta matrix of the cell-types in hand, one can cluster the cell-types by making a call to `clusterTopics()` directly, which allows one to specify the type of clustering that is performed. Assignment of cell-types to specific clusters in done using dynamic tree splitting using the R package `dynamicTreeCut`.
-
-```{r}
-results <- getBetaTheta(lda = optimalModel(models = ldas, opt = "15"),
-                        corpus = mobCorpus2$corpus)
-clust <- clusterTopics(beta = results$beta,
-                       clustering = "ward.D", # type of clustering
-                       dynamic = "hybrid", # method to assign cell-types to clusters (see `dynamicTreeCut` options)
-                       deepSplit = 4, # dynamic tree cutting sensitivity parameter
-                       plot = TRUE)
-clust
-```
-
-To get the beta and theta matrices of the cell-type clusters, `combineTopics()` is used to aggregate the beta or theta matrices of the cell-types within assigned clusters:
-
-```{r}
-betaCombn <- combineTopics(results$beta, clusters = clust$clusters, type = "b")
-thetaCombn <- combineTopics(results$theta, clusters = clust$clusters, type = "t")
-clust$clusters
-dim(betaCombn)
-dim(thetaCombn)
+head(deconProp)
+head(deconGexp)
 ```
 
 # Visualization
 
-```{r}
-results <- buildLDAobject(LDAmodel = optimalModel(models = ldas, opt = "15"),
-                          corpus = mobCorpus2$corpus,
-                          deepSplit = 4,
-                          colorScheme = "rainbow",
-                          plot = FALSE)
-print(names(results))
-```
-
-## All Cell-types or Cell-type clusters
+## Visualization of all topics via `vizAllTopics()`
 
 ```{r}
-m <- results$theta
+
+m <- deconProp
 p <- pos
 plt <- vizAllTopics(theta = m,
              pos = p,
@@ -228,12 +271,16 @@ plt <- vizAllTopics(theta = m,
              plotTitle = "K=15")
 plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
+
 ```
 
-Scatterpie borders can be colored, either custom, or based on group membership
+Scatterpies can be labeled as belonging to different groups and their
+borders colored to designate the group membership.
+
+Custom colors can be used for the arguments `groups` and `group_cols`
 
 ```{r}
-m <- results$theta
+m <- deconProp
 p <- pos
 plt <- vizAllTopics(theta = m,
              pos = p,
@@ -249,10 +296,11 @@ plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
-Based on group membership (let's use the coarse cell layers of the MOB)
+Color scatter pies based on group membership (let's use the coarse cell
+layers of the MOB)
 
 ```{r}
-m <- results$theta
+m <- deconProp
 p <- pos
 plt <- vizAllTopics(theta = m,
              pos = p,
@@ -268,59 +316,10 @@ plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
-Now let's visualize the cell-type clusters:
+Can filter the `theta` matrix to only visualize certain cell-types:
 
 ```{r}
-m <- results$thetaCombn
-p <- pos
-plt <- vizAllTopics(theta = m,
-             pos = p,
-             topicOrder=seq(ncol(m)),
-             topicCols=rainbow(ncol(m)),
-             groups = rep("0", dim(m)[1]),
-             group_cols = c("0" = "black"),
-             r = 0.4,
-             lwd = 0.2,
-             showLegend = TRUE,
-             plotTitle = "K=15 cell-type clusters")
-# plt <- plt + ggplot2::guides(fill=guide_legend(ncol=2))
-plt
-```
-
-## Individual Cell-types and Cell-type clusters
-
-```{r}
-m <- results$theta
-p <- pos[rownames(results$theta),]
-vizTopicClusters(theta = m,
-                 pos = p,
-                 clusters = results$cols,
-                 sharedCol = TRUE, # cell-types in a cluster share the same color
-                 groups = rep("0", dim(m)[1]),
-                 group_cols = c("0" = "black"),
-                 r = 0.4,
-                 lwd = 0.3,
-                 showLegend = TRUE)
-```
-
-```{r}
-m <- results$theta
-p <- pos[rownames(results$theta),]
-vizTopicClusters(theta = m,
-                 pos = p,
-                 clusters = results$cols,
-                 sharedCol = FALSE, # cell-types in a cluster on a color gradient
-                 groups = rep("0", dim(m)[1]),
-                 group_cols = c("0" = "black"),
-                 r = 0.4,
-                 lwd = 0.3,
-                 showLegend = TRUE)
-```
-
-Or just plot each cell-type, or a group of selected cell-types individually
-
-```{r}
-m <- results$theta[,c("14", "12")]
+m <- deconProp[,c("14", "12")]
 p <- pos
 other <- 1 - rowSums(m)
 m <- cbind(m, other)
@@ -336,5 +335,41 @@ vizAllTopics(theta = m,
              r = 0.4,
              lwd = 0.1,
              showLegend = TRUE,
-             overlay = NA) # BONUS: plot the scatterpies on top of a raster image of the H&E tissue, if set equal to the rgb matrix
+             overlay = NA) # BONUS: plot the scatterpies on top of a raster image of the H&E tissue, if this argument is equal to the rgb matrix of the image
 ```
+
+## Faster plotting via `vizTopic`
+
+For very large datasets with many pixels and cell-types, it can take a
+long time to render each individual scatterpie. To speed this up, we can
+visualize the pixel proportion of one cell-type at a time via
+`vizTopic()`
+
+```{r}
+m <- deconProp
+p <- pos
+
+vizTopic(theta = m, pos = p, topic = "14", plotTitle = "X14",
+         size = 5, stroke = 1, alpha = 0.5,
+         low = "white",
+         high = "red")
+```
+
+Again, we can also label the coarse cell layers for which the pixels
+were assigned to
+
+```{r}
+m <- deconProp
+p <- pos
+
+vizTopic(theta = m, pos = p, topic = "14", plotTitle = "X14",
+         size = 5, stroke = 1, alpha = 0.5,
+         groups = annot,
+         group_cols = rainbow(length(levels(annot))),
+         low = "white",
+         high = "red")
+```
+
+One last note: `vizAllTopics()` and `vizTopic()` return `ggplot2`
+objects, and so additional `ggplot2` aesthetics and themes can be added
+on for further customization.
