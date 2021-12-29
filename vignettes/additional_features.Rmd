@@ -52,7 +52,7 @@ and a user may want to include these in the final corpus.
 
 We include 2 different functions with `STdeconvolve`:
 
-1.  `restrictCorpus()`
+## `restrictCorpus()`
 
 The first is `restrictCorpus()`, which is highlighted in the
 `getting_started` tutorial. This function first feature selects for
@@ -61,7 +61,7 @@ overdispersed genes to those present in less than or more than specified
 fractions of pixels in the dataset. This function does not filter for
 poor pixels or genes itself.
 
-2.  `preprocess()`
+## `preprocess()`
 
 The second is `preprocess()`, which is a wrapper function and allows for
 more feature selection options.
@@ -199,10 +199,10 @@ Second, as K increases, the additional cell-types that are predicted
 tend to be represented at small proportions in the pixels and thus
 contribute little to the predicted pixel cell-type profiles. To help put
 an upper limit on K, we measure the number of predicted cell-types with
-mean pixel proportion less than 5% (by default). After a certain K, the
-number of "rare" predicted cell-types, or those with low proportions
-across the pixels, steadily increases, suggesting that increasing K is
-no longer returning informative topics, or cell-types.
+mean pixel proportion less than 5% (by default). After a certain K,
+**the number of "rare" predicted cell-types**, or those with low
+proportions across the pixels, steadily increases, suggesting that
+increasing K is no longer returning informative topics, or cell-types.
 
 ```{r}
 ## fit LDA models to the corpus
@@ -213,13 +213,15 @@ ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
                plot=TRUE, verbose=FALSE)
 ```
 
-While technically the lowest perplexity computed is when K=8, perplexity
-appears to be relatively stable between K=7 and K=18. Additionally, we
-expect there to be more than 4 cell-types and thus K should be greater
-than 4 (based on "knee" metric).
+While technically the lowest perplexity computed is when K=18,
+perplexity appears to stabilize and decreases gradually after K=7.
 
-However, the number of cell-types with mean proportion \<5% doesn't
-start steadily increasing until around K=15, suggesting that the number
+We could use the "knee" metric (maximum second derivative) to determine
+the optimal K. But in this case, using the "knee" method, the optimal K
+would be 4. However, we expect there to be more than 4 cell-types.
+
+Finally, the number of cell-types with mean proportion \<5% doesn't
+start steadily increasing until around K=12, suggesting that the number
 of predicted cell-types are likely informative until this chosen K.
 
 Once the LDA models are fitted, **beta** and **theta** matrices can be
@@ -230,7 +232,7 @@ extracted for a given model. The simplest way to do this is with
 ## `optimalModel()` can take as arguments:
 optimalModel(models = ldas, opt = "min") # "min" = K that resulted in minimum perplexity
 optimalModel(models = ldas, opt = "kneed") # "kneed" = K that resulted in inflection perplexity
-optimalModel(models = ldas, opt = 15) # or extract the model for any K that was used
+optimalModel(models = ldas, opt = 12) # or extract the model for any K that was used
 ```
 
 Then, `getBetaTheta()` can be used to get the **beta** (cell-type gene
@@ -238,9 +240,9 @@ expression profiles) and **theta** (pixel cell-type proportions)
 matrices.
 
 ```{r}
-optLDA <- optimalModel(models = ldas, opt = 15)
+optLDA <- optimalModel(models = ldas, opt = 12)
 results <- getBetaTheta(lda = optLDA,
-                        perc.filt = 0.05, # remove cell-types from pixels that are predicted to be present at less than 5%. Then readjusut pixel proportions to 100%
+                        perc.filt = 0.05, # remove cell-types from pixels that are predicted to be present at less than 5%. Then readjust pixel proportions to 100%
                         betaScale = 1000) # scale the cell-type transcriptional profiles
 print(names(results))
 
@@ -248,7 +250,7 @@ deconProp <- results$theta
 deconGexp <- results$beta
 
 head(deconProp)
-head(deconGexp)
+deconGexp[1:5,1:5]
 ```
 
 # Visualization
@@ -256,7 +258,6 @@ head(deconGexp)
 ## Visualization of all topics via `vizAllTopics()`
 
 ```{r}
-
 m <- deconProp
 p <- pos
 plt <- vizAllTopics(theta = m,
@@ -268,10 +269,11 @@ plt <- vizAllTopics(theta = m,
              r = 0.4, # size of scatterpies; adjust depending on the coordinates of the pixels
              lwd = 0.1,
              showLegend = TRUE,
-             plotTitle = "K=15")
+             plotTitle = "K=12")
+
+## function returns a `ggplot2` object, so other aesthetics can be added on:
 plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
-
 ```
 
 Scatterpies can be labeled as belonging to different groups and their
@@ -291,7 +293,9 @@ plt <- vizAllTopics(theta = m,
              r = 0.4,
              lwd = 0.4, # adjust thickness of the scatterpie borders
              showLegend = TRUE,
-             plotTitle = "K=15")
+             plotTitle = "K=12")
+
+## function returns a `ggplot2` object, so other aesthetics can be added on:
 plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
@@ -311,7 +315,9 @@ plt <- vizAllTopics(theta = m,
              r = 0.4,
              lwd = 0.4, # adjust thickness of the scatterpie borders
              showLegend = TRUE,
-             plotTitle = "K=15")
+             plotTitle = "K=12")
+
+## function returns a `ggplot2` object, so other aesthetics can be added on:
 plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
@@ -319,11 +325,11 @@ plt
 Can filter the `theta` matrix to only visualize certain cell-types:
 
 ```{r}
-m <- deconProp[,c("14", "12")]
+m <- deconProp[,c("3", "12")]
 p <- pos
 other <- 1 - rowSums(m)
 m <- cbind(m, other)
-colnames(m) <- c("14", "12", "Other")
+colnames(m) <- c("3", "12", "Other")
 vizAllTopics(theta = m,
              pos = p,
              topicOrder=seq(ncol(m)),
@@ -349,7 +355,7 @@ visualize the pixel proportion of one cell-type at a time via
 m <- deconProp
 p <- pos
 
-vizTopic(theta = m, pos = p, topic = "14", plotTitle = "X14",
+vizTopic(theta = m, pos = p, topic = "12", plotTitle = "X12",
          size = 5, stroke = 1, alpha = 0.5,
          low = "white",
          high = "red")
@@ -362,7 +368,7 @@ were assigned to
 m <- deconProp
 p <- pos
 
-vizTopic(theta = m, pos = p, topic = "14", plotTitle = "X14",
+vizTopic(theta = m, pos = p, topic = "12", plotTitle = "X12",
          size = 5, stroke = 1, alpha = 0.5,
          groups = annot,
          group_cols = rainbow(length(levels(annot))),
