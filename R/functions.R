@@ -29,26 +29,26 @@ restrictCorpus <- function(counts,
   ## remove genes that are present in more than X% of pixels
   vi <- rowSums(as.matrix(counts) > 0) >= ncol(counts)*removeAbove
   if(verbose) {
-    print(paste0('Removing ', sum(vi), ' genes present in ', removeAbove*100, '% or more of pixels...'))
+    message(paste0('Removing ', sum(vi), ' genes present in ', removeAbove*100, '% or more of pixels...'))
   }
   counts <- counts[!vi,]
   if(verbose) {
-    print(paste0(nrow(counts), ' genes remaining...'))
+    message(paste0(nrow(counts), ' genes remaining...'))
   }
   
   ## remove genes that are present in less than X% of pixels
   vi <- rowSums(as.matrix(counts) > 0) <= ncol(counts)*removeBelow
   if(verbose) {
-    print(paste0('Removing ', sum(vi), ' genes present in ', removeBelow*100, '% or less of pixels...'))
+    message(paste0('Removing ', sum(vi), ' genes present in ', removeBelow*100, '% or less of pixels...'))
   }
   counts <- counts[!vi,]
   if(verbose) {
-    print(paste0(nrow(counts), ' genes remaining...'))
+    message(paste0(nrow(counts), ' genes remaining...'))
   }
   
   ## overdispersed genes
   if(verbose) {
-    print(paste0('Restricting to overdispersed genes with alpha = ', alpha, '...'))
+    message(paste0('Restricting to overdispersed genes with alpha = ', alpha, '...'))
   }
   OD <- getOverdispersedGenes(counts,
                                    alpha = alpha,
@@ -60,13 +60,13 @@ restrictCorpus <- function(counts,
   # log p-val adjusted
   if (is.na(nTopOD) == FALSE){
     if(verbose){
-      cat(" Using top", nTopOD, "overdispersed genes.", "\n")
+      message(" Using top ", nTopOD, " overdispersed genes.", "\n")
     }
     OD_filt <- OD$df[OD$ods,]
     # check if actual number of OD genes less than `nTopOD`
     if (dim(OD_filt)[1] < nTopOD){
       if(verbose){
-        cat(" number of top overdispersed genes available:", dim(OD_filt)[1], "\n")
+        message(" number of top overdispersed genes available: ", dim(OD_filt)[1], "\n")
       }
       od_genes <- rownames(OD_filt)
     } else {
@@ -84,7 +84,7 @@ restrictCorpus <- function(counts,
   }
   
   if (dim(countsFiltRestricted)[1] > 1000){
-    cat("Genes in corpus > 1000 (", dim(countsFiltRestricted)[1],
+    message("Genes in corpus > 1000 (", dim(countsFiltRestricted)[1],
         "). This may cause model fitting to take a while. Consider reducing the number of genes.", "\n")
   }
   return(countsFiltRestricted)
@@ -148,7 +148,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
     testingPixels <- seq(nrow(counts))
     fittingPixels <- seq(nrow(counts))
   } else if ((0 < testSize) & (testSize < 1.0)){
-    cat("Splitting pixels into", testSize*100, "% and", 100-testSize*100, "% testing and fitting corpuses", "\n")
+    message("Splitting pixels into ", testSize*100, "% and ", 100-testSize*100, "% testing and fitting corpuses", "\n")
     set.seed(seed)
     testingPixels <- sample(nrow(counts), round(nrow(counts)*testSize))
     fittingPixels <- seq(nrow(counts))[-testingPixels]
@@ -186,11 +186,11 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   
   if(verbose) {
     total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
-    print(sprintf("Time to fit LDA models was %smins", total_t))
+    message(sprintf("Time to fit LDA models was %s mins", total_t))
   }
   
   if(verbose) {
-    print("Computing perplexity for each fitted model...")
+    message("Computing perplexity for each fitted model...")
   }
   
   start_time <- Sys.time()
@@ -209,7 +209,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   
   if(verbose) {
     total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
-    print(sprintf("Time to compute perplexities was %smins", total_t))
+    message(sprintf("Time to compute perplexities was %s mins", total_t))
   }
   
   ## Kneed algorithm
@@ -219,7 +219,7 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   
   ## check number of predicted cell-types at low proportions
   if(verbose) {
-    print("Getting predicted cell-types at low proportions...")
+    message("Getting predicted cell-types at low proportions...")
   }
   
   start_time <- Sys.time()
@@ -242,13 +242,13 @@ fitLDA <- function(counts, Ks = seq(2, 10, by = 2),
   
   if(verbose) {
     total_t <- round(difftime(Sys.time(), start_time, units = "mins"), 2)
-    print(sprintf("Time to compute cell-types at low proportions was %smins", total_t))
+    message(sprintf("Time to compute cell-types at low proportions was %s mins", total_t))
   }
   
   if(plot) {
     
     if(verbose) {
-      print("Plotting...")
+      message("Plotting...")
     }
     
     dat <- data.frame(K = as.double(Ks),
@@ -381,7 +381,7 @@ getBetaTheta <- function(lda, corpus = NULL, perc.filt = 0.05, betaScale = 1, ve
   
   ## filter out cell-types with low proportions in pixels
   if(verbose){
-    cat("Filtering out cell-types in pixels that contribute less than", perc.filt, "of the pixel proportion.", "\n")
+    message("Filtering out cell-types in pixels that contribute less than ", perc.filt, " of the pixel proportion.", "\n")
   }
   theta <- filterTheta(theta, perc.filt = perc.filt, verbose = verbose)
   
@@ -530,7 +530,7 @@ combineTopics <- function(mtx, clusters, type) {
   }))
   rownames(combinedTopics) <- levels(clusters)
   colnames(combinedTopics) <- colnames(mtx)
-  print("cell-types combined.")
+  message("cell-types combined.")
   
   # if theta, make cell-types the columns again
   if (type == "t") {
@@ -721,7 +721,7 @@ filterTheta <- function(theta, perc.filt = 0.05, verbose = TRUE){
   dropped_cts <- names(which(colSums(theta) == 0))
   if(length(dropped_cts) > 0){
     if(verbose){
-      cat("Cell-types with no proportions in pixels after filtering dropped:\n", dropped_cts, "\n")
+      message("Cell-types with no proportions in pixels after filtering dropped:\n", dropped_cts, "\n")
     }
   }
   theta <- theta[,which(colSums(theta) > 0)]
@@ -729,7 +729,7 @@ filterTheta <- function(theta, perc.filt = 0.05, verbose = TRUE){
   empty_pixels <- names(which(rowSums(theta) == 0))
   if(length(empty_pixels) > 0){
     if(verbose){
-      cat(length(empty_pixels), "pixels with no cell-types after filtering.", "\n")
+      message(length(empty_pixels), " pixels with no cell-types after filtering.", "\n")
     }
   }
   

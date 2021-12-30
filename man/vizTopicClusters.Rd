@@ -2,7 +2,8 @@
 % Please edit documentation in R/plot.R
 \name{vizTopicClusters}
 \alias{vizTopicClusters}
-\title{Visualize proportions of cell-types or aggregated cell-type-clusters individually}
+\title{Visualize proportions of cell-types or aggregated cell-type-clusters individually
+NOTE: Function replaced via "vizTopic" for faster plotting of individual topics}
 \usage{
 vizTopicClusters(
   theta,

@@ -81,7 +81,7 @@ cleanCounts <- function (counts, min.lib.size = 1, max.lib.size = Inf, min.reads
 #' Normalize gene expression variance relative to transcriptome-wide expectations
 #' (Modified from SCDE/PAGODA2 code)
 #'
-#' Normalizes gene expression magnitudes to with respect to its ratio to the
+#' @description Normalizes gene expression magnitudes to with respect to its ratio to the
 #' transcriptome-wide expectation as determined by local regression on expression magnitude
 #'
 #' @param counts Read count matrix. The rows correspond to genes, columns correspond to individual cells
@@ -121,7 +121,7 @@ getOverdispersedGenes <- function(counts,
   mat <- Matrix::t(counts) ## make rows as cells, cols as genes
   
   if(verbose) {
-    print("Calculating variance fit ...")
+    message("Calculating variance fit ...")
   }
   dfm <- log(Matrix::colMeans(mat))
   dfv <- log(apply(mat, 2, var))
@@ -134,12 +134,12 @@ getOverdispersedGenes <- function(counts,
   
   if(gam.k<2) {
     if(verbose) {
-      print("Using lm ...")
+      message("Using lm ...")
     }
     m <- lm(v ~ m, data = df[vi,])
   } else {
     if(verbose) {
-      print(paste0("Using gam with k=", gam.k, "..."))
+      message(paste0("Using gam with k=", gam.k, "..."))
     }
     fm <- as.formula(sprintf("v ~ s(m, k = %s)", gam.k))
     m <- mgcv::gam(fm, data = df[vi,])
@@ -157,7 +157,7 @@ getOverdispersedGenes <- function(counts,
     ods <- which(df$lpa<log(alpha))
   }
   if(verbose) {
-    print(paste0(length(ods), ' overdispersed genes ... ' ))
+    message(paste0(length(ods), ' overdispersed genes ... ' ))
   }
   
   df$gsf <- geneScaleFactors <- sqrt(pmax(min.adjusted.variance,pmin(max.adjusted.variance,df$qv))/exp(df$v));
@@ -213,6 +213,15 @@ fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=F,un
   }
 }
 
+
+#' Benjamini-Hochberg p-value adjustment
+#' 
+#' @description Benjamini-Hochberg p-value adjustment
+#' 
+#' @param x vector of p-values
+#' @param log log option (default: FALSE)
+#' 
+#' @export
 bh.adjust <- function(x, log = FALSE) {
   nai <- which(!is.na(x))
   ox <- x

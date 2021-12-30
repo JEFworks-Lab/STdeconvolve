@@ -29,9 +29,9 @@ and same length as topicCols (default: seq(ncol(theta)))}
 \item{topicCols}{Vector of colors for each of the cell-types to be visualized.
 Same length and order as topicOrder (default: rainbow(ncol(theta)))}
 
-\item{groups}{Indicates color of the scatterpie strokes with the goal of coloring them
+\item{groups}{Indicates color of the scatterpie strokes (borders) with the goal of coloring them
 by their assigned group. This can be a vector or factor indicating the group of each
-scatterpie. Needs to be in the same order as the pixel rows in "theta" (default: NA)}
+pixel. Needs to be in the same order as the pixel rows in "theta" (default: NA)}
 
 \item{group_cols}{Color labels for the groups. Can be a vector or factor. (default: NA)}
 
@@ -44,7 +44,7 @@ group_cols if being used.}
 
 \item{plotTitle}{add title to the resulting plot (default: NA)}
 
-\item{overlay}{plot the scatterpies on top of a raster image of the H&E tissue
+\item{overlay}{raster image of an H&E tissue (for example) to plot the scatterpies on top of
 (default: NA)}
 }
 \description{

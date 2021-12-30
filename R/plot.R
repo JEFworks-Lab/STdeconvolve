@@ -10,16 +10,16 @@
 #'     and same length as topicCols (default: seq(ncol(theta)))
 #' @param topicCols Vector of colors for each of the cell-types to be visualized.
 #'     Same length and order as topicOrder (default: rainbow(ncol(theta)))
-#' @param groups Indicates color of the scatterpie strokes with the goal of coloring them
+#' @param groups Indicates color of the scatterpie strokes (borders) with the goal of coloring them
 #'     by their assigned group. This can be a vector or factor indicating the group of each
-#'     scatterpie. Needs to be in the same order as the pixel rows in "theta" (default: NA)
+#'     pixel. Needs to be in the same order as the pixel rows in "theta" (default: NA)
 #' @param group_cols Color labels for the groups. Can be a vector or factor. (default: NA)
 #' @param r Radius of the scatterpie circles. Adjust based on positions of pixels (default: max(0.4, max(pos)/nrow(pos)*4))
 #' @param lwd Width of lines of the pie charts. Increasing helps visualize
 #'     group_cols if being used.
 #' @param showLegend Boolean to show the legend indicating cell-types and their color
 #' @param plotTitle add title to the resulting plot (default: NA)
-#' @param overlay plot the scatterpies on top of a raster image of the H&E tissue
+#' @param overlay raster image of an H&E tissue (for example) to plot the scatterpies on top of
 #'     (default: NA)
 #'
 #' @export
@@ -33,6 +33,18 @@ vizAllTopics <- function(theta, pos,
                          showLegend = TRUE,
                          plotTitle = NA,
                          overlay = NA) {
+  
+  ## check that theta and pos are either data.frames or matrices
+  if( (is.matrix(theta) == FALSE) & (is.data.frame(theta) == FALSE)){
+    stop("`theta` must be a matrix or data.frame.")
+  }
+  if( (is.matrix(pos) == FALSE) & (is.data.frame(pos) == FALSE)){
+    stop("`pos` must be a matrix or data.frame with exactly 2 columns named `x` and `y`.")
+  }
+  
+  if( (any(!colnames(pos) %in% c("x", "y")) == TRUE) | (dim(pos)[2] != 2) ){
+    stop("`pos` must have exactly 2 columns named `x` and `y`.")
+  }
   
   # pixel cell-type distribution reordered based on topicOrder
   theta_ordered <- theta[, topicOrder]
@@ -62,14 +74,13 @@ vizAllTopics <- function(theta, pos,
     group_cols <- c("0" = "gray")
   }
   
-  cat("Plotting scatterpies for", dim(theta_ordered_pos)[1], "pixels with", length(topicColumns),
-      "cell-types...this could take a while if the dataset is large.", "\n")
+  message("Plotting scatterpies for ", dim(theta_ordered_pos)[1], " pixels with ", length(topicColumns),
+      " cell-types...this could take a while if the dataset is large.", "\n")
   
   if (is.na(overlay[1]) == FALSE){
     p <- ggplot2::ggplot(mapping = ggplot2::aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
       ggplot2::coord_equal(xlim = c(0,dim(overlay)[2]), ylim = c(0, dim(overlay)[1]), expand = FALSE) +
       ggplot2::theme(
-        #panel.background = element_rect(fill = "white"),
         panel.grid = ggplot2::element_blank(),
         axis.line = ggplot2::element_blank(),
         axis.text.x = ggplot2::element_blank(),
@@ -77,7 +88,11 @@ vizAllTopics <- function(theta, pos,
         axis.ticks = ggplot2::element_blank(),
         axis.title.x = ggplot2::element_blank(),
         axis.title.y = ggplot2::element_blank(),
-        panel.background= ggplot2::element_blank()) +
+        panel.background = ggplot2::element_blank(),
+        plot.background = ggplot2::element_blank(),
+        legend.text = ggplot2::element_text(size = 12, colour = "black"),
+        legend.title = ggplot2::element_text(size = 12, colour = "black")
+      ) +
       # geom_point(aes(x = c(0,dim(overlay)[2]), y = c(0, dim(overlay)[1]))) +
       ggplot2::annotation_raster(overlay, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) +
       # theme_classic() +
@@ -91,7 +106,6 @@ vizAllTopics <- function(theta, pos,
   } else {
     p <- ggplot2::ggplot() +
       ggplot2::theme(
-        #panel.background = element_rect(fill = "white"),
         panel.grid = ggplot2::element_blank(),
         axis.line = ggplot2::element_blank(),
         axis.text.x = ggplot2::element_blank(),
@@ -99,8 +113,11 @@ vizAllTopics <- function(theta, pos,
         axis.ticks = ggplot2::element_blank(),
         axis.title.x = ggplot2::element_blank(),
         axis.title.y = ggplot2::element_blank(),
-        panel.background = ggplot2::element_blank()) +
-      # theme_classic() +
+        panel.background = ggplot2::element_blank(),
+        plot.background = ggplot2::element_blank(),
+        legend.text = ggplot2::element_text(size = 12, colour = "black"),
+        legend.title = ggplot2::element_text(size = 12, colour = "black")
+        ) +
       scatterpie::geom_scatterpie(ggplot2::aes(x=x, y=y, group=Row.names, r=r, color = Pixel.Groups),
                                   lwd = lwd,
                                   data = theta_ordered_pos,
@@ -119,11 +136,14 @@ vizAllTopics <- function(theta, pos,
     p <- p + ggplot2::ggtitle(plotTitle)
   }
   
+  p <- p + ggplot2::coord_equal()
+  
   return(p)
 }
 
 
 #' Visualize proportions of cell-types or aggregated cell-type-clusters individually
+#' NOTE: Function replaced via "vizTopic" for faster plotting of individual topics
 #' 
 #' @description Similar to `vizAllTopics` but will generate a separate plot for
 #'     each cell-type or cell-type-cluster where the other cell-types or clusters will be
@@ -152,7 +172,6 @@ vizAllTopics <- function(theta, pos,
 #' @param fig_path path so save output figures for each plotted cluster (not in use)
 #' @param fig_prefix prefix to name each output figure for each plotted cluster (not in use)
 #'     
-#' @export
 vizTopicClusters <- function(theta, pos, clusters,
                              sharedCol = FALSE,
                              groups = NA,
@@ -165,14 +184,14 @@ vizTopicClusters <- function(theta, pos, clusters,
                              fig_path = "./",
                              fig_prefix = NA) {
   
-  print("Topic cluster members:")
+  message("Topic cluster members:")
   # produce a plot for each cell-type-cluster:
   for (cluster in levels(clusters)) {
     
     # select the cell-types in the cluster
     topics <- labels(clusters[which(clusters == cluster)])
     
-    cat(cluster, ":", topics, "\n")
+    message(cluster, " : ", topics)
     
     # pixel cell-type distribution reordered based on topicOrder and selected cluster cell-types
     theta_ordered <- theta[, topics]
@@ -195,11 +214,11 @@ vizTopicClusters <- function(theta, pos, clusters,
     # "other" takes one of the colors of the cell-types and is not gray
     if ( length(which(colSums(theta_ordered) == 0)) > 0 ) {
       missing_topics <- colnames(theta_ordered)[which(colSums(theta_ordered) == 0)]
-      cat("NOTE:", missing_topics, "not present in any pixels and will be dropped.", "\n")
+      message("NOTE: ", missing_topics, " not present in any pixels and will be dropped.", "\n")
       theta_ordered <- theta_ordered[,which(!colSums(theta_ordered) == 0)]
       # if the entire cluster/topic is represented in no spots, skip
       if (is.null(dim(theta_ordered))){
-        cat("No pixels contain this cell-type. Skipping", "\n")
+        message("No pixels contain this cell-type. Skipping", "\n")
         next
       }
     }
@@ -311,11 +330,124 @@ vizTopicClusters <- function(theta, pos, clusters,
 }
 
 
-#' Visualize gene counts in pixels in space. Can also see group assignment of
+#' Visualize pixel proportions of a single cell-type.
+#' 
+#' @description Visualize the pixel proportions of a single topic.
+#'
+#' @param theta document (pixel) x cell-type proportion matrix
+#' @param pos position of pixels, as data.frame with `x` and `y` columns
+#' @param groups colors the pixel border lines based on a group or cell layer
+#'     they belong to. Needs to be a character or named vector of assigned groups for each pixel
+#'     Ex: c("0", "1", "0", ...)
+#' @param group_cols color labels for the groups. Ex: c("0" = "gray", "1" = "red")
+#' @param size size of the geom_points to plot (default: 2)
+#' @param stroke thickness of the geom_point lines to help in emphasizing groups
+#'     (default: 0.5)
+#' @param alpha alpha value of colored pixels (default: 1)
+#' @param low sets the color for the low end of the topic proportion color scale (default: "white")
+#' @param high sets the color the the high end of the topic proportion color scale (default: "red")
+#' @param plotTitle option to add a title to the plot (character)
+#' @param showLegend Boolean to show the plot legend
+#' 
+#' @export
+vizTopic <- function(theta, pos, topic,
+                     groups = NA,
+                     group_cols = NA,
+                     size = 2,
+                     stroke = 0.3,
+                     alpha = 1,
+                     low = "white",
+                     high = "red",
+                     plotTitle = NA,
+                     showLegend = TRUE) {
+  
+  ## check that theta and pos are either data.frames or matrices
+  if( (is.matrix(theta) == FALSE) & (is.data.frame(theta) == FALSE)){
+    stop("`theta` must be a matrix or data.frame.")
+  }
+  if( (is.matrix(pos) == FALSE) & (is.data.frame(pos) == FALSE)){
+    stop("`pos` must be a matrix or data.frame with exactly 2 columns named `x` and `y`.")
+  }
+  
+  if( (any(!colnames(pos) %in% c("x", "y")) == TRUE) | (dim(pos)[2] != 2) ){
+    stop("`pos` must have exactly 2 columns named `x` and `y`.")
+  }
+  
+  proportion <- theta[,topic]
+  dat <- merge(data.frame(proportion),
+               data.frame(pos), by=0)
+  
+  # color spots by group:
+  if (is.na(groups[1]) == TRUE) {
+    Groups <- " "
+    # stroke <- 0.5
+  } else {
+    Groups <- as.character(groups)
+  }
+  if (is.na(group_cols[1]) == TRUE) {
+    group_cols <- c(" " = "black")
+  }
+  
+  p <- ggplot2::ggplot() +
+    ggplot2::geom_point(data = dat, ggplot2::aes(x=x, y=y, fill=proportion, color = Groups),
+                        shape = 21,
+                        stroke = stroke, size = size, 
+                        alpha = alpha) +
+    # viridis::scale_fill_viridis(option = "A", direction = -1) +
+    # ggplot2::scale_fill_gradient(low = "white", high = "red", ) +
+    ggplot2::scale_color_manual(values = group_cols)
+  
+  p <- p +
+    ggplot2::theme(
+      #panel.background = element_rect(fill = "white"),
+      panel.grid = ggplot2::element_blank(),
+      axis.line = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_blank(),
+      axis.text.y = ggplot2::element_blank(),
+      axis.ticks = ggplot2::element_blank(),
+      axis.title.x = ggplot2::element_blank(),
+      axis.title.y = ggplot2::element_blank(),
+      panel.background = ggplot2::element_blank(),
+      legend.text = ggplot2::element_text(size = 12, colour = "black"),
+      legend.title = ggplot2::element_text(size = 12, colour = "black")
+    ) +
+    
+    ggplot2::scale_fill_gradientn(limits = c(0, 1.0),
+                                  breaks = c(0, 0.2, 0.4, 0.6, 0.8, 1.0),
+                                  colors=(grDevices::colorRampPalette(c(low, high)))(n = 209)
+    ) +
+    
+    ggplot2::guides(fill = ggplot2::guide_colorbar(title = "Proportion",
+                                                   title.position = "left",
+                                                   title.hjust = 0.5,
+                                                   ticks.colour = "black",
+                                                   ticks.linewidth = 2,
+                                                   frame.colour= "black",
+                                                   frame.linewidth = 2,
+                                                   label.hjust = 0,
+                                                   title.theme = ggplot2::element_text(angle = 90)
+    ))
+  
+  if (showLegend == FALSE) {
+    # p <- p + ggplot2::guides(fill=FALSE)
+    p <- p + ggplot2::theme(legend.position = "none")
+  }
+  
+  if (is.na(plotTitle) == FALSE) {
+    p <- p + ggplot2::ggtitle(plotTitle)
+  }
+  
+  p <- p + ggplot2::coord_equal()
+  
+  return(p)
+  
+}
+
+
+#' Visualize gene counts for a given gene in the pixels. Can also see group assignment of
 #' spots.
 #' 
-#' @description Note: visualized one gene at a time. Can set up a loop to plot
-#'    a different gene column in df individually.
+#' @description Visualize one gene at a time.
 #'
 #' @param df data.frame where rows are spots and columns must be at least:
 #'      "x", "y" for spot positions in space and "gene" column that is counts
@@ -328,7 +460,7 @@ vizTopicClusters <- function(theta, pos, clusters,
 #' @param winsorize Winsorization quantile
 #' @param size size of the geom_points to plot (default: 7)
 #' @param stroke thickness of the geom_point lines to help in emphasizing groups
-#'     (default: 2)
+#'     (default: 0.5)
 #' @param alpha alpha value of colored pixels (default: 1)
 #' @param plotTitle option to add a title to the plot
 #' @param showLegend Boolean to show the plot legend
@@ -377,8 +509,17 @@ vizGeneCounts <- function(df, gene,
       axis.ticks = ggplot2::element_blank(),
       axis.title.x = ggplot2::element_blank(),
       axis.title.y = ggplot2::element_blank(),
-      panel.background = ggplot2::element_blank())
-  # theme_classic()
+      panel.background = ggplot2::element_blank()) + 
+    
+    ggplot2::guides(fill = ggplot2::guide_colorbar(title = "Counts",
+                                                   title.position = "left",
+                                                   title.hjust = 0.5,
+                                                   ticks.colour = "black",
+                                                   ticks.linewidth = 2,
+                                                   frame.colour= "black",
+                                                   frame.linewidth = 2,
+                                                   label.hjust = 0
+    ))
   
   if (showLegend == FALSE) {
     # p <- p + ggplot2::guides(fill=FALSE)
@@ -388,6 +529,8 @@ vizGeneCounts <- function(df, gene,
   if (is.na(plotTitle) == FALSE) {
     p <- p + ggplot2::ggtitle(plotTitle)
   }
+  
+  p <- p + ggplot2::coord_equal()
   
   return(p)
 }
@@ -492,7 +635,7 @@ correlationPlot <- function(mat, colLabs = NA, rowLabs = NA, title = NA, annotat
   
   dat <- reshape2::melt(mat)
   plt <- ggplot2::ggplot(data = dat) +
-    ggplot2::geom_tile(ggplot2::aes(x = as.character(Var1), y = as.character(Var2), fill=value)) +
+    ggplot2::geom_tile(ggplot2::aes(x = Var1, y = Var2, fill=value)) +
     
     # ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1),
     #                               guide = ggplot2::guide_colorbar(title = "correlation", ticks = FALSE, label = FALSE)) +

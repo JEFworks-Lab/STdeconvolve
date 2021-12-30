@@ -89,6 +89,36 @@ vizAllTopics(deconProp, pos,
              r=0.4)
 ```
 
+For faster plotting, we can visualize the pixel proportions of a single cell-type separately using `vizTopic()`:
+
+```{r, getting_started_proportions_2, fig.width=8, fig.height=4}
+vizTopic(theta = deconProp, pos = pos, topic = "5", plotTitle = "X5",
+         size = 5, stroke = 1, alpha = 0.5,
+         low = "white",
+         high = "red")
+```
+
+We can loop through all cell-types to visualize them all together:
+
+```{r, getting_started_proportions_3, fig.width=12, fig.height=8}
+ps <- lapply(colnames(deconProp), function(celltype) {
+  
+  vizTopic(theta = deconProp, pos = pos, topic = celltype, plotTitle = paste0("X", celltype),
+         size = 2, stroke = 1, alpha = 0.5,
+         low = "white",
+         high = "red")
+  
+})
+gridExtra::grid.arrange(
+  grobs = ps,
+  layout_matrix = rbind(c(1, 2, 3),
+                        c(4, 5, 6),
+                        c(7, 8, 9))
+)
+```
+
+
+
 We can also visualize the top marker genes for each deconvolved cell-type. We will use deconvolved cell-types `5` and `1` as examples here. We will define the top marker genes here as genes highly expressed in the deconvolved cell-type (count > 5) that also have the top 4 highest log2(fold change) when comparing the deconvolved cell-type's expression profile to the average of all other deconvolved cell-types' expression profiles. 
 
 ```{r, getting_started_expression_1, fig.width=5, fig.height=3}
