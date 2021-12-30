@@ -78,6 +78,9 @@ corMtx_beta <- getCorrMtx(m1 = as.matrix(deconGexp), # the deconvolved cell-type
                           m2 = t(as.matrix(mobProxyGexp)), # the reference `beta` (celltypes x genes)
                           type = "b") # "b" = comparing beta matrices, "t" for thetas
 
+## row and column names need to be characters
+rownames(corMtx_beta) <- paste0("decon_", seq(nrow(corMtx_beta)))
+
 correlationPlot(mat = corMtx_beta,
                 colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
                 rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
@@ -93,6 +96,9 @@ corMtx_theta <- getCorrMtx(m1 = as.matrix(deconProp), # the deconvolved cell-typ
                           m2 = as.matrix(mobProxyTheta), # the reference `theta` (pixels x celltypes)
                           type = "t") # "b" = comparing beta matrices, "t" for thetas
 
+## row and column names need to be characters
+rownames(corMtx_theta) <- paste0("decon_", seq(nrow(corMtx_theta)))
+
 correlationPlot(mat = corMtx_theta,
                 colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
                 rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
@@ -104,15 +110,19 @@ Finally, we can also pair up each reference cell-type with the deconvolved cell-
 
 ```{r, fig.width=6, fig.height=5}
 
-## compute best pairs. Note that cannot have more rows than columns so transpose here
-pairs <- lsatPairs(t(corMtx_beta))
+## order the cell-types rows based on best match (highest correlation) with each community
+## cannot have more rows than columns for this pairing, so transpose
+pairs <- lsatPairs(t(corMtx_theta))
+m <- t(corMtx_theta)[pairs$rowix, pairs$colsix]
 
-correlationPlot(mat = corMtx_beta[pairs$colsix,pairs$rowix],
+correlationPlot(mat = t(m), # transpose back
                 colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
                 rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
                 title = "Transcriptional correlation", annotation = TRUE)
 
 ```
+
+Note that only the paired deconvolved cell-types remain. Ones that paired less strongly with a given ground truth are dropped after assigning pairs.
 
 ## Strategy 2: GSEA
 

@@ -26,22 +26,31 @@ annot <- mOB$annot
 counts <- cleanCounts(cd, min.lib.size = 100)
 ```
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-2-1.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-19-1.png)
 
 ``` r
 ## feature select for genes
 corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
 ```
 
-    ## [1] "Removing 124 genes present in 100% or more of pixels..."
-    ## [1] "14704 genes remaining..."
-    ## [1] "Removing 3009 genes present in 5% or less of pixels..."
-    ## [1] "11695 genes remaining..."
-    ## [1] "Restricting to overdispersed genes with alpha = 0.05..."
-    ## [1] "Calculating variance fit ..."
-    ## [1] "Using gam with k=5..."
-    ## [1] "232 overdispersed genes ... "
-    ##  Using top 1000 overdispersed genes. 
+    ## Removing 124 genes present in 100% or more of pixels...
+
+    ## 14704 genes remaining...
+
+    ## Removing 3009 genes present in 5% or less of pixels...
+
+    ## 11695 genes remaining...
+
+    ## Restricting to overdispersed genes with alpha = 0.05...
+
+    ## Calculating variance fit ...
+
+    ## Using gam with k=5...
+
+    ## 232 overdispersed genes ...
+
+    ##  Using top 1000 overdispersed genes.
+
     ##  number of top overdispersed genes available: 232
 
 ``` r
@@ -49,15 +58,61 @@ corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
 ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1))
 ```
 
-    ## [1] "Time to fit LDA models was 0.46mins"
-    ## [1] "Computing perplexity for each fitted model..."
+    ## Warning in serialize(data, node$con): 'package:stats' may
+    ## not be available when loading
 
-    ## [1] "Time to compute perplexities was 0.16mins"
-    ## [1] "Getting predicted cell-types at low proportions..."
-    ## [1] "Time to compute cell-types at low proportions was 0mins"
-    ## [1] "Plotting..."
+    ## Warning in serialize(data, node$con): 'package:stats' may
+    ## not be available when loading
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-2-2.png)
+    ## Warning in serialize(data, node$con): 'package:stats' may
+    ## not be available when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may
+    ## not be available when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may
+    ## not be available when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may
+    ## not be available when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may
+    ## not be available when loading
+
+    ## Time to fit LDA models was 0.41 mins
+
+    ## Computing perplexity for each fitted model...
+
+    ## Warning in serialize(data, node$con): 'package:stats' may
+    ## not be available when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may
+    ## not be available when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may
+    ## not be available when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may
+    ## not be available when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may
+    ## not be available when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may
+    ## not be available when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may
+    ## not be available when loading
+
+    ## Time to compute perplexities was 0.14 mins
+
+    ## Getting predicted cell-types at low proportions...
+
+    ## Time to compute cell-types at low proportions was 0 mins
+
+    ## Plotting...
+
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-19-2.png)
 
 ``` r
 ## get best model results
@@ -80,10 +135,10 @@ vizAllTopics(deconProp, pos,
 
     ## Plotting scatterpies for 260 pixels with 8 cell-types...this could take a while if the dataset is large.
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-2-3.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-19-3.png)
 
 For demonstration purposes, let’s use the 5 annotated tissue layer
-labels (i.e. “Granular Cell Layer”, “Mitral Cell Layer”, etc) assigned
+labels (i.e. “Granular Cell Layer”, “Mitral Cell Layer”, etc) assigned
 to each pixel and use these to make transcriptional profiles for each of
 the annotated tissue layers in the MOB.
 
@@ -114,13 +169,16 @@ corMtx_beta <- getCorrMtx(m1 = as.matrix(deconGexp), # the deconvolved cell-type
     ## cell-type correlations based on 232 shared genes between m1 and m2.
 
 ``` r
+## row and column names need to be characters
+rownames(corMtx_beta) <- paste0("decon_", seq(nrow(corMtx_beta)))
+
 correlationPlot(mat = corMtx_beta,
                 colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
                 rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
                 title = "Transcriptional correlation", annotation = TRUE)
 ```
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-4-1.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-21-1.png)
 
 Notice that cell-type 1, 4, and 5 correlate the strongest with the
 Granular cell layer, cell-type 2 with the Olfactory nerve layer, etc.
@@ -138,28 +196,37 @@ corMtx_theta <- getCorrMtx(m1 = as.matrix(deconProp), # the deconvolved cell-typ
     ## cell-type correlations based on 260 shared pixels between m1 and m2.
 
 ``` r
+## row and column names need to be characters
+rownames(corMtx_theta) <- paste0("decon_", seq(nrow(corMtx_theta)))
+
 correlationPlot(mat = corMtx_theta,
                 colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
                 rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
                 title = "Proportional correlation", annotation = TRUE)
 ```
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-5-1.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-22-1.png)
 
 Finally, we can also pair up each reference cell-type with the
 deconvolved cell-type that has the highest correlation.
 
 ``` r
-## compute best pairs. Note that cannot have more rows than columns so transpose here
-pairs <- lsatPairs(t(corMtx_beta))
+## order the cell-types rows based on best match (highest correlation) with each community
+## cannot have more rows than columns for this pairing, so transpose
+pairs <- lsatPairs(t(corMtx_theta))
+m <- t(corMtx_theta)[pairs$rowix, pairs$colsix]
 
-correlationPlot(mat = corMtx_beta[pairs$colsix,pairs$rowix],
+correlationPlot(mat = t(m), # transpose back
                 colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
                 rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
                 title = "Transcriptional correlation", annotation = TRUE)
 ```
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-6-1.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-23-1.png)
+
+Note that only the paired deconvolved cell-types remain. Ones that
+paired less strongly with a given ground truth are dropped after
+assigning pairs.
 
 ## Strategy 2: GSEA
 
@@ -218,9 +285,12 @@ enriched in deconvolved cell-type 2:
 celltype_annotations$results$`2`
 ```
 
-    ##                              p.val      q.val    sscore     edge
-    ## 5: Olfactory Nerve Layer 9.999e-05 0.00019998  2.258666 4.660299
-    ## 1: Granular Cell Layer   9.999e-05 0.00019998 -1.860806 1.369958
+    ##                              p.val      q.val    sscore
+    ## 5: Olfactory Nerve Layer 9.999e-05 0.00019998  2.258666
+    ## 1: Granular Cell Layer   9.999e-05 0.00019998 -1.860806
+    ##                              edge
+    ## 5: Olfactory Nerve Layer 4.660299
+    ## 1: Granular Cell Layer   1.369958
 
 Note that the “5: Olfactory Nerve Layer” is significantly positively
 enriched in the transcriptional profiles of cell-type 2 whereas “1:
@@ -236,10 +306,12 @@ enrichment, then the deconvolved cell-type will have no matches.
 celltype_annotations$predictions
 ```
 
-    ##                          1                          2                          3 
-    ##                         NA "5: Olfactory Nerve Layer"     "2: Mitral Cell Layer" 
-    ##                          4                          5                          6 
-    ##   "1: Granular Cell Layer"   "1: Granular Cell Layer"      "4: Glomerular Layer" 
+    ##                          1                          2 
+    ##                         NA "5: Olfactory Nerve Layer" 
+    ##                          3                          4 
+    ##     "2: Mitral Cell Layer"   "1: Granular Cell Layer" 
+    ##                          5                          6 
+    ##   "1: Granular Cell Layer"      "4: Glomerular Layer" 
     ##                          7                          8 
     ##     "2: Mitral Cell Layer"     "2: Mitral Cell Layer"
 
