@@ -635,7 +635,7 @@ correlationPlot <- function(mat, colLabs = NA, rowLabs = NA, title = NA, annotat
   
   dat <- reshape2::melt(mat)
   plt <- ggplot2::ggplot(data = dat) +
-    ggplot2::geom_tile(ggplot2::aes(x = as.character(Var1), y = as.character(Var2), fill=value)) +
+    ggplot2::geom_tile(ggplot2::aes(x = Var1, y = Var2, fill=value)) +
     
     # ggplot2::scale_fill_gradientn(colors = correlation_palette, breaks = correlation_breaks, limits = c(-1,1),
     #                               guide = ggplot2::guide_colorbar(title = "correlation", ticks = FALSE, label = FALSE)) +

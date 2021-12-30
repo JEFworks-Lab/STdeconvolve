@@ -56,9 +56,10 @@ vizAllTopics(deconProp, pos,
 More details can be found in the tutorials.
 
 ## Tutorials
-- [Getting Started with STdeconvolve](https://github.com/JEFworks/STdeconvolve/blob/package/docs/getting_started.md)
-- [Additional Features with STdeconvolve](https://github.com/JEFworks/STdeconvolve/blob/package/docs/additional_features.md)
-- [Annotating Deconvolved cell-types](https://github.com/JEFworks/STdeconvolve/blob/package/docs/celltype_annotation.md)
+- [Getting started with `STdeconvolve`](https://github.com/JEFworks/STdeconvolve/blob/package/docs/getting_started.md)
+- [Additional features with `STdeconvolve`](https://github.com/JEFworks/STdeconvolve/blob/package/docs/additional_features.md)
+- [Annotating deconvolved cell-types](https://github.com/JEFworks/STdeconvolve/blob/package/docs/celltype_annotation.md)
+- [Analysis of 10X Visium data](https://github.com/JEFworks/STdeconvolve/blob/package/docs/visium_10x.md)
 
 ## Preprocessing datasets
 
