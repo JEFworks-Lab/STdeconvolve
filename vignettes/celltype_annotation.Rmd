@@ -84,7 +84,10 @@ rownames(corMtx_beta) <- paste0("decon_", seq(nrow(corMtx_beta)))
 correlationPlot(mat = corMtx_beta,
                 colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
                 rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
-                title = "Transcriptional correlation", annotation = TRUE)
+                title = "Transcriptional correlation", annotation = TRUE) +
+  
+  ## this function returns a `ggplot2` object, so can add additional aesthetics
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0))
 
 ```
 
@@ -102,7 +105,10 @@ rownames(corMtx_theta) <- paste0("decon_", seq(nrow(corMtx_theta)))
 correlationPlot(mat = corMtx_theta,
                 colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
                 rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
-                title = "Proportional correlation", annotation = TRUE)
+                title = "Proportional correlation", annotation = TRUE) +
+  
+  ## this function returns a `ggplot2` object, so can add additional aesthetics
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0))
 
 ```
 
@@ -118,7 +124,10 @@ m <- t(corMtx_theta)[pairs$rowix, pairs$colsix]
 correlationPlot(mat = t(m), # transpose back
                 colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
                 rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
-                title = "Transcriptional correlation", annotation = TRUE)
+                title = "Transcriptional correlation", annotation = TRUE) +
+  
+  ## this function returns a `ggplot2` object, so can add additional aesthetics
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0))
 
 ```
 

@@ -26,7 +26,7 @@ annot <- mOB$annot
 counts <- cleanCounts(cd, min.lib.size = 100)
 ```
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-19-1.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-6-1.png)
 
 ``` r
 ## feature select for genes
@@ -79,7 +79,7 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1))
     ## Warning in serialize(data, node$con): 'package:stats' may
     ## not be available when loading
 
-    ## Time to fit LDA models was 0.41 mins
+    ## Time to fit LDA models was 0.44 mins
 
     ## Computing perplexity for each fitted model...
 
@@ -104,7 +104,7 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1))
     ## Warning in serialize(data, node$con): 'package:stats' may
     ## not be available when loading
 
-    ## Time to compute perplexities was 0.14 mins
+    ## Time to compute perplexities was 0.16 mins
 
     ## Getting predicted cell-types at low proportions...
 
@@ -112,7 +112,7 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1))
 
     ## Plotting...
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-19-2.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-6-2.png)
 
 ``` r
 ## get best model results
@@ -135,7 +135,7 @@ vizAllTopics(deconProp, pos,
 
     ## Plotting scatterpies for 260 pixels with 8 cell-types...this could take a while if the dataset is large.
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-19-3.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-6-3.png)
 
 For demonstration purposes, let’s use the 5 annotated tissue layer
 labels (i.e. “Granular Cell Layer”, “Mitral Cell Layer”, etc) assigned
@@ -175,10 +175,13 @@ rownames(corMtx_beta) <- paste0("decon_", seq(nrow(corMtx_beta)))
 correlationPlot(mat = corMtx_beta,
                 colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
                 rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
-                title = "Transcriptional correlation", annotation = TRUE)
+                title = "Transcriptional correlation", annotation = TRUE) +
+  
+  ## this function returns a `ggplot2` object, so can add additional aesthetics
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0))
 ```
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-21-1.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-8-1.png)
 
 Notice that cell-type 1, 4, and 5 correlate the strongest with the
 Granular cell layer, cell-type 2 with the Olfactory nerve layer, etc.
@@ -202,10 +205,13 @@ rownames(corMtx_theta) <- paste0("decon_", seq(nrow(corMtx_theta)))
 correlationPlot(mat = corMtx_theta,
                 colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
                 rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
-                title = "Proportional correlation", annotation = TRUE)
+                title = "Proportional correlation", annotation = TRUE) +
+  
+  ## this function returns a `ggplot2` object, so can add additional aesthetics
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0))
 ```
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-22-1.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-9-1.png)
 
 Finally, we can also pair up each reference cell-type with the
 deconvolved cell-type that has the highest correlation.
@@ -219,10 +225,13 @@ m <- t(corMtx_theta)[pairs$rowix, pairs$colsix]
 correlationPlot(mat = t(m), # transpose back
                 colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
                 rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
-                title = "Transcriptional correlation", annotation = TRUE)
+                title = "Transcriptional correlation", annotation = TRUE) +
+  
+  ## this function returns a `ggplot2` object, so can add additional aesthetics
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0))
 ```
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-23-1.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-10-1.png)
 
 Note that only the paired deconvolved cell-types remain. Ones that
 paired less strongly with a given ground truth are dropped after
