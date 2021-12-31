@@ -15,7 +15,7 @@ knitr::opts_chunk$set(dev = 'png',
 
 # Motivation
 
-This tutorial demonstrates an analysis workflow using STdeconvolve on the 10x [visium mouse brain section (coronal) dataset](https://www.10xgenomics.com/resources/datasets/mouse-brain-section-coronal-1-standard-1-1-0)
+This tutorial demonstrates an analysis workflow using STdeconvolve on the 10x [visium mouse brain section (coronal) data set](https://www.10xgenomics.com/resources/datasets/mouse-brain-section-coronal-1-standard-1-1-0)
 
 ```{r imports}
 library(here)
@@ -88,7 +88,7 @@ pos <- data.frame("x" = mouseCoronalSCE$imagecol, "y" = mouseCoronalSCE$imagerow
 rownames(pos) <- mouseCoronalSCE$spot
 ```
 
-## filter and pre-process
+## Filter and pre-process
 
 ```{r filter-preprocess}
 filtered <- STdeconvolve::preprocess(dat = t(as.matrix(counts)),
@@ -110,9 +110,9 @@ filtered <- STdeconvolve::preprocess(dat = t(as.matrix(counts)),
 filtered$pos <- pos[rownames(filtered$corpus), ]
 ```
 
-#Analysis
+# Analysis
 
-First, we demonstrate a previously published workflow using the [MERINGUE]{https://jef.works/MERINGUE/} package. PCA was used for dimensional reduction and t-SNE was used to generate a 2D embedding. Graph-based clustering is used to infer sub-populations of spatial transcriptomics spots.
+First, we demonstrate a previously published workflow using the [MERINGUE](https://jef.works/MERINGUE/) package. PCA was used for dimensional reduction and t-SNE was used to generate a 2D embedding. Graph-based clustering is used to infer sub-populations of spatial transcriptomics spots.
 
 ```{r pca}
 # CPM normalize
@@ -151,7 +151,7 @@ plotEmbedding(pos,
               verbose=FALSE)
 ```
 
-Now, we demonstrate a workflow with STdeconvolve. We fit a Latent Dirichlet Allocation (LDA) model over the pre-filtered spots and genes. The model assigns spots to a user-specific number of "topics". The "topics" can be interpreted as inferred cell type. 
+Now, we demonstrate a workflow with STdeconvolve. We fit a Latent Dirichlet Allocation (LDA) model over the pre-filtered spots and genes. The model assigns spots to a user-specific number of "topics". The "topics" can be interpreted as inferred cell type.
 
 ```{r fitLDA}
 # try to deconvolve 20 cell types, which is the number that 10x Genomics demonstrated in their web applet
@@ -159,7 +159,7 @@ ldas <- fitLDA(as.matrix(filtered$corpus), Ks = 20, plot=FALSE, verbose=TRUE)
 optLDA <- ldas$models$'20'
 ```
 
-```{r plot-topics, fig.width=5, fig.height=5}
+```{r plot-topics, fig.width=6, fig.height=6}
 ## extract pixel cell-type proportions (theta) and cell-type gene expression profiles (beta) for the given dataset
 results <- getBetaTheta(optLDA, corpus = as.matrix(filtered$corpus))
 deconProp <- results$theta
@@ -167,12 +167,14 @@ deconGexp <- results$beta*1000
 
 vizAllTopics(deconProp, pos, r=50)
 ```
-Visually, we can find some strong correlation between graph-based clustering and LDA deconvolution. 
-- similarity between topic 11 and pink cluster (middle of tissue)
-- red topics and light blue cluster etc
+
+Visually, we can find some strong correlation between graph-based clustering and LDA deconvolution.
+
+-   similarity between topic 11 and pink cluster (middle of tissue)
+
+-   red topics and light blue cluster etc
 
 We would like to compare the similarity between STdeconvolve cell types and graph-based clusters
-
 
 Matching de-convolved cell types with clusters
 
