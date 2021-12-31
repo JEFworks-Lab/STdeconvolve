@@ -180,7 +180,9 @@ Matching de-convolved cell types with clusters
 
 Examples of interesting de-convolved cell types - present in multiple clusters/split one cluster - gradient of cell type in cluster - interesting features corresponding to biological layers
 
+
 # Apppendix: MERINGUE Functions
+
 
 Remove for Github version
 
