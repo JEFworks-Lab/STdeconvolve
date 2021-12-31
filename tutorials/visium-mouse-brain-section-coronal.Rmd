@@ -130,24 +130,31 @@ com <- getClusters(pcs, k, weight=TRUE)
 # Plot
 par(mfrow=c(1,2), mar=rep(1,4))
 plotEmbedding(emb, 
-              # groups=annot, 
+              groups=com,
               show.legend=TRUE, xlab=NA, ylab=NA,
               verbose=FALSE)
 plotEmbedding(pos, 
-              # groups=annot, 
+              groups=com,
               cex=1, xlab=NA, ylab=NA,
               verbose=FALSE)
 ```
 
 
 De-convolve clusters:
-```{r}
+```{r fitLDA}
 # try to deconvolve 20 clusters, which is the number that 10x Genomics demonstrated in their web applet
-ldas <- fitLDA(as.matrix(filtered$corpus), Ks = 20, plot=TRUE, verbose=TRUE)
-
+ldas <- STdeconvolve::fitLDA(as.matrix(filtered$corpus), Ks = 20, plot=FALSE, verbose=FALSE)
+optLDA <- ldas$models$`20`
 ```
 
 
+```{r plot-topics, fig.width=6, fig.height=6}
+results <- getBetaTheta(optLDA, corpus=as.matrix(filtered$corpus))
+deconProp <- results$theta
+deconGexp <- results$beta*1000
+
+vizAllTopics(deconProp, pos, r=50)
+```
 
 
 # Apppendix: MERINGUE Functions
