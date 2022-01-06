@@ -44,8 +44,6 @@ if(!file.exists(here("tutorialdata", "V1_Adult_Mouse_Brain_filtered_feature_bc_m
 }
 untar(tarfile = here("tutorialdata", "V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.tar.gz"), 
       exdir = here("tutorialdata"))
-
-
 if(!file.exists(here("tutorialdata", "V1_Adult_Mouse_Brain_raw_feature_bc_matrix.tar.gz"))){
   tar_gz_file <- "http://cf.10xgenomics.com/samples/spatial-exp/1.1.0/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_raw_feature_bc_matrix.tar.gz"
   download.file(tar_gz_file, 
@@ -54,7 +52,6 @@ if(!file.exists(here("tutorialdata", "V1_Adult_Mouse_Brain_raw_feature_bc_matrix
 }
 untar(tarfile = here("tutorialdata", "V1_Adult_Mouse_Brain_raw_feature_bc_matrix.tar.gz"), 
       exdir = here("tutorialdata"))
-
 if(!file.exists(here("tutorialdata", "V1_Adult_Mouse_Brain_spatial.tar.gz"))){
 spatial_imaging_data <- "http://cf.10xgenomics.com/samples/spatial-exp/1.1.0/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_spatial.tar.gz"
   download.file(spatial_imaging_data, 
@@ -63,7 +60,6 @@ spatial_imaging_data <- "http://cf.10xgenomics.com/samples/spatial-exp/1.1.0/V1_
 }
 untar(tarfile = here("tutorialdata", "V1_Adult_Mouse_Brain_spatial.tar.gz"), 
       exdir = here("tutorialdata"))
-
 if(!file.exists(here("tutorialdata", "V1_Adult_Mouse_Brain_image.tiff"))){
   tif_file <- "https://cf.10xgenomics.com/samples/spatial-exp/1.1.0/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_image.tif"
   download.file(tif_file, 
@@ -82,7 +78,6 @@ For our analysis, we are interested in the `counts` matrix
 
 ```{r read-visium}
 mouseCoronalSCE <- readVisium(here("tutorialdata"))
-
 counts <- mouseCoronalSCE@assays@data@listData$counts
 pos <- data.frame("x" = mouseCoronalSCE$imagecol, "y" = mouseCoronalSCE$imagerow)
 rownames(pos) <- mouseCoronalSCE$spot
@@ -119,7 +114,6 @@ First, we demonstrate a previously published workflow using the [MERINGUE](https
 mat <- normalizeCounts(counts = counts, 
                        log=FALSE,
                        verbose=TRUE)
-
 # Dimensionality reduction by PCA on log10 CPM expression values
 pcs.info <- prcomp(t(log10(as.matrix(mat)+1)), center=TRUE)
 nPcs <- 5
@@ -132,13 +126,13 @@ emb <- Rtsne::Rtsne(pcs,
              is_distance=FALSE,
              perplexity=30,
              num_threads=1,
-             verbose=FALSE)$Y
+             verbose=FALSE)
 rownames(emb) <- rownames(pcs)
-
 # Graph-based cluster detection
-k <- 30
-com <- getClusters(pcs, k, weight=TRUE)
 
+# larger K, less community
+k <- 25
+com <- getClusters(pcs, k, weight=TRUE)
 # Plot
 par(mfrow=c(1,2), mar=rep(1,4))
 plotEmbedding(emb, 
@@ -164,21 +158,139 @@ optLDA <- ldas$models$'20'
 results <- getBetaTheta(optLDA, corpus = as.matrix(filtered$corpus))
 deconProp <- results$theta
 deconGexp <- results$beta*1000
-
 vizAllTopics(deconProp, pos, r=50)
 ```
 
-Visually, we can find some strong correlation between graph-based clustering and LDA deconvolution.
+Correlating Louvain clustering to de-convolved cell type is a challenge. Clustering assigns each pixel to a single cluster, whereas de-convolution assigns proportions of each pixel to several cell types. As a first pass solution, suppose that each de-convolved pixel is assigned to the cell type with the largest proportion. This should hold well in homogeneous tissue and break down in heterogeneous tissue or along tissue boundaries.
+```{r}
+res <- matrix(as.numeric(unfactor(com)), ncol=1)
+deconType <- as.numeric(colnames(deconProp)[max.col(deconProp)])
+res2 <- data.frame(cbind(names(com), res, deconType))
+colnames(res2) <- c("spot", "clusterType", "deconType")
 
--   similarity between topic 11 and pink cluster (middle of tissue)
+res2 <- aggregate(res2$spot, res2[-1], FUN=length)
+res3 <- pivot_wider(res2, names_from = deconType, values_from = x)
 
--   red topics and light blue cluster etc
+# Clustering assignment as row, deconvolved cell type as column
+res4 <- matrix(as.numeric(unlist(res3)), ncol = length(res3))
+max.col(replace(res4, is.na(res4), -Inf), ties.method = "first")
+```
+The previous analysis suggest that cluster 1, 2 and 3 all represent cell type 7.
+A simple visualization shows that the matching fails to represent most of the area and some other cell types e.g. cell type 20 should also play a prominent role
+```{r, fig.height=5, fig.width=5}
+# Visualize deconvolved cell type 7
+vizTopic(deconProp, pos, 7)
 
-We would like to compare the similarity between STdeconvolve cell types and graph-based clusters
+# Visualize deconvolved cell type 18
+vizTopic(deconProp, pos, 20)
 
-Matching de-convolved cell types with clusters
+# Next visualize cluster 1
+plotEmbedding(pos, 
+              groups=com[com==1], 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
 
-Examples of interesting de-convolved cell types - present in multiple clusters/split one cluster - gradient of cell type in cluster - interesting features corresponding to biological layers
+# Next visualize cluster 2
+plotEmbedding(pos, 
+              groups=com[com==2], 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+
+# Next visualize cluster 3
+plotEmbedding(pos, 
+              groups=com[com==3], 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+```
+
+Now, relax the simplification that each pixel is represented by the cell type of highest proportion
+
+Instead, calculate the overlap between each de-convolved cell type and cluster at every pixel, the overlap ranging from 0 - 1. This produces a similarity matrix
+```{r}
+cluster <- as.numeric(unfactor(com))
+mtx <- matrix(0, length(levels(com)), ncol(deconProp))
+
+#TODO: vectorize
+for (i in seq(nrow(deconProp))){
+  for(j in seq(ncol(deconProp))){
+    print(i, j)
+    mtx[cluster[i], j] = mtx[cluster[i], j] + deconProp[i,j]
+  }
+}
+
+max.col(mtx)
+```
+These clustering seems to be representative of the general region, but not as tight
+```{r, fig.height=5, fig.width=5}
+# Visualize deconvolved cell type 13
+vizTopic(deconProp, pos, 13)
+
+
+# Next visualize cluster 1
+plotEmbedding(pos, 
+              groups=com[com==1], 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+
+# Next visualize cluster 2
+plotEmbedding(pos, 
+              groups=com[com==2], 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+```
+
+Clearly cluster 11 correlates poorly, even though it encompasses swarths of cell type 14. 
+
+Clusters 10 and 11 seems to correlate well with cell type 14.
+How do we compare these overlaps?
+```{r, fig.height=5, fig.width=5}
+# Visualize deconvolved cell type 14
+vizTopic(deconProp, pos, 14)
+
+
+# Next visualize cluster 5
+plotEmbedding(pos, 
+              groups=com[com==5], 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+
+# Next visualize cluster 10
+plotEmbedding(pos, 
+              groups=com[com==10], 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+
+# Next visualize cluster 11
+plotEmbedding(pos, 
+              groups=com[com==11], 
+              cex=1, xlab=NA, ylab=NA,
+              verbose=FALSE)
+```
+A much better solution is converting the graph based cluster vector into a matrix in the same format as the theta matrix. 
+
+```{r, fig.}
+comTheta <- model.matrix(~ com + 0)
+rownames(comTheta) <- names(com)
+
+mtx <- getCorrMtx(comTheta, deconProp, "t")
+rownames(mtx) <- paste0("com_", seq(nrow(mtx)))
+colnames(mtx) <- paste0("decon_", seq(ncol(mtx)))
+
+## order the cell-types rows based on best match (highest correlation) with each community 
+pairs <- STdeconvolve::lsatPairs(mtx)
+m <- mtx[pairs$rowix, pairs$colsix]
+correlationPlot(m) +
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90))
+```
+2-3 interesting cases: split topic by graph based clusters
+Annotate tissue by annotations e.g. Allan Brain Atlas
+  e.g. hybridization
+
+Use beta matrix v.s. Visualise top genes for transcriptional clusters --> recover top genes from PCs
+  How does that hash out in split topics?
+
+
+
 
 
 # Apppendix: MERINGUE Functions
@@ -214,10 +326,8 @@ normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseu
     }
     counts <- log10(counts + pseudo)
   }
-
   return(counts)
 }
-
 getClusters <- function (pcs, k,
                          method = igraph::cluster_louvain,
                          weight = FALSE,
@@ -229,7 +339,6 @@ getClusters <- function (pcs, k,
   # nearest neighbors in PC space
   nn = RANN::nn2(pcs, k = k) ## KNN
   names(nn) <- c('idx', 'dists')
-
   if(weight) {
     if(verbose) {
       print('using transcriptional distance weighting')
@@ -241,7 +350,6 @@ getClusters <- function (pcs, k,
     }
     weight <- rep(1, nrow(pcs))
   }
-
   if (verbose) {
     print("calculating clustering ...")
   }
@@ -273,13 +381,10 @@ getClusters <- function (pcs, k,
     return(com)
   }
 }
-
-
 plotEmbedding <- function(emb, groups=NULL, colors=NULL, cex=0.6, alpha=0.4, gradientPalette=NULL, zlim=NULL,
                           s=1, v=0.8, min.group.size=1, show.legend=FALSE, mark.clusters=FALSE, mark.cluster.cex=2,
                           shuffle.colors=FALSE, legend.x='topright', gradient.range.quantile=0.95, verbose=FALSE,
                           unclassified.cell.color='lightgrey', group.level.colors=NULL, xlab=NA, ylab=NA, ...) {
-
   if(!is.null(colors)) {
     ## use clusters information
     if(!all(rownames(emb) %in% names(colors))) { warning("provided cluster vector doesn't list colors for all of the cells; unmatched cells will be shown in gray. ")}
@@ -322,7 +427,6 @@ plotEmbedding <- function(emb, groups=NULL, colors=NULL, cex=0.6, alpha=0.4, gra
       names(cols) <- rownames(emb)
     }
   }
-
   plot(emb,col=adjustcolor(cols,alpha.f=alpha),cex=cex,pch=19,axes=F,xlab=xlab,ylab=ylab, ...); box();
   if(mark.clusters) {
     if(!is.null(groups)) {
@@ -340,8 +444,6 @@ plotEmbedding <- function(emb, groups=NULL, colors=NULL, cex=0.6, alpha=0.4, gra
     
   }
 }
-
-
 # Helper function to translate factor into colors
 fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=F,unclassified.cell.color='lightgrey',level.colors=NULL) {
   x <- as.factor(x);
@@ -355,9 +457,7 @@ fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=F,un
     col <- level.colors[1:length(levels(x))];
   }
   names(col) <- levels(x);
-
   if(shuffle) col <- sample(col);
-
   y <- col[as.integer(x)]; names(y) <- names(x);
   y[is.na(y)] <- unclassified.cell.color;
   if(return.details) {
