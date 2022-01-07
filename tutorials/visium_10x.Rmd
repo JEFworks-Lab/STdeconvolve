@@ -18,6 +18,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(STdeconvolve)
+library(raster)
 ```
 
 
@@ -530,23 +531,15 @@ STdeconvolve::correlationPlot(mat = m,
     axis.text.x = ggplot2::element_text(angle = 90)
 )
 ```
-We observe that cell type 19 correlates strongly with transcriptional communities 10 and 11. Let's observe their spatial locations. 
+We observe that cell type 19 correlates strongly with transcriptional communities 10 and 11. Let's observe their spatial locations. It appears that communities 10 and 11 share regions of space occupied by cell type 19. 
 ```{r, fig.height=5, fig.width=5}
 vizTopic(deconProp, pos, 19, plotTitle = "cell type 19")
 
-vizTopic(com_proxyTheta, pos, 10, plotTitle = "cluster 10")
-
-
-# plotEmbedding(pos, 
-#               groups=com[com==10], 
-#               cex=1, xlab=NA, ylab=NA,
-#               verbose=FALSE)
-# 
-# plotEmbedding(pos, 
-#               groups=com[com==11], 
-#               cex=1, xlab=NA, ylab=NA,
-#               verbose=FALSE)
+com_proxyTheta <- as.matrix(com_proxyTheta)
+vizTopic(com_proxyTheta, pos, 10, plotTitle = "communities 10")
+vizTopic(com_proxyTheta, pos, 11, plotTitle = "communities 11")
 ```
+Let's view the tissue slice and compare the regions with the [mouse brain reference atlas](https://mouse.brain-map.org/experiment/thumbnails/100048576?image_type=atlas)
 
 
 
