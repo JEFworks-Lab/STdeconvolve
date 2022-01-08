@@ -18,7 +18,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(STdeconvolve)
+library(sp)
 library(raster)
+library(rgdal)
 ```
 
 
@@ -28,7 +30,7 @@ This tutorial demonstrates an analysis workflow on 10X Visium ST data. It includ
 
 # Data
 
-We focus on the [Visium mouse brain section (coronal) dataset](https://www.10xgenomics.com/resources/datasets/mouse-brain-section-coronal-1-standard-1-1-0)
+We focus on the [Visium mouse brain section (coronal) dataset](https://www.10xgenomics.com/resources/datasets/mouse-brain-section-coronal-1-standard-1-1-0). A [summary of the dataset](https://cf.10xgenomics.com/samples/spatial-exp/1.1.0/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_web_summary.html) is provided by 10x Genomics
 
 In particular, we are interested in the filtered count matrix and the spatial positions of the barcodes. We can download these files into a folder, which we will use to load them into a [`SpatialExperiment`](https://bioconductor.org/packages/release/bioc/html/SpatialExperiment.html) object. 
 
@@ -335,7 +337,7 @@ gridExtra::grid.arrange(
 
 # Compare to transcriptional clustering
 
-Now, let's see how the deconvolved cell-types compare in terms of clustering the barcodes transcriptionally into 15 clusters.
+Now, let's see how the deconvolved cell-types compare in terms of clustering the barcodes transcriptionally into 19 clusters.
 
 First, let's perform dimensionality reduction on the `counts` matrix:
 
@@ -531,15 +533,61 @@ STdeconvolve::correlationPlot(mat = m,
     axis.text.x = ggplot2::element_text(angle = 90)
 )
 ```
-We observe that cell type 19 correlates strongly with transcriptional communities 10 and 11. Let's observe their spatial locations. It appears that communities 10 and 11 share regions of space occupied by cell type 19. 
+We observe that cell type 11 correlates strongly with transcriptional community 18 and 19. We plot their spatial locations, as well as the image of the tissue slice. Comparing the regions with the [mouse brain reference atlas](https://mouse.brain-map.org/experiment/thumbnails/100048576?image_type=atlas), it appears to overlap with nucleus of the thalamus.
 ```{r, fig.height=5, fig.width=5}
-vizTopic(deconProp, pos, 19, plotTitle = "cell type 19")
+vizTopic(deconProp, pos, 11, plotTitle = "cell type 11")
 
 com_proxyTheta <- as.matrix(com_proxyTheta)
-vizTopic(com_proxyTheta, pos, 10, plotTitle = "communities 10")
-vizTopic(com_proxyTheta, pos, 11, plotTitle = "communities 11")
+vizTopic(com_proxyTheta, pos, 18, plotTitle = "communities 18")
+vizTopic(com_proxyTheta, pos, 19, plotTitle = "communities 19")
+
+coronal_raster <- brick("~/Github/STdeconvolve/tutorialdata/V1_Adult_Mouse_Brain_image.tif")
+plotRGB(coronal_raster)
 ```
-Let's view the tissue slice and compare the regions with the [mouse brain reference atlas](https://mouse.brain-map.org/experiment/thumbnails/100048576?image_type=atlas)
+We explore the differentially expressed genes in cell type 11 and transcriptional communities 18 and 19. 
+First we compare the highly upregulated genes (>2) in transcriptional communities 18 and 19. 
+1141 genes are upregulated in community 18 and 587 genes are upregulated in community 19. 221 of these genes are common between both communities. 
+
+110 genes are upregulated in cell type 11. 42 of these genes are shared with both community 18 and 19. 
+```{r}
+celltype <- c(11)
+
+cell_upreg <- lapply(celltype, function(cluster) {
+  diffExp <- deconGexp[celltype,]/colMeans(deconGexp[-celltype,])
+  diffExp[is.nan(diffExp)] <- 0
+  names(diffExp)[diffExp > 2]
+})
+
+
+communities <- c(18, 19)
+avg_gene_exp <- Matrix::rowMeans(counts)
+
+community_upreg <- lapply(communities, function(community) {
+  
+  spots <- rownames(com_proxyTheta)[com_proxyTheta[,community]==1]
+  expression <- counts[,spots] # ~30000 x 102
+  diffExp <- Matrix::rowMeans(expression)/avg_gene_exp
+  diffExp[is.nan(diffExp)] <- 0
+  names(diffExp)[diffExp > 2]
+})
+
+lapply(cell_upreg, length)
+lapply(community_upreg, length)
+
+length(Reduce(intersect, append(cell_upreg, community_upreg)))
+```
+
+
+In other cases, deconvolved cell types form sub-clusters of transcriptional communities. For instance, community 13 correlates strongly with both cell types 3 and 6, and it appears to be split by the deconvolved cell types.
+
+Cell type 6 appears to be the border of ventral posterior medial region. 
+Cell type 3...
+```{r}
+vizTopic(com_proxyTheta, pos, 13, plotTitle = "communities 13")
+
+vizTopic(deconProp, pos, 3, plotTitle = "cell type 3")
+vizTopic(deconProp, pos, 6, plotTitle = "cell type 6")
+```
 
 
 
