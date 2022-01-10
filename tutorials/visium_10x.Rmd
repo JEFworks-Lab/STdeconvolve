@@ -21,6 +21,8 @@ library(STdeconvolve)
 library(sp)
 library(raster)
 library(rgdal)
+library(AnnotationHub)
+library(GO.db)
 ```
 
 
@@ -533,7 +535,9 @@ STdeconvolve::correlationPlot(mat = m,
     axis.text.x = ggplot2::element_text(angle = 90)
 )
 ```
+
 We observe that cell type 11 correlates strongly with transcriptional community 18 and 19. We plot their spatial locations, as well as the image of the tissue slice. Comparing the regions with the [mouse brain reference atlas](https://mouse.brain-map.org/experiment/thumbnails/100048576?image_type=atlas), it appears to overlap with nucleus of the thalamus.
+
 ```{r, fig.height=5, fig.width=5}
 vizTopic(deconProp, pos, 11, plotTitle = "cell type 11")
 
@@ -545,10 +549,11 @@ coronal_raster <- brick("~/Github/STdeconvolve/tutorialdata/V1_Adult_Mouse_Brain
 plotRGB(coronal_raster)
 ```
 We explore the differentially expressed genes in cell type 11 and transcriptional communities 18 and 19. 
-First we compare the highly upregulated genes (>2) in transcriptional communities 18 and 19. 
-1141 genes are upregulated in community 18 and 587 genes are upregulated in community 19. 221 of these genes are common between both communities. 
+First we identify the upregulated genes (>2). 
+110 genes are upregulated in cell type 11, 1141 genes are upregulated in community 18 and 587 genes are upregulated in community 19. 
 
-110 genes are upregulated in cell type 11. 42 of these genes are shared with both community 18 and 19. 
+221 of these genes are common between both communities 18 and 19. 42 of these genes are shared between all three groups.
+
 ```{r}
 celltype <- c(11)
 
@@ -574,7 +579,41 @@ community_upreg <- lapply(communities, function(community) {
 lapply(cell_upreg, length)
 lapply(community_upreg, length)
 
-length(Reduce(intersect, append(cell_upreg, community_upreg)))
+upreg <- Reduce(intersect, append(cell_upreg, community_upreg))
+upreg <- sort(toupper(upreg))
+upreg
+```
+TODO: compare with Allen Brain Atlas (differentially expressed genes)[https://mouse.brain-map.org/search/show?page_num=0&page_size=100&no_paging=false&domain1=8&domain2=549&domain1_threshold=0,50&domain2_threshold=2,50&image_set=P56coronal&search_type=differential] in the thalamus.
+```{r}
+
+```
+
+
+
+Let's further explore the 42 upregulated genes. We annotate the genes using GO term. 
+```{r}
+ah <- AnnotationHub()
+orgs <- subset(ah, ah$rdataclass == "OrgDb")
+orgdb <- query(orgs, "Homo sapiens")[[1]]
+go <- mapIds(orgdb, keys=upreg,
+       column="GO", keytype="SYMBOL",
+       multiVals="list")
+# filter out genes with no GO annotations.
+go <- go[!is.na(go)]
+go <- unlist(go, use.names = FALSE)
+
+Ontology(go[1])
+
+go2 <- lapply(go, function(go_term){
+  if( unname(Ontology(go_term)) == "BP") {
+    unname(Term(go_term))
+  }
+})
+
+go2 <- unlist(plyr::compact(go2), use.names = FALSE)
+go_freq <- as.data.frame(table(go2))
+go_freq <- go_freq[order(-go_freq$Freq),]
+head(go_freq)
 ```
 
 
