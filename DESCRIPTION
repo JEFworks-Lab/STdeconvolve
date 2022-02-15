@@ -37,7 +37,6 @@ Imports:
     stats,
     clue,
     hash,
-    NMF,
     liger,
     dplyr,
     reshape2
