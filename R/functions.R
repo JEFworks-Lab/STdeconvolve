@@ -381,7 +381,7 @@ preprocess <- function(dat,
 #'
 #' @description The input for topicmodels::LDA needs to be a
 #'     slam::as.simple_triplet_matrix (docs x words). Access a given model in
-#'     the returned list via: lda$models[[k]][1]. The models are objects from
+#'     the returned list via: lda$models$k. The models are objects from
 #'     the R package "topicmodels". The LDA models have slots with additional
 #'     information.
 #'

@@ -213,7 +213,7 @@ buildLDAobject <- function(LDAmodel,
   # colors for the cell-types. Essentially colored by the cluster they are in
   cols <- m$clusters
   if (colorScheme == "rainbow"){
-    levels(cols) <- rainbow(length(levels(cols)))
+    levels(cols) <- grDevices::rainbow(length(levels(cols)))
   }
   if (colorScheme == "ggplot"){
     levels(cols) <- gg_color_hue(length(levels(cols)))
@@ -301,7 +301,7 @@ correlationPlot_2 <- function(mat, rowLabs = NA, colLabs = NA, rowv = NA, colv =
 #' @param patch_size dimension in um to make the simulated spots for a MERFISH
 #'     experiment. The Centroid coords are already in um. (default: 100)
 #' 
-#' @return a hash table where each key is a bregma ID (ie [["-0.04"]])
+#' @return a hash table where each key is a bregma ID
 #'     and the returned object is a list that contains
 #' \itemize{
 #' \item bregmaFullDf: the "annot.table" data.frame for the specific bregma with
@@ -530,7 +530,7 @@ buildBregmaCorpus <- function (hashTable, bregmaID) {
 #' 
 #' 
 #' @param nmfRef the list returned from `SPOTlight::train_nmf()`. For `SPOTlight::spotlight_deconvolution()`,
-#'     this returned list actually has this nmfRef input list as its first element, i.e. nmfRef[[1]]
+#'     this returned list actually has this nmfRef input list as its first element
 #' @param stCounts ST count matrix to deconvolve, genes x spots
 #' @param min_cont param of `mixture_deconvolution_nmf()`. remove topics less than this percent in a spot
 #' @param normCtTopicProfiles if TRUE, uses the normalized cell-type topic-proportions instead of the 

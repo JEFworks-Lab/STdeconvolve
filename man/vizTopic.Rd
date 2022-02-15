@@ -24,6 +24,8 @@ vizTopic(
 
 \item{pos}{position of pixels, as data.frame with \code{x} and \code{y} columns}
 
+\item{topic}{the index of the topic}
+
 \item{groups}{colors the pixel border lines based on a group or cell layer
 they belong to. Needs to be a character or named vector of assigned groups for each pixel
 Ex: c("0", "1", "0", ...)}

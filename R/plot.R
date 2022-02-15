@@ -336,6 +336,7 @@ vizTopicClusters <- function(theta, pos, clusters,
 #'
 #' @param theta document (pixel) x cell-type proportion matrix
 #' @param pos position of pixels, as data.frame with `x` and `y` columns
+#' @param topic the index of the topic
 #' @param groups colors the pixel border lines based on a group or cell layer
 #'     they belong to. Needs to be a character or named vector of assigned groups for each pixel
 #'     Ex: c("0", "1", "0", ...)
