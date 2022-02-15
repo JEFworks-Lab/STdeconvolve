@@ -3,7 +3,7 @@
 \docType{data}
 \name{mOB}
 \alias{mOB}
-\title{Spatial transcriptomics transcriptomics of the mouse olfactory bulb}
+\title{Spatial transcriptomics of the mouse olfactory bulb}
 \format{
 List where 'counts' is a sparse matrix with columns as voxels and rows as genes and
 'pos' is a data frame of x and y position values per voxel
@@ -15,6 +15,6 @@ List where 'counts' is a sparse matrix with columns as voxels and rows as genes 
 mOB
 }
 \description{
-Spatial transcriptomics transcriptomics of the mouse olfactory bulb
+Spatial transcriptomics of the mouse olfactory bulb
 }
 \keyword{datasets}

@@ -11,7 +11,7 @@ reduceTheta(theta, top = 3)
 \item{theta}{pixel (rows) by cell-types (columns) distribution matrix. Each row
 is the cell-type composition for a given pixel}
 
-\item{top}{Seelct number of top cell-types in each pixel to keep (defaul: 3)}
+\item{top}{Seelct number of top cell-types in each pixel to keep (default: 3)}
 }
 \value{
 A filtered pixel (rows) by cell-types (columns) distribution matrix.

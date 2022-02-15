@@ -1,0 +1,29 @@
+---
+title: "STdeconvolve Vignette"
+author: "Brendan F. Miller"
+output: rmarkdown::html_document
+vignette: >
+  %\VignetteIndexEntry{Deconvolution with STdeconvolve}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, results = 'hide')
+library(STdeconvolve)
+```
+
+# Installation
+
+```{r, eval = FALSE}
+if(!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("STdeconvolve")
+
+```
+
+# Introduction
+
+```{r}
+sessionInfo()
+```

@@ -2,6 +2,284 @@
 # the actual STdeconvolve pipeline
 
 
+#' Aggregate cell-types together using dynamic tree cutting.
+#'
+#' @param beta Beta matrix (cell-type gene distribution matrix)
+#' @param clustering Clustering agglomeration method to be used (default: ward.D)
+#' @param dynamic Dynamic tree cutting method to be used (default: hybrid)
+#' @param deepSplit Dynamic tree cutting sensitivity parameter (default: 4)
+#' @param plot Boolean for plotting
+#'
+#' @return A list that contains
+#' \itemize{
+#' \item order: vector of the dendrogram index order for the cell-types
+#' \item clusters: factor of the cell-types (names) and their assigned cluster (levels)
+#' \item dendro: dendrogram of the clusters
+#' }
+#'
+#'
+clusterTopics <- function(beta,
+                          #distance = "euclidean",
+                          clustering = "ward.D",
+                          dynamic = "hybrid",
+                          deepSplit = 4,
+                          plot = TRUE) {
+  
+  if (deepSplit == 4) {
+    maxCoreScatter = 0.95
+    minGap = (1 - maxCoreScatter) * 3/4
+  } else if (deepSplit == 3) {
+    maxCoreScatter = 0.91
+    minGap = (1 - maxCoreScatter) * 3/4
+  } else if (deepSplit == 2) {
+    maxCoreScatter = 0.82
+    minGap = (1 - maxCoreScatter) * 3/4
+  } else if (deepSplit == 1) {
+    maxCoreScatter = 0.73
+    minGap = (1 - maxCoreScatter) * 3/4
+  } else if (deepSplit == 0) {
+    maxCoreScatter = 0.64
+    minGap = (1 - maxCoreScatter) * 3/4
+  }
+  
+  #d_ <- dist(beta, method = distance)
+  ## Jean: use correlation instead
+  d_ <- as.dist(1-cor(t(beta)))
+  hc_ <- stats::hclust(d_, method = clustering)
+  
+  groups <- dynamicTreeCut::cutreeDynamic(hc_,
+                                          method = dynamic,
+                                          distM = as.matrix(d_),
+                                          deepSplit = deepSplit,
+                                          minClusterSize=0,
+                                          maxCoreScatter = maxCoreScatter,
+                                          minGap = minGap,
+                                          maxAbsCoreScatter=NULL,
+                                          minAbsGap=NULL)
+  
+  names(groups) <- hc_$labels
+  groups <- factor(groups)
+  
+  if (plot) {
+    #plot(hc_)
+    d2_ <- as.dist(1-cor(beta))
+    rc_ <- hclust(d2_, method = clustering)
+    heatmap(t(beta),
+            Colv=as.dendrogram(hc_),
+            Rowv=as.dendrogram(rc_),
+            ColSideColors = fac2col(groups),
+            col = correlation_palette,
+            xlab = "Cell-types",
+            ylab = "Genes",
+            main = "Predicted cell-types and clusters")
+  }
+  
+  return(list(clusters = groups,
+              order = hc_$order,
+              dendro = as.dendrogram(hc_)))
+  
+}
+
+
+#' Aggregate cell-types in the same cluster into a single cell-type
+#'
+#' @description Note: for the beta matrix, each row is a cell-type, each column
+#'     is a gene. The cell-type row is a distribution of terms that sums to 1. So
+#'     combining cell-type row vectors, these should be adjusted such that the
+#'     rowSum == 1. As in, take average of the terms after combining. However, the
+#'     theta matrix (after inversion) will have cell-type rows and each column is a
+#'     document. Because the cell-type can be represented at various proportions in
+#'     each doc and these will not necessarily add to 1, should not take average.
+#'     Just sum cell-type row vectors together. This way, each document column still
+#'     adds to 1 when considering the proportion of each cell-type-cluster in the document.
+#'
+#' @param mtx either a beta (cell-type gene distribution matrix) or a
+#'     theta (pixel-cell type distribution matrix)
+#' @param clusters factor of the cell-types (names) and their assigned cluster (levels)
+#' @param type either "t" or "b". Affects the adjustment to the combined
+#'     cell-type vectors. "b" divides summed cell-type vectors by number of aggregated cell-types
+#'
+#' @return matrix where cell-types are now cell-type-clusters
+#'
+combineTopics <- function(mtx, clusters, type) {
+  
+  if (!type %in% c("t", "b")){
+    stop("`type` must be either 't' or 'b'")
+  }
+  
+  # if mtx is theta, transpose so cell-types are rows
+  if (type == "t") {
+    mtx <- t(mtx)
+  }
+  
+  combinedTopics <- do.call(rbind, lapply(levels(clusters), function(cluster) {
+    
+    # get cell-types in a given cluster
+    topics <- labels(clusters[which(clusters == cluster)])
+    
+    # print(cluster)
+    # print(length(topics))
+    
+    # matrix slice for the cell-types in the cluster
+    mtx_slice <- mtx[topics,]
+    
+    if (length(topics) == 1) {
+      topicVector <- mtx_slice
+    } else if (length(topics) > 1) {
+      mtx_slice <- as.data.frame(mtx_slice)
+      if (type == "b") {
+        topicVector <- colSums(mtx_slice) / length(topics)
+      } else if (type == "t") {
+        topicVector <- colSums(mtx_slice)
+      }
+    }
+    topicVector
+    
+  }))
+  rownames(combinedTopics) <- levels(clusters)
+  colnames(combinedTopics) <- colnames(mtx)
+  message("cell-types combined.")
+  
+  # if theta, make cell-types the columns again
+  if (type == "t") {
+    combinedTopics <- t(combinedTopics)
+  }
+  return(combinedTopics)
+}
+
+
+#' Wrapper to extract beta (cell type-gene distribution matrix),
+#' theta (pixel cell-type distribution) for individual cell-types and aggregated cell-type-clusters
+#' for an LDA model in `fitLDA` output list.
+#'
+#' @description Wrapper that combines the functions `getBetaTheta`, `clusterTopics`,
+#'     `combineTopics` and slots of the topicmodels::LDA object to return a list
+#'     that contains the most relevant components of a given LDA model for ease
+#'     of analysis and visualization.
+#'
+#' @param LDAmodel LDA model from fitLDA
+#' @param corpus If corpus is NULL, then it will use the original corpus that
+#'     the model was fitted to. Otherwise, compute deconvolved topics from this
+#'     new corpus. Needs to be pixels x genes and nonnegative integer counts. 
+#'     Each row needs at least 1 nonzero entry (default: NULL)
+#' @param perc.filt proportion threshold to remove cell-types in pixels (default: 0.05)
+#' @param clustering Clustering agglomeration method to be used (default: ward.D)
+#' @param dynamic Dynamic tree cutting method to be used (default: hybrid)
+#' @param deepSplit parameter for `clusterTopics` for dynamic tree splitting
+#'     when aggregating cell-types (default: 4)
+#' @param colorScheme color scheme for generating colors assigned to cell-type
+#'     clusters for visualizing. Either "rainbow" or "ggplot" (default: "rainbow")
+#' @param plot Boolean for plotting
+#'
+#' @return A list that contains
+#' \itemize{
+#' \item beta: cell-type (rows) by gene (columns) distribution matrix.
+#'     Each row is a probability distribution of a cell-type expressing each gene
+#'     in the corpus
+#' \item theta: pixel (rows) by cell-type (columns) distribution matrix. Each row
+#'     is the cell-type composition for a given pixel
+#' \item clusters: factor of the cell-types (names) and their assigned cluster (levels)
+#' \item dendro: dendrogram of the clusters. Returned from `stats::hclust()` in `clusterTopics`
+#' \item cols: factor of colors for each cell-type where colors correspond to their assigned cluster
+#' \item betaCombn: cell-type (rows) by gene (columns) distribution matrix for combined cell-type-clusters
+#' \item thetaCombn: pixel (rows) by cell-type (columns) distribution matrix for aggregated cell-type-clusters
+#' \item clustCols: factor of colors for each cell-type-cluster
+#' \item k: number of cell-types K of the model
+#' }
+#'
+buildLDAobject <- function(LDAmodel,
+                           corpus = NULL,
+                           perc.filt = 0.05,
+                           clustering = "ward.D",
+                           dynamic = "hybrid",
+                           deepSplit = 4,
+                           colorScheme = "rainbow",
+                           plot = TRUE){
+  
+  # get beta and theta list object from the LDA model
+  m <- getBetaTheta(LDAmodel, corpus = corpus, perc.filt = perc.filt)
+  
+  # cluster cell-types
+  clust <- clusterTopics(beta = m$beta,
+                         clustering = clustering,
+                         dynamic = dynamic,
+                         deepSplit = deepSplit,
+                         plot = plot)
+  
+  # add cluster information to the list
+  m$clusters <- clust$clusters
+  m$dendro <- clust$dendro
+  
+  # colors for the cell-types. Essentially colored by the cluster they are in
+  cols <- m$clusters
+  if (colorScheme == "rainbow"){
+    levels(cols) <- grDevices::rainbow(length(levels(cols)))
+  }
+  if (colorScheme == "ggplot"){
+    levels(cols) <- gg_color_hue(length(levels(cols)))
+  }
+  m$cols <- cols
+  
+  # construct beta and thetas for the cell-type-clusters
+  m$betaCombn <- combineTopics(m$beta, clusters = m$clusters, type = "b")
+  m$thetaCombn <- combineTopics(m$theta, clusters = m$clusters, type = "t")
+  
+  # colors for the cell-type-clusters
+  # separate factor for ease of use with vizTopicClusters and others
+  # note that these color assignments are different than the
+  # cluster color assignments in the levels of `cols`
+  clusterCols <- as.factor(colnames(m$thetaCombn))
+  names(clusterCols) <- colnames(m$thetaCombn)
+  levels(clusterCols) <- levels(m$cols)
+  m$clustCols <- clusterCols
+  
+  m$k <- LDAmodel@k
+  
+  return(m)
+  
+}
+
+
+#' Generate heatmap of correlations
+#' 
+#' @description Visualize the correlations between topics stored in a matrix, typically one
+#'     returned via `getCorrMtx()`. This function uses gplots::heatmap.2.
+#'
+#' @param mat matrix with correlation values from -1 to 1
+#' @param rowLabs y-axis label for plot. These are the rows of the matrix, or specifically m1 from getCorrMtx. (default: NULL)
+#' @param colLabs x-axis label for plot. These are the columns of the matrix, or specifically m2 from getCorrMtx. (default: NULL)
+#' @param rowv cluster order for the rows to make dendrogram (RowV in heatmap.2()). (default: NA)
+#' @param colv cluster order for the columns to make dendrogram (Colv in heatmap.2()). (default: NA)
+#' @param margins set margins of the plot. (default: c(6,8))
+#' @param textSize set the text size for both x-axis and y-axis labels. (default: 0.9)
+#' 
+correlationPlot_2 <- function(mat, rowLabs = NA, colLabs = NA, rowv = NA, colv = NA, margins = c(6,8), textSize = 0.9) {
+  
+  correlation_palette <- grDevices::colorRampPalette(c("blue", "white", "red"))(n = 209)
+  correlation_breaks <- c(seq(-1,-0.01,length=100),
+                          seq(-0.009,0.009,length=10),
+                          seq(0.01,1,length=100))
+  
+  plt <- gplots::heatmap.2(x = mat,
+                           density.info = "none",
+                           trace = "none",
+                           Rowv = rowv,
+                           Colv = colv,
+                           col = correlation_palette,
+                           breaks = correlation_breaks,
+                           key.xlab = "Correlation",
+                           xlab = colLabs,
+                           ylab = rowLabs,
+                           key.title = NA,
+                           cexRow = textSize,
+                           cexCol = textSize,
+                           # lhei = c(1,3),
+                           margins = margins)
+  
+  return(plt)
+}
+
+
 #' Build hash table of simulated spots for each bregma layer of a given
 #' MERFISH experiment.
 #' 
@@ -23,7 +301,7 @@
 #' @param patch_size dimension in um to make the simulated spots for a MERFISH
 #'     experiment. The Centroid coords are already in um. (default: 100)
 #' 
-#' @return a hash table where each key is a bregma ID (ie [["-0.04"]])
+#' @return a hash table where each key is a bregma ID
 #'     and the returned object is a list that contains
 #' \itemize{
 #' \item bregmaFullDf: the "annot.table" data.frame for the specific bregma with
@@ -39,7 +317,6 @@
 #'     each simulated patch
 #' }
 #' 
-#' @export
 simulateBregmaSpots <- function (cellCentroidsAndClass, counts, patch_size = 100) {
   
   # dictionary hash table
@@ -158,7 +435,6 @@ simulateBregmaSpots <- function (cellCentroidsAndClass, counts, patch_size = 100
 #'     their position, cell type label, and assigned patch
 #' }
 #' 
-#' @export
 buildBregmaCorpus <- function (hashTable, bregmaID) {
   
   bregmaID <- as.character(bregmaID)
@@ -254,7 +530,7 @@ buildBregmaCorpus <- function (hashTable, bregmaID) {
 #' 
 #' 
 #' @param nmfRef the list returned from `SPOTlight::train_nmf()`. For `SPOTlight::spotlight_deconvolution()`,
-#'     this returned list actually has this nmfRef input list as its first element, i.e. nmfRef[[1]]
+#'     this returned list actually has this nmfRef input list as its first element
 #' @param stCounts ST count matrix to deconvolve, genes x spots
 #' @param min_cont param of `mixture_deconvolution_nmf()`. remove topics less than this percent in a spot
 #' @param normCtTopicProfiles if TRUE, uses the normalized cell-type topic-proportions instead of the 
@@ -269,7 +545,6 @@ buildBregmaCorpus <- function (hashTable, bregmaID) {
 #' \item thetaCt: ct_in_spots_clean)) # spot x cell type proportions (all spots and cell types)
 #' }
 #'
-#' @export
 SPOTlightPredict <- function(nmfRef, stCounts, min_cont = 0.0, normCtTopicProfiles = FALSE) {
   
   # get basis matrix W [genes x topics]
@@ -397,6 +672,4 @@ SPOTlightPredict <- function(nmfRef, stCounts, min_cont = 0.0, normCtTopicProfil
   # as cluster genes for the NMF, and thus would not be in the NMF at all
   
 }
-
-
 

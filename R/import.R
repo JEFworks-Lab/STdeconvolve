@@ -12,12 +12,13 @@
 #' 
 #' @export
 #' 
-where.is.knee <- function(points = NULL) {
+where.is.knee <- function(points=NULL) {
   
   lower.limit <- 2
   upper.limit <- length(points) -1
   
-  second.derivative <- sapply(lower.limit:upper.limit, function(i) { points[i+1] + points[i-1] - (2 * points[i]) })
+  second.derivative <- sapply(lower.limit:upper.limit, function(i){
+    points[i+1] + points[i-1] - (2 * points[i]) })
   
   w.max <- which.max(second.derivative)
   best.k <- w.max +1
@@ -50,12 +51,18 @@ where.is.knee <- function(points = NULL) {
 #'
 #' @importFrom Matrix Matrix colSums rowSums
 #'
-cleanCounts <- function (counts, min.lib.size = 1, max.lib.size = Inf, min.reads = 1, min.detected = 1, verbose = FALSE, plot=TRUE) {
+cleanCounts <- function(counts,
+                        min.lib.size=1,
+                        max.lib.size=Inf,
+                        min.reads=1,
+                        min.detected=1,
+                        verbose=FALSE,
+                        plot=TRUE) {
   if (!any(class(counts) %in% c("dgCMatrix", "dgTMatrix"))) {
     if (verbose) {
       message("Converting to sparse matrix ...")
     }
-    counts <- Matrix::Matrix(counts, sparse = TRUE)
+    counts <- Matrix::Matrix(counts, sparse=TRUE)
   }
   if (verbose) {
     message("Filtering matrix with ", ncol(counts), " cells and ",
@@ -296,7 +303,7 @@ normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseu
 #' @description Function to winsorize the gene counts
 #' 
 #' @param x gene count matrix
-#' @param qt quantile for winsorization (defaul: 0.05)
+#' @param qt quantile for winsorization (default: 0.05)
 #' 
 #' @return winsorized gene count matrix
 #' 

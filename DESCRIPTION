@@ -1,7 +1,7 @@
 Package: STdeconvolve
 Type: Package
 Title: Reference-free cell-type deconvolution of multi-cellular spatially resolved transcriptomics data 
-Version: 0.1.0
+Version: 0.99.0
 Authors@R:
     c(person(given = "Brendan",
            family = "Miller",
@@ -18,7 +18,7 @@ Description: STdeconvolve uses latent Dirichlet allocation to infer latent cell-
 biocViews: Transcriptomics, Visualization, Deconvolution, RNASeq, TopicModels, Spatial
 License: GPL-3
 Encoding: UTF-8
-LazyData: true
+LazyData: FALSE
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
 Imports:
@@ -39,7 +39,8 @@ Imports:
     hash,
     NMF,
     liger,
-    dplyr
+    dplyr,
+    reshape2
 LinkingTo:
     Rcpp
 Depends:
@@ -48,7 +49,9 @@ Suggests:
     knitr,
     rmarkdown,
     testthat,
-    rcmdcheck
+    rcmdcheck,
+    SPOTlight,
+    gplots
 VignetteBuilder:
     knitr,
     rmarkdown

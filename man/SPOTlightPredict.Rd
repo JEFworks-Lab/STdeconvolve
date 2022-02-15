@@ -9,7 +9,7 @@ SPOTlightPredict(nmfRef, stCounts, min_cont = 0, normCtTopicProfiles = FALSE)
 }
 \arguments{
 \item{nmfRef}{the list returned from \code{SPOTlight::train_nmf()}. For \code{SPOTlight::spotlight_deconvolution()},
-this returned list actually has this nmfRef input list as its first element, i.e. nmfRef[\link{1}]}
+this returned list actually has this nmfRef input list as its first element}
 
 \item{stCounts}{ST count matrix to deconvolve, genes x spots}
 

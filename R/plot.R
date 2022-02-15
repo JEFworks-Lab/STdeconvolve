@@ -5,7 +5,7 @@
 #'     of each cell-type in a pixel, the row (pixel) should sum to 1.
 #'
 #' @param theta document (pixel) x cell-type proportion matrix
-#' @param pos position of pixels, as data.frame with `x` and `y` columns
+#' @param pos position of pixels, as data.frame with x and y columns
 #' @param topicOrder order of topics in theta to visualize as a numeric vector
 #'     and same length as topicCols (default: seq(ncol(theta)))
 #' @param topicCols Vector of colors for each of the cell-types to be visualized.
@@ -336,6 +336,7 @@ vizTopicClusters <- function(theta, pos, clusters,
 #'
 #' @param theta document (pixel) x cell-type proportion matrix
 #' @param pos position of pixels, as data.frame with `x` and `y` columns
+#' @param topic the index of the topic
 #' @param groups colors the pixel border lines based on a group or cell layer
 #'     they belong to. Needs to be a character or named vector of assigned groups for each pixel
 #'     Ex: c("0", "1", "0", ...)
@@ -689,47 +690,6 @@ correlationPlot <- function(mat, colLabs = NA, rowLabs = NA, title = NA, annotat
   
   return(plt)
   
-}
-
-
-#' Generate heatmap of correlations
-#' 
-#' @description Visualize the correlations between topics stored in a matrix, typically one
-#'     returned via `getCorrMtx()`. This function uses gplots::heatmap.2.
-#'
-#' @param mat matrix with correlation values from -1 to 1
-#' @param rowLabs y-axis label for plot. These are the rows of the matrix, or specifically m1 from getCorrMtx. (default: NULL)
-#' @param colLabs x-axis label for plot. These are the columns of the matrix, or specifically m2 from getCorrMtx. (default: NULL)
-#' @param rowv cluster order for the rows to make dendrogram (RowV in heatmap.2()). (default: NA)
-#' @param colv cluster order for the columns to make dendrogram (Colv in heatmap.2()). (default: NA)
-#' @param margins set margins of the plot. (default: c(6,8))
-#' @param textSize set the text size for both x-axis and y-axis labels. (default: 0.9)
-#' 
-#' @export
-correlationPlot_2 <- function(mat, rowLabs = NA, colLabs = NA, rowv = NA, colv = NA, margins = c(6,8), textSize = 0.9) {
-  
-  correlation_palette <- grDevices::colorRampPalette(c("blue", "white", "red"))(n = 209)
-  correlation_breaks <- c(seq(-1,-0.01,length=100),
-                          seq(-0.009,0.009,length=10),
-                          seq(0.01,1,length=100))
-  
-  plt <- gplots::heatmap.2(x = mat,
-                           density.info = "none",
-                           trace = "none",
-                           Rowv = rowv,
-                           Colv = colv,
-                           col = correlation_palette,
-                           breaks = correlation_breaks,
-                           key.xlab = "Correlation",
-                           xlab = colLabs,
-                           ylab = rowLabs,
-                           key.title = NA,
-                           cexRow = textSize,
-                           cexCol = textSize,
-                           # lhei = c(1,3),
-                           margins = margins)
-  
-  return(plt)
 }
 
 

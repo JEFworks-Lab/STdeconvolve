@@ -21,7 +21,7 @@ restrictCorpus(
 
 \item{removeBelow}{remove over dispersed genes that are present in less than this fraction of pixels (default: 0.05)}
 
-\item{alpha}{alpha parameter for \code{getOverdispersedGenes}.
+\item{alpha}{alpha parameter for getOverdispersedGenes().
 Higher = less stringent and more overdispersed genes returned (default: 0.05)}
 
 \item{nTopOD}{number of top over dispersed genes to use. int (default: 1000).

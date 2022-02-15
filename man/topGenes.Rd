@@ -9,7 +9,7 @@ topGenes(beta, n = 10)
 \arguments{
 \item{beta}{beta matrix (cell-type gene distribution matrix)}
 
-\item{n}{number of top genes for each deconvolved cell-type to return (defaul: 10)}
+\item{n}{number of top genes for each deconvolved cell-type to return (default: 10)}
 }
 \value{
 a list where each item is a vector of the top genes and their associated probabilities for

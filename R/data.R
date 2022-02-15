@@ -1,4 +1,4 @@
-#' Spatial transcriptomics transcriptomics of the mouse olfactory bulb
+#' Spatial transcriptomics of the mouse olfactory bulb
 #'
 #' @format List where 'counts' is a sparse matrix with columns as voxels and rows as genes and
 #'                    'pos' is a data frame of x and y position values per voxel
@@ -16,11 +16,11 @@
 # @source \url{https://science.sciencemag.org/content/362/6416/eaau5324/}
 # "mPOA"
 
-#' Spatial transcriptomics transcriptomics of 4 breast cancer biopsy sections
+#' Spatial transcriptomics of 4 breast cancer biopsy sections
 #'
 #' @format List where 'counts' is a sparse matrix with columns as voxels and rows as genes and
 #'                    'pos' is a data frame of x and y position values per voxel
 #'                          and slice index for 4 consecutive slices
 #'
 #' @source \url{https://science.sciencemag.org/content/353/6294/78}
-"BCL"
+# "BCL"
