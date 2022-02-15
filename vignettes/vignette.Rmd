@@ -24,6 +24,245 @@ BiocManager::install("STdeconvolve")
 
 # Introduction
 
+## Deconvolution
+
+In this tutorial, we will walk through some of the main functionalities of `STdeconvolve`. 
+
+```{r, load_library}
+library(STdeconvolve)
+```
+
+Given a counts matrix from pixel-resolution spatial transcriptomics data where each spatially resolved measurement may represent mixtures from potentially multiple cell-types, STdeconvolve infers the putative transcriptomic profiles of cell-types and their proportional representation within each multi-cellular spatially resolved pixel. Such a pixel-resolution spatial transcriptomics dataset of the mouse olfactory bulb is built in and can be loaded. 
+
+```{r, data}
+data(mOB)
+pos <- mOB$pos ## x and y positions of each pixel
+cd <- mOB$counts ## matrix of gene counts in each pixel
+annot <- mOB$annot ## annotated tissue layers assigned to each pixel
+```
+
+`STdeconvolve` first feature selects for genes most likely to be relevant for distinguishing between cell-types by looking for highly overdispersed genes across ST pixels. Pixels with too few genes or genes with too few reads can also be removed. 
+
+```{r, feature_selection, fig.width=6, fig.height=3}
+## remove pixels with too few genes
+counts <- cleanCounts(counts = cd,
+                      min.lib.size = 100,
+                      min.reads = 1,
+                      min.detected = 1,
+                      verbose = TRUE)
+## feature select for genes
+corpus <- restrictCorpus(counts,
+                         removeAbove = 1.0,
+                         removeBelow = 0.05,
+                         alpha = 0.05,
+                         plot = TRUE,
+                         verbose = TRUE)
+```
+
+`STdeconvolve` then applies latent Dirichlet allocation (LDA), a generative statistical model commonly used in natural language processing, to discover `K` latent cell-types. `STdeconvolve` fits a range of LDA models to inform the choice of an optimal `K`.  
+
+```{r, fit_ldas, fig.width=6, fig.height=4}
+## Note: the input corpus needs to be an integer count matrix of pixels x genes
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1),
+               perc.rare.thresh = 0.05,
+               plot=TRUE,
+               verbose=TRUE)
+```
+
+In this example, we will use the model with the lowest model perplexity.
+
+The shaded region indicates where a fitted model for a given K had an `alpha` > 1. `alpha` is an LDA parameter that is solved for during model fitting and corresponds to the shape parameter of a symmetric Dirichlet distribution. In the model, this Dirichlet distribution describes the cell-type proportions in the pixels. A symmetric Dirichlet with alpha > 1 would lead to more uniform cell-type distributions in the pixels and difficulty identifying distinct cell-types. Instead, we want models with alphas < 1, resulting in sparse distributions where only a few cell-types are represented in a given pixel. 
+
+The resulting `theta` matrix can be interpreted as the proportion of each deconvolved cell-type across each spatially resolved pixel. The resulting `beta` matrix can be interpreted as the putative gene expression profile for each deconvolved cell-type normalized to a library size of 1. This `beta` matrix can be scaled by a depth factor (ex. 1000) for interpretability. 
+
+```{r, model}
+## select model with minimum perplexity
+optLDA <- optimalModel(models = ldas, opt = "min")
+
+## extract pixel cell-type proportions (theta) and cell-type gene expression profiles (beta) for the given dataset
+## we can also remove cell-types from pixels that contribute less than 5% of the pixel proportion
+## and scale the deconvolved transcriptional profiles by 1000 
+results <- getBetaTheta(optLDA,
+                        perc.filt = 0.05,
+                        betaScale = 1000)
+
+deconProp <- results$theta
+deconGexp <- results$beta
+```
+
+## Visualization
+
+We can now visualize the proportion of each deconvolved cell-type across the original spatially resolved pixels. 
+
+```{r, visualize_all, fig.width=8, fig.height=4}
+vizAllTopics(deconProp, pos, 
+             groups = annot, 
+             group_cols = rainbow(length(levels(annot))),
+             r=0.4)
+```
+
+For faster plotting, we can visualize the pixel proportions of a single cell-type separately using `vizTopic()`:
+
+```{r, visualize_one, fig.width=8, fig.height=4}
+vizTopic(theta = deconProp, pos = pos, topic = "5", plotTitle = "X5",
+         size = 5, stroke = 1, alpha = 0.5,
+         low = "white",
+         high = "red")
+```
+
+In this tutorial, we will go over two different strategies for annotating the deconvolved cell-types.
+
+Recall that `STdeconvolve` does not require a reference to deconvolve cell-types in multi-cellular spatially-resolved pixels. However, we would still like some way to identify the deconvolved cell-types to determine if they may represent known cell-types.
+
+In addition to the predicted pixel proportions, `STdeconvolve` also returns predicted transcriptional profiles of the deconvolved cell-types as the `beta` matrix. We can use these transcriptional profiles to compare to known cell-type transcriptional profiles and see if we can annotate them.
+
+For demonstration purposes, let's use the 5 annotated tissue layer labels (i.e. "Granular Cell Layer", "Mitral Cell Layer", etc) assigned to each pixel and use these to make transcriptional profiles for each of the annotated tissue layers in the MOB.
+
+```{r, proxy_annotations}
+
+# proxy theta for the annotated layers
+mobProxyTheta <- model.matrix(~ 0 + annot)
+rownames(mobProxyTheta) <- names(annot)
+# fix names
+colnames(mobProxyTheta) <- unlist(lapply(colnames(mobProxyTheta), function(x) {
+  unlist(strsplit(x, "annot"))[2]
+}))
+
+mobProxyGexp <- counts %*% mobProxyTheta
+
+```
+
+## Annotation Strategy 1: Transcriptional correlations
+
+First, we can find the Pearson's correlation between the transcriptional profiles of the deconvolved cell-types and those of a ground truth reference.
+
+```{r, correlation_beta, fig.width=6, fig.height=5}
+
+corMtx_beta <- getCorrMtx(m1 = as.matrix(deconGexp), # the deconvolved cell-type `beta` (celltypes x genes)
+                          m2 = t(as.matrix(mobProxyGexp)), # the reference `beta` (celltypes x genes)
+                          type = "b") # "b" = comparing beta matrices, "t" for thetas
+
+## row and column names need to be characters
+rownames(corMtx_beta) <- paste0("decon_", seq(nrow(corMtx_beta)))
+
+correlationPlot(mat = corMtx_beta,
+                colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
+                rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
+                title = "Transcriptional correlation", annotation = TRUE) +
+  
+  ## this function returns a `ggplot2` object, so can add additional aesthetics
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0))
+
+```
+
+Notice that cell-type 1, 4, and 5 correlate the strongest with the Granular cell layer, cell-type 2 with the Olfactory nerve layer, etc. These agree with there predicted spatial proportions in the MOB dataset. We can also confirm this by also computing the correlation between the predicted and ground truth cell-type proportions via comparing the `theta` matrices.
+
+```{r, correlation_theta, fig.width=6, fig.height=5}
+
+corMtx_theta <- getCorrMtx(m1 = as.matrix(deconProp), # the deconvolved cell-type `theta` (pixels x celltypes)
+                          m2 = as.matrix(mobProxyTheta), # the reference `theta` (pixels x celltypes)
+                          type = "t") # "b" = comparing beta matrices, "t" for thetas
+
+## row and column names need to be characters
+rownames(corMtx_theta) <- paste0("decon_", seq(nrow(corMtx_theta)))
+
+correlationPlot(mat = corMtx_theta,
+                colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
+                rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
+                title = "Proportional correlation", annotation = TRUE) +
+  
+  ## this function returns a `ggplot2` object, so can add additional aesthetics
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0))
+
+```
+
+Finally, we can also pair up each reference cell-type with the deconvolved cell-type that has the highest correlation.
+
+```{r, correlation_pairing, fig.width=6, fig.height=5}
+
+## order the cell-types rows based on best match (highest correlation) with each community
+## cannot have more rows than columns for this pairing, so transpose
+pairs <- lsatPairs(t(corMtx_theta))
+m <- t(corMtx_theta)[pairs$rowix, pairs$colsix]
+
+correlationPlot(mat = t(m), # transpose back
+                colLabs = "Deconvolved cell-types", # aka x-axis, and rows of matrix
+                rowLabs = "Ground truth cell-types", # aka y-axis, and columns of matrix
+                title = "Transcriptional correlation", annotation = TRUE) +
+  
+  ## this function returns a `ggplot2` object, so can add additional aesthetics
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0))
+
+```
+
+Note that only the paired deconvolved cell-types remain. Ones that paired less strongly with a given ground truth are dropped after assigning pairs.
+
+## Annotation Strategy 2: GSEA
+
+Next, given a list of reference gene sets for different cell types, we can performed gene set enrichment analysis on the deconvolved transcriptional profiles to test for significant enrichment of any known ground truth cell-types.
+
+First, let's identify marker genes for each tissue layer based on log2(fold-change) compared to the other tissue layers. This will be our list of gene sets for each tissue layer.
+
+```{r, marker_genes}
+
+mobProxyLayerMarkers <- list()
+
+## make the tissue layers the rows and genes the columns
+gexp <- t(as.matrix(mobProxyGexp))
+
+for (i in seq(length(rownames(gexp)))){
+  celltype <- i
+  ## log2FC relative to other cell-types
+  ## highly expressed in cell-type of interest
+  highgexp <- names(which(gexp[celltype,] > 10))
+  ## high log2(fold-change) compared to other deconvolved cell-types and limit to top 200
+  log2fc <- sort(log2(gexp[celltype,highgexp]/colMeans(gexp[-celltype,highgexp])), decreasing=TRUE)[1:200]
+  
+  ## for gene set of the ground truth cell-type, get the genes
+  ## with log2FC > 1 (so FC > 2 over the mean exp of the other cell-types)
+  markers <- names(log2fc[log2fc > 1])
+  mobProxyLayerMarkers[[ rownames(gexp)[celltype] ]] <- markers
+}
+
+```
+
+```{r, annotations}
+
+celltype_annotations <- annotateCellTypesGSEA(beta = results$beta, gset = mobProxyLayerMarkers, qval = 0.05)
+
+```
+
+`annotateCellTypesGSEA` returns a list where the first entry, `$results`, contains a list of matrices that show any reference cell-types that had a significant positive enrichment score in each of the deconvolved cell-types.
+
+For example, here are the reference cell-types that were significantly enriched in deconvolved cell-type 2:
+
+```{r, annotation_result_1}
+
+celltype_annotations$results$`2`
+
+```
+
+Note that the "5: Olfactory Nerve Layer" is significantly positively enriched in the transcriptional profiles of cell-type 2 whereas "1: Granular Cell Layer" is negatively enriched.
+
+`annotateCellTypesGSEA` also contains `$predictions`, which is a named vector of the most significant matched reference cell-type with the highest positive enrichment score for each deconvolved cell-type. Note that if there were no significant reference cell-types with positive enrichment, then the deconvolved cell-type will have no matches.
+
+```{r, annotation_result_2}
+
+celltype_annotations$predictions
+
+```
+
+Note how the best matches are closely associated with the transcriptional and pixel proportion correlations.
+
+
+# Additional tutotorials and analyses
+
+For additional tutorials and commands to reproduce the preprocessing of certain datasets used in the manuscript, check out:
+
+[https://jef.works/STdeconvolve/](https://jef.works/STdeconvolve/)
+
+# Session information
+
 ```{r}
 sessionInfo()
 ```
