@@ -1,0 +1,168 @@
+---
+title: "Process DBiT-seq Data"
+author: "Brendan F. Miller"
+date: "11/23/2021"
+# output: rmarkdown::html_document
+output:
+  md_document:
+    variant: markdown_github
+vignette: >
+  %\VignetteIndexEntry{Process DBiTseq Data}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The following code demonstrates how to create the DBiT-seq input matrix
+for `STdeconvolve`, which was used for analyses in the `STdeconvolve` paper.
+
+This was based on the GSM4364242 dataset of a mouse E11 lower embryo and tail section.
+
+```{r}
+library(STdeconvolve)
+```
+
+## Process raw data
+
+```{r}
+
+dbit_e11_counts <- read.csv("/Users/brendan/Desktop/PostDoc/data/2020_DBiT-seq/GSE137986_RAW/GSM4364242_E11-1L.tsv",
+                            sep = "\t",
+                            row.names = 1)
+
+## 20849 genes by 1837 pixels
+dbit_e11_counts <- as(t(dbit_e11_counts), "dgCMatrix")
+dbit_e11_counts
+
+```
+
+Note that the pixel IDs are essentially named based on their x-y coordinates. 
+
+```{r}
+
+## remove mt genes:
+dbit_e11_counts <- dbit_e11_counts[!grepl("mt.", rownames(dbit_e11_counts)), ]
+
+dbit_e11_clean <- cleanCounts(dbit_e11_counts_filt,
+                        min.lib.size = 100,
+                        max.lib.size = Inf,
+                        min.reads = 100,
+                        min.detected = 1,
+                        verbose = TRUE,
+                        plot=TRUE)
+
+dbit_e11_corpus <- preprocess(t(as.matrix(dbit_e11_clean)),
+                       alignFile = NA,
+                       extractPos = TRUE, ## extract the x-y coodiantes from the pixel IDs
+                       selected.genes = NA,
+                       nTopGenes = NA,
+                       genes.to.remove = NA,
+                       removeAbove = 0.95, ## remove genes in more than 95% pixels
+                       removeBelow = 0.05, ## remove genes in less than 5% of pixels
+                       min.lib.size = 100, ## keep pixels with 100+ gene counts
+                       ODgenes = TRUE,
+                       nTopOD = 1000, ## limit to top 1000 overdispersed genes
+                       od.genes.alpha = 0.01, ## only overdispersed genes with p.adj < 0.01
+                       gam.k = 5,
+                       verbose = TRUE)
+
+```
+
+The y-axis needs to be reversed.
+
+```{r}
+
+dbit_e11_corpus$posR <- dbit_e11_corpus$pos
+dbit_e11_corpus$posR[, "y"] <- dbit_e11_corpus$posR[, "y"] * -1
+
+```
+
+Make gene count dataframe with positions to use with `vizGeneCounts`
+
+```{r}
+
+geneDf_e11 <- merge(as.data.frame(dbit_e11_corpus$posR),
+            as.data.frame(as.matrix(dbit_e11_corpus$corpus)),
+            by = 0)
+
+```
+
+## LDA model fitting
+
+```{r}
+
+## for E11, in paper there were 13 clusters.
+ks <- c(13)
+
+dbit_e11_LDAs <- fitLDA(counts = as.matrix(dbit_e11_corpus$corpus),
+                        Ks = ks,
+                        testSize = NULL,
+                        perc.rare.thresh = 0.05,
+                        seed = 0,
+                        ncores = 7,
+                        plot = TRUE)
+
+```
+
+Check the alphas of the fitted models
+
+```{r}
+
+unlist(sapply(dbit_e11_LDAs$models, slot, "alpha"))
+
+```
+
+Deconvolve the cell-types for each fitted model. Store in a list to access 
+
+```{r}
+
+## `buildLDAobject` is a wrapper around `getBetaTheta` that will also
+## cluster cell-types based on their txn profiles using `clusterTopics`.
+
+dbit_e11_LDAsDeconv <- lapply(c(13), function(l) {
+  lda <- buildLDAobject(LDAmodel = optimalModel(dbit_e11_LDAs, opt = l),
+                        deepSplit = 4,
+                        perc.filt = 0.05, 
+                        colorScheme = "rainbow")
+  lda
+})
+names(dbit_e11_LDAsDeconv) <- as.character(c(13))
+
+```
+
+## Visualize K=13 
+
+```{r, fig.height=9, fig.width=9}
+
+m <- dbit_e11_LDAsDeconv$`13`$theta
+pos <- dbit_e11_corpus$posR
+
+p <- vizAllTopics(theta = m,
+                   pos = pos,
+                   topicOrder = seq(ncol(m)),
+                   groups = rep("0", dim(m)[1]),
+                   group_cols = c("0" = STdeconvolve::transparentCol("black", percent = 100)),
+                   r = 0.4,
+                   lwd = 0,
+                   showLegend = TRUE,
+                   plotTitle = NA) +
+  ggplot2::guides(fill=ggplot2::guide_legend(ncol=2)) +
+  
+  ## outer border
+  ggplot2::geom_rect(data = data.frame(pos),
+            ggplot2::aes(xmin = min(x)-1, xmax = max(x)+1,
+                         ymin = min(y)-1, ymax = max(y)+1),
+            fill = NA, color = "black", linetype = "solid", size = 0.5) +
+  
+  ggplot2::theme(
+    plot.background = ggplot2::element_blank()
+  ) +
+  
+  ggplot2::coord_equal()
+
+p
+
+```
