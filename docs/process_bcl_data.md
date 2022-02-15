@@ -4,6 +4,7 @@ The following code demonstrates how to create the BCL ST input data matrix for `
 library(STdeconvolve)
 ```
 
+First load the BCL data. Note that this data object is stored on the [`devel` branch of `STdeconvolve`](https://github.com/JEFworks-Lab/STdeconvolve/tree/devel/data)
 ```{r}
 data("BCL") # the 4 breast cancer sections
 ```
