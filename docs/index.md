@@ -6,7 +6,7 @@
 
 `STdeconvolve` enables reference-free cell-type deconvolution of multi-cellular pixel-resolution spatially resolved transcriptomics data
 
-<img src="https://github.com/JEFworks/STdeconvolve/blob/package/docs/img/STdeconvolve_logo.png?raw=true"/>
+<img src="https://github.com/JEFworks/STdeconvolve/blob/devel/docs/img/STdeconvolve_logo.png?raw=true"/>
 
 The overall approach is detailed on [bioRxiv](https://www.biorxiv.org/content/10.1101/2021.06.15.448381v2)
 
@@ -14,7 +14,7 @@ The overall approach is detailed on [bioRxiv](https://www.biorxiv.org/content/10
 
 `STdeconvolve` is an unsupervised machine learning approach to deconvolve multi-cellular pixel-resolution spatial transcriptomics datasets in order to recover the putative transcriptomic profiles of cell-types and their proportional representation within spatially resolved pixels without reliance on external single-cell transcriptomics references.
 
-<img src="https://github.com/JEFworks/STdeconvolve/blob/package/docs/img/STdeconvolve_workflowforwebsite_v2.png?raw=true"/>
+<img src="https://github.com/JEFworks/STdeconvolve/blob/devel/docs/img/STdeconvolve_workflowforwebsite_v2.png?raw=true"/>
 
 ## Example
 
@@ -44,7 +44,7 @@ vizAllTopics(deconProp, pos,
              r=0.4)	  
 ```
 
-<img src="https://github.com/JEFworks/STdeconvolve/blob/package/docs/getting_started_files/figure-markdown_github/getting_started_proportions-1.png?raw=true"/>
+<img src="https://github.com/JEFworks/STdeconvolve/blob/devel/docs/getting_started_files/figure-markdown_github/getting_started_proportions-1.png?raw=true"/>
 
 More details can be found in the tutorials.
 
