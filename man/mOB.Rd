@@ -12,7 +12,7 @@ List where 'counts' is a sparse matrix with columns as voxels and rows as genes 
 \url{https://science.sciencemag.org/content/353/6294/78}
 }
 \usage{
-mOB
+data(mOB)
 }
 \description{
 Spatial transcriptomics of the mouse olfactory bulb
