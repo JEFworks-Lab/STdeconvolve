@@ -1,4 +1,4 @@
-<img src="https://github.com/JEFworks/STdeconvolve/blob/package/docs/img/STdeconvolve_logo.png?raw=true"/>
+<img src="https://github.com/JEFworks/STdeconvolve/blob/devel/docs/img/STdeconvolve_logo.png?raw=true"/>
 
 <!-- badges: start -->
 [![R build status](https://github.com/JEFworks/STdeconvolve/workflows/R-CMD-check/badge.svg)](https://github.com/JEFworks/STdeconvolve/actions)
@@ -10,7 +10,7 @@
 
 `STdeconvolve` is an unsupervised machine learning approach to deconvolve multi-cellular pixel-resolution spatial transcriptomics datasets in order to recover the putative transcriptomic profiles of cell-types and their proportional representation within spatially resolved pixels without reliance on external single-cell transcriptomics references.
 
-<img src="https://github.com/JEFworks/STdeconvolve/blob/package/docs/img/STdeconvolve_workflowforwebsite_v2.png?raw=true"/>
+<img src="https://github.com/JEFworks/STdeconvolve/blob/devel/docs/img/STdeconvolve_workflowforwebsite_v2.png?raw=true"/>
 
 ## Installation
 
@@ -51,7 +51,7 @@ vizAllTopics(deconProp, pos,
              r=0.4)	  
 ```
 
-<img src="https://github.com/JEFworks/STdeconvolve/blob/package/docs/getting_started_files/figure-markdown_github/getting_started_proportions-1.png?raw=true"/>
+<img src="https://github.com/JEFworks/STdeconvolve/blob/devel/docs/getting_started_files/figure-markdown_github/getting_started_proportions-1.png?raw=true"/>
 
 More details can be found in the tutorials.
 
