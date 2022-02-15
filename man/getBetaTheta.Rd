@@ -14,7 +14,7 @@ getBetaTheta(
 )
 }
 \arguments{
-\item{lda}{an LDA model from \code{topicmodels}. From list of models returned by
+\item{lda}{an LDA model from "topicmodels" R package. From list of models returned by
 fitLDA}
 
 \item{corpus}{If corpus is NULL, then it will use the original corpus that
@@ -25,6 +25,8 @@ Each row needs at least 1 nonzero entry (default: NULL)}
 \item{perc.filt}{proportion threshold to remove cell-types in pixels (default: 0.05)}
 
 \item{betaScale}{factor to scale the predicted cell-type gene expression profiles (default: 1)}
+
+\item{verbose}{Boolean for verbosity (default: TRUE)}
 }
 \value{
 A list that contains

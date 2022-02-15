@@ -21,7 +21,7 @@ vizAllTopics(
 \arguments{
 \item{theta}{document (pixel) x cell-type proportion matrix}
 
-\item{pos}{position of pixels, as data.frame with \code{x} and \code{y} columns}
+\item{pos}{position of pixels, as data.frame with x and y columns}
 
 \item{topicOrder}{order of topics in theta to visualize as a numeric vector
 and same length as topicCols (default: seq(ncol(theta)))}

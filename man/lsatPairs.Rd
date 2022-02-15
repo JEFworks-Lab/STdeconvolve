@@ -7,7 +7,7 @@
 lsatPairs(mtx)
 }
 \arguments{
-\item{mtx}{output correlation matrix from \code{getCorrMtx}. Must not have more rows
+\item{mtx}{output correlation matrix from getCorrMtx(). Must not have more rows
 than columns}
 }
 \value{
@@ -21,8 +21,8 @@ position the first element is a row and the second is the paired column.
 }
 \description{
 Finds best matches between cell-types that correlate between
-beta or theta matrices that have been compared via \code{getCorrMtx}.
-Each row is paired with a column in the output matrix from \code{getCorrMtx}.
+beta or theta matrices that have been compared via getCorrMtx().
+Each row is paired with a column in the output matrix from getCorrMtx().
 If there are less rows than columns, then some columns will not be
 matched and not part of the output.
 }

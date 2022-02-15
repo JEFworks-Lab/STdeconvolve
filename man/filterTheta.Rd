@@ -11,6 +11,8 @@ filterTheta(theta, perc.filt = 0.05, verbose = TRUE)
 is the cell-type composition for a given pixel}
 
 \item{perc.filt}{proportion threshold to remove cell-types in pixels (default: 0.05)}
+
+\item{verbose}{Boolean for verbosity (default: TRUE)}
 }
 \value{
 A filtered pixel (rows) by cell-types (columns) distribution matrix.

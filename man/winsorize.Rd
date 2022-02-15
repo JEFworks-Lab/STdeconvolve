@@ -9,7 +9,7 @@ winsorize(x, qt = 0.05)
 \arguments{
 \item{x}{gene count matrix}
 
-\item{qt}{quantile for winsorization (defaul: 0.05)}
+\item{qt}{quantile for winsorization (default: 0.05)}
 }
 \value{
 winsorized gene count matrix
