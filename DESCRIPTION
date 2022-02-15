@@ -50,7 +50,6 @@ Suggests:
     rmarkdown,
     testthat,
     rcmdcheck,
-    SPOTlight,
     gplots
 VignetteBuilder:
     knitr,
