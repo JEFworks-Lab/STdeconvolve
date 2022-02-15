@@ -24,6 +24,8 @@ BiocManager::install("STdeconvolve")
 
 # Introduction
 
+`STdeconvolve` is an unsupervised machine learning approach to deconvolve multi-cellular pixel-resolution spatial transcriptomics datasets in order to recover the putative transcriptomic profiles of cell-types and their proportional representation within spatially resolved pixels without reliance on external single-cell transcriptomics references.
+
 ## Deconvolution
 
 In this tutorial, we will walk through some of the main functionalities of `STdeconvolve`. 
@@ -110,7 +112,7 @@ vizTopic(theta = deconProp, pos = pos, topic = "5", plotTitle = "X5",
          high = "red")
 ```
 
-In this tutorial, we will go over two different strategies for annotating the deconvolved cell-types.
+With deconvolved cell-types in hand, we will now go over two different strategies for annotating the deconvolved cell-types.
 
 Recall that `STdeconvolve` does not require a reference to deconvolve cell-types in multi-cellular spatially-resolved pixels. However, we would still like some way to identify the deconvolved cell-types to determine if they may represent known cell-types.
 
