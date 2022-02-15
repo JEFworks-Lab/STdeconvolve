@@ -13,5 +13,5 @@ figures/mob
 figures/bcl
 figures/pdfs
 *.tar.gz
-docs/
+docs/*
 data/BCL.rda
