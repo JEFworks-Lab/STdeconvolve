@@ -49,10 +49,11 @@ vizAllTopics(deconProp, pos,
 More details can be found in the tutorials.
 
 ## Tutorials
-- [Getting started with STdeconvolve](getting_started.md)
-- [Additional features with STdeconvolve](additional_features.md)
+- [Getting started with `STdeconvolve`](getting_started.md)
+- [Additional features with `STdeconvolve`](additional_features.md)
 - [Annotating deconvolved cell-types](celltype_annotation.md)
 - [Analysis of 10X Visium data](visium_10x.md)
+- [Examples of when `STdeconvolve` may fail](failure_examples.md)
 
 ## Installation
 
