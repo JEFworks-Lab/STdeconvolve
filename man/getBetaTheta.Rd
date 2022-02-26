@@ -42,3 +42,16 @@ is the cell-type composition for a given pixel
 Pull out cell-type proportions across pixels (theta) and
 cell-type gene probabilities (beta) matrices from fitted LDA models from fitLDA
 }
+\examples{
+data(mOB)
+pos <- mOB$pos
+cd <- mOB$counts
+counts <- cleanCounts(cd, min.lib.size = 100)
+corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6))
+optLDA <- optimalModel(models = ldas, opt = 6)
+results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
+head(results$theta)
+head(results$beta)
+
+}

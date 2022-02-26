@@ -15,8 +15,18 @@ optimalModel(models, opt)
 "proportion" = K vs number of cell-type with mean proportion < 5\% inflection point}
 }
 \value{
-optimal LDA model fitted to the K based on \code{opt}
+optimal LDA model fitted to the K based on opt parameter
 }
 \description{
 Get the optimal LDA model
+}
+\examples{
+data(mOB)
+pos <- mOB$pos
+cd <- mOB$counts
+counts <- cleanCounts(cd, min.lib.size = 100)
+corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,9))
+optLDA <- optimalModel(models = ldas, opt = "min")
+
 }

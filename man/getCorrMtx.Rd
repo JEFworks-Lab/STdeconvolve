@@ -28,3 +28,19 @@ Find Pearson's correlations between topics (cell-types) with respect to their
 proportions across documents (pixels), i.e. thetas, or gene probabilities,
 i.e. betas.
 }
+\examples{
+data(mOB)
+pos <- mOB$pos
+cd <- mOB$counts
+counts <- cleanCounts(cd, min.lib.size = 100)
+corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = 8)
+optLDA <- optimalModel(models = ldas, opt = 8)
+results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
+deconProp <- results$theta
+corMtx <- getCorrMtx(m1 = as.matrix(deconProp), m2 = as.matrix(deconProp), type = "t")
+rownames(corMtx) <- paste0("X", seq(nrow(corMtx)))
+colnames(corMtx) <- paste0("X", seq(ncol(corMtx)))
+head(corMtx)
+
+}

@@ -17,7 +17,7 @@
 #' \item dendro: dendrogram of the clusters
 #' }
 #'
-#'
+#' @noRd
 clusterTopics <- function(beta,
                           #distance = "euclidean",
                           clustering = "ward.D",
@@ -101,6 +101,7 @@ clusterTopics <- function(beta,
 #'
 #' @return matrix where cell-types are now cell-type-clusters
 #'
+#' @noRd
 combineTopics <- function(mtx, clusters, type) {
   
   if (!type %in% c("t", "b")){
@@ -187,6 +188,7 @@ combineTopics <- function(mtx, clusters, type) {
 #' \item k: number of cell-types K of the model
 #' }
 #'
+#' @noRd
 buildLDAobject <- function(LDAmodel,
                            corpus = NULL,
                            perc.filt = 0.05,
@@ -240,6 +242,7 @@ buildLDAobject <- function(LDAmodel,
 }
 
 
+
 #' Generate heatmap of correlations
 #' 
 #' @description Visualize the correlations between topics stored in a matrix, typically one
@@ -253,6 +256,7 @@ buildLDAobject <- function(LDAmodel,
 #' @param margins set margins of the plot. (default: c(6,8))
 #' @param textSize set the text size for both x-axis and y-axis labels. (default: 0.9)
 #' 
+#' @noRd
 correlationPlot_2 <- function(mat, rowLabs = NA, colLabs = NA, rowv = NA, colv = NA, margins = c(6,8), textSize = 0.9) {
   
   correlation_palette <- grDevices::colorRampPalette(c("blue", "white", "red"))(n = 209)
@@ -317,6 +321,7 @@ correlationPlot_2 <- function(mat, rowLabs = NA, colLabs = NA, rowv = NA, colv =
 #'     each simulated patch
 #' }
 #' 
+#' @noRd
 simulateBregmaSpots <- function (cellCentroidsAndClass, counts, patch_size = 100) {
   
   # dictionary hash table
@@ -407,7 +412,6 @@ simulateBregmaSpots <- function (cellCentroidsAndClass, counts, patch_size = 100
 }
 
 
-
 #' Generate simulated corpus as input into `topicmodels` and the matched ground
 #' truth spot-topic proportion and topic-gene proportion matrices for a given
 #' simulated bregma spot dataset (built with `simulateBregmaSpots`)
@@ -435,6 +439,7 @@ simulateBregmaSpots <- function (cellCentroidsAndClass, counts, patch_size = 100
 #'     their position, cell type label, and assigned patch
 #' }
 #' 
+#' @noRd
 buildBregmaCorpus <- function (hashTable, bregmaID) {
   
   bregmaID <- as.character(bregmaID)
@@ -509,7 +514,6 @@ buildBregmaCorpus <- function (hashTable, bregmaID) {
 }
 
 
-#' @noRd
 #' Wrapper around functions in `SPOTlight::spotlight_deconvolution()`
 #' that take place subsequently after training the NMF model.
 #' 
@@ -673,4 +677,41 @@ buildBregmaCorpus <- function (hashTable, bregmaID) {
 #   # as cluster genes for the NMF, and thus would not be in the NMF at all
 #   
 # }
+
+
+#' Function to reduce theta matrices down to the top X cell-types in each
+#' pixel. 
+#' 
+#' @description The cell-types with the top X highest proportions are kept in each
+#'     pixel and the rest are set to 0. Then renormalizes the pixel proportions to sum to 1.
+#'     Cell-types that result in 0 in all pixels after this filtering step are removed.
+#'
+#' @param theta pixel (rows) by cell-types (columns) distribution matrix. Each row
+#'     is the cell-type composition for a given pixel
+#' @param top Select number of top cell-types in each pixel to keep (default: 3)
+#' 
+#' @return A filtered pixel (rows) by cell-types (columns) distribution matrix.
+#' 
+#' @noRd
+reduceTheta <- function(theta, top=3){
+  
+  theta_filt <- do.call(rbind, lapply(seq(nrow(theta)), function(i){
+    p <- theta[i,]
+    thresh <- sort(p, decreasing=TRUE)[top]
+    p[p < thresh] <- 0
+    p
+  }))
+  
+  colnames(theta_filt) <- colnames(theta)
+  rownames(theta_filt) <- rownames(theta)
+  
+  theta_filt <- theta_filt/rowSums(theta_filt)
+  ## if NAs because all cts are 0 in a spot, replace with 0
+  theta_filt[is.na(theta_filt)] <- 0
+  ## drop any cts that are 0 for all pixels
+  theta_filt <- theta_filt[,which(colSums(theta_filt) > 0)]
+  
+  return(theta_filt)
+}
+
 

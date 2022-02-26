@@ -33,9 +33,18 @@ for over dispersed genes and after corpus restriction. (default: FALSE)}
 
 \item{verbose}{(default: TRUE)}
 }
+\value{
+a gene by pixel matrix where the remaining genes have been filtered
+}
 \description{
 identifies over dispersed genes across pixels to use as informative words
 (genes) in topic modeling. Also allows ability to restrict over dispersed genes
 to those that occur in more than and/or less than selected fractions of pixels in corpus.
 Limits to the top 1000 overdispersed genes in order to keep the corpus to a reasonable size.
+}
+\examples{
+data(mOB)
+corpus <- restrictCorpus(counts = mOB$counts)
+corpus
+
 }

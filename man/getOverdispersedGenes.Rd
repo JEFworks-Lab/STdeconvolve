@@ -46,3 +46,14 @@ If details is true, will return data frame of normalization parameters. Else wil
 Normalizes gene expression magnitudes to with respect to its ratio to the
 transcriptome-wide expectation as determined by local regression on expression magnitude
 }
+\examples{
+data(mOB)
+od <- getOverdispersedGenes(counts = mOB$counts, gam.k = 5, alpha = 0.05, details = FALSE)
+head(od)
+
+od <- getOverdispersedGenes(counts = mOB$counts, gam.k = 5, alpha = 0.05, details = TRUE)
+head(od$mat)
+head(od$ods)
+head(od$df)
+
+}

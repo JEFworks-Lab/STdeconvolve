@@ -21,6 +21,23 @@
 #' @param plotTitle add title to the resulting plot (default: NA)
 #' @param overlay raster image of an H&E tissue (for example) to plot the scatterpies on top of
 #'     (default: NA)
+#' 
+#' @return a plot of scatterpies, where each scatterpie represents
+#'     a pixel in space based on the x,y coordinates and the components
+#'     represent the proportion of each cell-type at that pixel.
+#' 
+#' @examples 
+#' data(mOB)
+#' pos <- mOB$pos
+#' cd <- mOB$counts
+#' annot <- mOB$annot
+#' counts <- cleanCounts(cd, min.lib.size = 100)
+#' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 8)
+#' optLDA <- optimalModel(models = ldas, opt = 8)
+#' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
+#' deconProp <- results$theta
+#' vizAllTopics(deconProp,pos, groups = annot, group_cols = rainbow(length(levels(annot))), r=0.4)
 #'
 #' @export
 vizAllTopics <- function(theta, pos,
@@ -143,7 +160,7 @@ vizAllTopics <- function(theta, pos,
 
 
 #' Visualize proportions of cell-types or aggregated cell-type-clusters individually
-#' NOTE: Function replaced via "vizTopic" for faster plotting of individual topics
+#' NOTE: Function was replaced via "vizTopic" for faster plotting of individual topics
 #' 
 #' @description Similar to `vizAllTopics` but will generate a separate plot for
 #'     each cell-type or cell-type-cluster where the other cell-types or clusters will be
@@ -171,7 +188,8 @@ vizAllTopics <- function(theta, pos,
 #'     (default: NA)
 #' @param fig_path path so save output figures for each plotted cluster (not in use)
 #' @param fig_prefix prefix to name each output figure for each plotted cluster (not in use)
-#'     
+#' 
+#' @noRd    
 vizTopicClusters <- function(theta, pos, clusters,
                              sharedCol = FALSE,
                              groups = NA,
@@ -350,6 +368,21 @@ vizTopicClusters <- function(theta, pos, clusters,
 #' @param plotTitle option to add a title to the plot (character)
 #' @param showLegend Boolean to show the plot legend
 #' 
+#' @return a plot where each point is a pixel colored by the proportion of the selected cell-type
+#' 
+#' @examples 
+#' data(mOB)
+#' pos <- mOB$pos
+#' cd <- mOB$counts
+#' counts <- cleanCounts(cd, min.lib.size = 100)
+#' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 8)
+#' optLDA <- optimalModel(models = ldas, opt = 8)
+#' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
+#' deconProp <- results$theta
+#' vizTopic(theta = deconProp, pos = pos, topic = "5", plotTitle = "X5",
+#'     size = 5, stroke = 1, alpha = 0.5, low = "white", high = "red")
+#' 
 #' @export
 vizTopic <- function(theta, pos, topic,
                      groups = NA,
@@ -466,6 +499,18 @@ vizTopic <- function(theta, pos, topic,
 #' @param plotTitle option to add a title to the plot
 #' @param showLegend Boolean to show the plot legend
 #' 
+#' @return a plot where each point is a pixel colored by the expression level of the selected gene
+#' 
+#' @examples 
+#' data(mOB)
+#' pos <- mOB$pos
+#' cd <- mOB$counts
+#' counts <- cleanCounts(cd, min.lib.size = 100) 
+#' df <- merge(as.data.frame(pos), as.data.frame(t(as.matrix(counts))), by = 0)
+#' vizGeneCounts(df = df, gene = "Sox11",
+#'     size = 3, stroke = 0.1, plotTitle = "Sox11",
+#'     winsorize = 0.05, showLegend = TRUE)
+#' 
 #' @export
 vizGeneCounts <- function(df, gene,
                           groups = NA,
@@ -551,7 +596,7 @@ correlation_breaks <- c(seq(-1,-0.01,length=100),
 #' @param color color
 #' @param factor how much to lighten (default: 0.5)
 #' 
-#' @export
+#' @noRd
 lighten <- function(color, factor = 0.5) {
   if ((factor > 1) | (factor < 0)) stop("factor needs to be within [0,1]")
   col <- col2rgb(color)
@@ -568,7 +613,7 @@ lighten <- function(color, factor = 0.5) {
 #' @param color color
 #' @param factor how much to darken (default: 1.4)
 #' 
-#' @export
+#' @noRd
 darken <- function(color, factor=1.4){
   col <- col2rgb(color)
   col <- col/factor
@@ -583,7 +628,7 @@ darken <- function(color, factor=1.4){
 #'
 #' @param n length of color palette
 #' 
-#' @export
+#' @noRd
 gg_color_hue <- function(n) {
   hues = seq(15, 375, length = n + 1)
   hcl(h = hues, l = 65, c = 100)[1:n]
@@ -599,7 +644,7 @@ gg_color_hue <- function(n) {
 #' @param percent % transparency (default: 50)
 #' @param name an optional name for the color (default: NULL)
 #' 
-#' @export
+#' @noRd
 transparentCol <- function(color, percent = 50, name = NULL) {
   ## Get RGB values for named color
   rgb.val <- col2rgb(color)
@@ -625,6 +670,24 @@ transparentCol <- function(color, percent = 50, name = NULL) {
 #' @param colLabs x-axis label for plot. These are the columns of the matrix, or specifically m2 from getCorrMtx. (default: NULL)
 #' @param title title of the plot. (default: NULL)
 #' @param annotation Boolean to show the correlation values in the squares of the heatmap (default; FALSE)
+#' 
+#' @return a heatmap of the values in the input mat
+#' 
+#' @examples 
+#' data(mOB)
+#' pos <- mOB$pos
+#' cd <- mOB$counts
+#' counts <- cleanCounts(cd, min.lib.size = 100)
+#' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 8)
+#' optLDA <- optimalModel(models = ldas, opt = 8)
+#' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
+#' deconProp <- results$theta
+#' corMtx <- getCorrMtx(m1 = as.matrix(deconProp), m2 = as.matrix(deconProp), type = "t")
+#' rownames(corMtx) <- paste0("X", seq(nrow(corMtx)))
+#' colnames(corMtx) <- paste0("X", seq(ncol(corMtx)))
+#' correlationPlot(mat = corMtx, title = "Proportional correlation", annotation = TRUE) +
+#'     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0))
 #' 
 #' @export
 correlationPlot <- function(mat, colLabs = NA, rowLabs = NA, title = NA, annotation = FALSE){
@@ -705,6 +768,17 @@ correlationPlot <- function(mat, colLabs = NA, rowLabs = NA, title = NA, annotat
 #'     Each row needs at least 1 nonzero entry (default: NULL)
 #' @param perc.rare.thresh the number of deconvolved cell-types with mean pixel proportion below this fraction used to assess
 #'     performance of fitted models for each K. Recorded for each K. (default: 0.05)
+#'     
+#' @return a plot indicating the perplexity and number of rare cell-types of a list of fitted LDA models
+#' 
+#' @examples 
+#' data(mOB)
+#' pos <- mOB$pos
+#' cd <- mOB$counts
+#' counts <- cleanCounts(cd, min.lib.size = 100)
+#' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6))
+#' perplexityPlot(models = ldas, corpus = corpus)
 #' 
 #' @export
 perplexityPlot <- function(models, corpus = NULL, perc.rare.thresh = 0.05){

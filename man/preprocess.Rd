@@ -97,3 +97,9 @@ can be extracted as the pixel position coordinates (a characteristic of Stahl da
          7. Choice to use the top over dispersed genes based on -log10(p.adj)
 }
 }
+\examples{
+data(mOB)
+cd <- mOB$counts
+corpus <- preprocess(t(cd), removeAbove = 0.95, removeBelow = 0.05)
+
+}

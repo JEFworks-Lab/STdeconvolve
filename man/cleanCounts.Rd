@@ -41,3 +41,8 @@ a filtered read count matrix
 Filter a counts matrix based on gene (row) and cell (column)
 requirements.
 }
+\examples{
+data(mOB)
+counts <- cleanCounts(mOB$counts, min.lib.size = 100)
+
+}

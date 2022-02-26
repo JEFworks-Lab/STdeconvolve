@@ -17,7 +17,20 @@ Each row needs at least 1 nonzero entry (default: NULL)}
 \item{perc.rare.thresh}{the number of deconvolved cell-types with mean pixel proportion below this fraction used to assess
 performance of fitted models for each K. Recorded for each K. (default: 0.05)}
 }
+\value{
+a plot indicating the perplexity and number of rare cell-types of a list of fitted LDA models
+}
 \description{
 the same plot returned by fitLDA() but now callable as a
 separate function.
+}
+\examples{
+data(mOB)
+pos <- mOB$pos
+cd <- mOB$counts
+counts <- cleanCounts(cd, min.lib.size = 100)
+corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6))
+perplexityPlot(models = ldas, corpus = corpus)
+
 }

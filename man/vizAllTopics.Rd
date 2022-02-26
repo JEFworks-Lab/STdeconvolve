@@ -47,8 +47,27 @@ group_cols if being used.}
 \item{overlay}{raster image of an H&E tissue (for example) to plot the scatterpies on top of
 (default: NA)}
 }
+\value{
+a plot of scatterpies, where each scatterpie represents
+a pixel in space based on the x,y coordinates and the components
+represent the proportion of each cell-type at that pixel.
+}
 \description{
 Note: visualizes all cell-types in theta at once (could be
 individual cell-types or cell-type-clusters) so for accuracy of the proportions
 of each cell-type in a pixel, the row (pixel) should sum to 1.
+}
+\examples{
+data(mOB)
+pos <- mOB$pos
+cd <- mOB$counts
+annot <- mOB$annot
+counts <- cleanCounts(cd, min.lib.size = 100)
+corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = 8)
+optLDA <- optimalModel(models = ldas, opt = 8)
+results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
+deconProp <- results$theta
+vizAllTopics(deconProp,pos, groups = annot, group_cols = rainbow(length(levels(annot))), r=0.4)
+
 }
