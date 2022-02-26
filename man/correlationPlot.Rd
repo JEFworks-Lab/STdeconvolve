@@ -23,7 +23,27 @@ correlationPlot(
 
 \item{annotation}{Boolean to show the correlation values in the squares of the heatmap (default; FALSE)}
 }
+\value{
+a heatmap of the values in the input mat
+}
 \description{
 Visualize the correlations between topics stored in a matrix, typically one
 returned via \code{getCorrMtx()}. This function uses ggplot2::geom_tile.
+}
+\examples{
+data(mOB)
+pos <- mOB$pos
+cd <- mOB$counts
+counts <- cleanCounts(cd, min.lib.size = 100)
+corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = 8)
+optLDA <- optimalModel(models = ldas, opt = 8)
+results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
+deconProp <- results$theta
+corMtx <- getCorrMtx(m1 = as.matrix(deconProp), m2 = as.matrix(deconProp), type = "t")
+rownames(corMtx) <- paste0("X", seq(nrow(corMtx)))
+colnames(corMtx) <- paste0("X", seq(ncol(corMtx)))
+correlationPlot(mat = corMtx, title = "Proportional correlation", annotation = TRUE) +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0))
+
 }

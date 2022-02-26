@@ -104,44 +104,7 @@ distributions are drawn with equal chance across the simplex:
 
 ``` r
 library(ggtern)
-```
-
-    ## Loading required package: ggplot2
-
-    ## --
-    ## Remember to cite, run citation(package = 'ggtern') for further info.
-    ## --
-
-    ## 
-    ## Attaching package: 'ggtern'
-
-    ## The following objects are masked from 'package:ggplot2':
-    ## 
-    ##     aes, annotate, ggplot, ggplot_build, ggplot_gtable,
-    ##     ggplotGrob, ggsave, layer_data, theme_bw, theme_classic,
-    ##     theme_dark, theme_gray, theme_light, theme_linedraw,
-    ##     theme_minimal, theme_void
-
-``` r
 library(MCMCpack)
-```
-
-    ## Loading required package: coda
-
-    ## Loading required package: MASS
-
-    ## ##
-    ## ## Markov Chain Monte Carlo Package (MCMCpack)
-
-    ## ## Copyright (C) 2003-2022 Andrew D. Martin, Kevin M. Quinn, and Jong Hee Park
-
-    ## ##
-    ## ## Support provided by the U.S. National Science Foundation
-
-    ## ## (Grants SES-0350646 and SES-0350613)
-    ## ##
-
-``` r
 library(ggplot2)
 ```
 
@@ -172,7 +135,7 @@ plt <- ggtern::ggtern(data = dat, ggplot2::aes(x = A, y = B, z = C))
 plt + ggplot2::geom_point()
 ```
 
-![](failure_examples_files/figure-markdown_github/unnamed-chunk-70-1.png)
+![](failure_examples_files/figure-markdown_github/unnamed-chunk-2-1.png)
 
 If ***α*** is \> 1, then the multinomial distributions become centered
 in the simplex, which means that they tend to have equal probability of
@@ -205,7 +168,7 @@ plt <- ggtern::ggtern(data = dat, ggplot2::aes(x = A, y = B, z = C))
 plt + ggplot2::geom_point()
 ```
 
-![](failure_examples_files/figure-markdown_github/unnamed-chunk-71-1.png)
+![](failure_examples_files/figure-markdown_github/unnamed-chunk-3-1.png)
 
 In this example, let’s visualize the probability of each cell-type for
 the first 10 pixels:
@@ -235,7 +198,7 @@ ggplot2::ggplot(data = dat2,
                 ggplot2::labs(x = "Cell-type", y = "probability", title = "Cell-type probability distribution of each pixel")
 ```
 
-![](failure_examples_files/figure-markdown_github/unnamed-chunk-72-1.png)
+![](failure_examples_files/figure-markdown_github/unnamed-chunk-4-1.png)
 
 We can see that the cell-type probabilities are relatively the same
 within and between pixels.
@@ -270,7 +233,7 @@ plt <- ggtern::ggtern(data = dat, ggplot2::aes(x = A, y = B, z = C))
 plt + ggplot2::geom_point()
 ```
 
-![](failure_examples_files/figure-markdown_github/unnamed-chunk-73-1.png)
+![](failure_examples_files/figure-markdown_github/unnamed-chunk-5-1.png)
 
 Now when we look at the probability distributions of the first 10
 pixels, we see that each pixel is enriched for a given cell-type at
@@ -301,7 +264,7 @@ ggplot2::ggplot(data = dat2,
                 ggplot2::labs(x = "Cell-type", y = "probability", title = "Cell-type probability distribution of each pixel")
 ```
 
-![](failure_examples_files/figure-markdown_github/unnamed-chunk-74-1.png)
+![](failure_examples_files/figure-markdown_github/unnamed-chunk-6-1.png)
 
 This fits with our assumption that the proportional distribution of
 cell-types across pixels is heterogeneous within tissues profiled by ST
@@ -339,7 +302,7 @@ ggplot2::ggplot(data = dat2,
                 ggplot2::labs(x = "Cell-type", y = "probability", title = "Cell-type probability distribution of each pixel")
 ```
 
-![](failure_examples_files/figure-markdown_github/unnamed-chunk-75-1.png)
+![](failure_examples_files/figure-markdown_github/unnamed-chunk-7-1.png)
 
 ``` r
 set.seed(888)
@@ -365,7 +328,7 @@ ggplot2::ggplot(data = dat2,
                 ggplot2::labs(x = "Cell-type", y = "probability", title = "Cell-type probability distribution of each pixel")
 ```
 
-![](failure_examples_files/figure-markdown_github/unnamed-chunk-76-1.png)
+![](failure_examples_files/figure-markdown_github/unnamed-chunk-8-1.png)
 
 Therefore, when choosing an optimal model for a given *K*, we also want
 models in which ***α*** \< 1. When fitting LDA models, `STdeconvolve`
@@ -377,12 +340,21 @@ the plot returned by `fitLDA()`.
 
 ## model where ***α*** \> 1
 
-To illustrate the above point, let’s fit several models to the `mOB`
-test data using preprocessing parameters that result in some models with
-an ***α*** \> 1.
+To illustrate the above point, let’s fit several LDA models to the `mOB`
+test data that result in some models with an ***α*** \> 1.
 
-For a more extreme example, let’s limit ourselves to just the top 40
-overdispersed genes for this dataset.
+An ***α*** \> 1 is indicates that the LDA was not able to deconvolve
+distinct cell-types in the pixels. The most likely reason for this is
+that the selected features (genes) included in the input dataset were
+not sufficient to distinguish between transcirptionally distinct
+cell-types.
+
+To illustrate this point, let’s create an input dataset just using
+randomly sampled genes. Here, we are not selecting for overdispersed
+genes as a means to detect cell-type specific transcriptional profiles.
+We do not expect the random genes to provide enough information for the
+model to identify latent cell-types (i.e., non-overlapping groups of
+co-expressed, or frequently co-occurring, genes) in different pixels.
 
 ``` r
 library(STdeconvolve)
@@ -393,24 +365,17 @@ annot <- mOB$annot
 ```
 
 ``` r
-## get list of genes of interest, for an example.
+set.seed(888)
+
+## filter genes
 counts <- cleanCounts(counts = cd,
                       min.lib.size = 100,
                       min.reads = 1,
                       min.detected = 1,
                       plot = FALSE)
-odGenes <- getOverdispersedGenes(as.matrix(counts),
-                      gam.k=5,
-                      alpha=0.05,
-                      plot=FALSE,
-                      use.unadjusted.pvals=FALSE,
-                      do.par=TRUE,
-                      max.adjusted.variance=1e3,
-                      min.adjusted.variance=1e-3,
-                      verbose=FALSE, details=FALSE)
 
-# limit the number of overdispersed genes when building the input corpus
-genes <- odGenes[1:40]
+## random genes
+genes <- sample(x = rownames(as.matrix(counts)), size = 100)
 
 ## build corpus using just the selected genes
 mobCorpus2 <- preprocess(t(cd),
@@ -425,15 +390,15 @@ mobCorpus2 <- preprocess(t(cd),
 
     ## Final corpus:
 
-    ## A 260x40 simple triplet matrix.
+    ## A 260x100 simple triplet matrix.
 
     ## Preprocess complete.
 
-![](failure_examples_files/figure-markdown_github/unnamed-chunk-77-1.png)
+![](failure_examples_files/figure-markdown_github/unnamed-chunk-9-1.png)
 
 ``` r
 ## fit LDA models to the corpus
-ks <- seq(from = 2, to = 10, by = 1) # range of K's to fit LDA models with given the input corpus
+ks <- seq(from = 2, to = 12, by = 1) # range of K's to fit LDA models with given the input corpus
 ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
                Ks = ks,
                ncores = parallel::detectCores(logical = TRUE) - 1, # number of cores to fit LDA models in parallel
@@ -461,7 +426,7 @@ ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
     ## Warning in serialize(data, node$con): 'package:stats' may not be available
     ## when loading
 
-    ## Time to fit LDA models was 0.18 mins
+    ## Time to fit LDA models was 0.11 mins
 
     ## Computing perplexity for each fitted model...
 
@@ -486,7 +451,7 @@ ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
     ## Warning in serialize(data, node$con): 'package:stats' may not be available
     ## when loading
 
-    ## Time to compute perplexities was 0.11 mins
+    ## Time to compute perplexities was 0.17 mins
 
     ## Getting predicted cell-types at low proportions...
 
@@ -494,7 +459,7 @@ ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
 
     ## Plotting...
 
-![](failure_examples_files/figure-markdown_github/unnamed-chunk-78-1.png)
+![](failure_examples_files/figure-markdown_github/unnamed-chunk-10-1.png)
 
 Here, the LDA models have ***α***’s \> 1.
 
@@ -504,15 +469,15 @@ We can obtain the ***α***’s for each model via:
 unlist(sapply(ldas$models, slot, "alpha"))
 ```
 
-    ##        2        3        4        5        6        7        8        9 
-    ## 1.007697 1.726367 1.591266 1.960213 2.148224 1.995111 1.987923 2.050338 
-    ##       10 
-    ## 2.290878
+    ##         2         3         4         5         6         7         8 
+    ##  80.18376 141.21467 137.74855 141.81926 137.81350 124.85134 122.69297 
+    ##         9        10        11        12 
+    ## 119.42429 109.37748 108.52553 100.51034
 
-Let’s check out the results for *K* = 10.
+Let’s check out the results for *K* = 12.
 
 ``` r
-optLDA <- optimalModel(models = ldas, opt = 10)
+optLDA <- optimalModel(models = ldas, opt = 12)
 results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 ```
 
@@ -524,27 +489,30 @@ deconGexp <- results$beta
 vizAllTopics(deconProp, pos, r=0.4, lwd = 0.1)
 ```
 
-    ## Plotting scatterpies for 260 pixels with 10 cell-types...this could take a while if the dataset is large.
+    ## Plotting scatterpies for 260 pixels with 12 cell-types...this could take a while if the dataset is large.
 
-![](failure_examples_files/figure-markdown_github/unnamed-chunk-80-1.png)
+![](failure_examples_files/figure-markdown_github/unnamed-chunk-12-1.png)
 
-We can see some spatial differences in cell-type proportions between the
-pixels, however, the cell-type proportions for most pixels are uniform,
-particularly for the pixels more towards the center of the tissue. While
-40 genes is enough to begin seeing some cell-type proportional patterns,
-it isn’t enough information to deconvolve distinct cell-types in the
-pixels.
+As expected, using only random genes did not provide enough information
+for the model to identify latent cell-types (i.e., non-overlapping
+groups of co-expressed, or frequently co-occurring, genes) in the
+pixels. As a result, the ***α***’s are very large for all of the fitted
+LDA models. `STdeconvolve` indicates this by shading the models for
+which ***α*** \> 1. Again, note that the cell-type distributions are
+uniform in the pixels.
 
-In this dataset, even increasing the number of genes to 100, we do much
-better.
+Instead, let’s try fitting LDA models using feature selected
+overdispersed genes to serve as a proxy for identifying cell-type
+transcriptional profiles. We will limit the overdispersed genes to the
+top 100 to be consistent with the number of randomly selected genes.
 
 ``` r
-## get list of genes of interest, for an example.
 counts <- cleanCounts(counts = cd,
                       min.lib.size = 100,
                       min.reads = 1,
                       min.detected = 1,
                       plot = FALSE)
+
 odGenes <- getOverdispersedGenes(as.matrix(counts),
                       gam.k=5,
                       alpha=0.05,
@@ -575,11 +543,11 @@ mobCorpus2 <- preprocess(t(cd),
 
     ## Preprocess complete.
 
-![](failure_examples_files/figure-markdown_github/unnamed-chunk-81-1.png)
+![](failure_examples_files/figure-markdown_github/unnamed-chunk-13-1.png)
 
 ``` r
 ## fit LDA models to the corpus
-ks <- seq(from = 2, to = 10, by = 1) # range of K's to fit LDA models with given the input corpus
+ks <- seq(from = 2, to = 12, by = 1) # range of K's to fit LDA models with given the input corpus
 ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
                Ks = ks,
                ncores = parallel::detectCores(logical = TRUE) - 1, # number of cores to fit LDA models in parallel
@@ -607,7 +575,7 @@ ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
     ## Warning in serialize(data, node$con): 'package:stats' may not be available
     ## when loading
 
-    ## Time to fit LDA models was 0.32 mins
+    ## Time to fit LDA models was 0.4 mins
 
     ## Computing perplexity for each fitted model...
 
@@ -632,7 +600,7 @@ ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
     ## Warning in serialize(data, node$con): 'package:stats' may not be available
     ## when loading
 
-    ## Time to compute perplexities was 0.19 mins
+    ## Time to compute perplexities was 0.16 mins
 
     ## Getting predicted cell-types at low proportions...
 
@@ -640,7 +608,7 @@ ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
 
     ## Plotting...
 
-![](failure_examples_files/figure-markdown_github/unnamed-chunk-82-1.png)
+![](failure_examples_files/figure-markdown_github/unnamed-chunk-14-1.png)
 
 ``` r
 unlist(sapply(ldas$models, slot, "alpha"))
@@ -648,8 +616,8 @@ unlist(sapply(ldas$models, slot, "alpha"))
 
     ##         2         3         4         5         6         7         8 
     ## 0.9233002 1.0155469 0.9646652 0.9967726 1.0883712 0.9445329 0.9750063 
-    ##         9        10 
-    ## 1.0340109 1.0559614
+    ##         9        10        11        12 
+    ## 1.0340109 1.0559614 1.1231159 1.1946524
 
 Here, let’s choose the model *K* = 7, because it has the lowest
 perplexity, number of rare cell-types is 0, and the ***α*** \< 1.
@@ -669,7 +637,7 @@ vizAllTopics(deconProp, pos, r=0.4, lwd = 0.1)
 
     ## Plotting scatterpies for 260 pixels with 7 cell-types...this could take a while if the dataset is large.
 
-![](failure_examples_files/figure-markdown_github/unnamed-chunk-84-1.png)
+![](failure_examples_files/figure-markdown_github/unnamed-chunk-16-1.png)
 
 Now we are able to see distinct cell-types across the pixels.
 Importantly, most pixels are enriched for just a few cell-types, as we

@@ -10,8 +10,7 @@
 #' 
 #' @return the best K (i.e. inflection point of the perplexities)
 #' 
-#' @export
-#' 
+#' @noRd
 where.is.knee <- function(points=NULL) {
   
   lower.limit <- 2
@@ -46,6 +45,10 @@ where.is.knee <- function(points=NULL) {
 #' @param plot Whether to plot (default: TRUE)
 #'
 #' @return a filtered read count matrix
+#' 
+#' @examples 
+#' data(mOB)
+#' counts <- cleanCounts(mOB$counts, min.lib.size = 100)
 #'
 #' @export
 #'
@@ -103,11 +106,20 @@ cleanCounts <- function(counts,
 #' @param details If true, will return data frame of normalization parameters. Else will return list of overdispersed genes. (default: FALSE)
 #'
 #' @return If details is true, will return data frame of normalization parameters. Else will return list of overdispersed genes.
+#' 
+#' @examples 
+#' data(mOB)
+#' od <- getOverdispersedGenes(counts = mOB$counts, gam.k = 5, alpha = 0.05, details = FALSE)
+#' head(od)
+#' 
+#' od <- getOverdispersedGenes(counts = mOB$counts, gam.k = 5, alpha = 0.05, details = TRUE)
+#' head(od$mat)
+#' head(od$ods)
+#' head(od$df)
 #'
 #' @importFrom mgcv s
 #'
 #' @export
-#'
 getOverdispersedGenes <- function(counts,
                                   gam.k=5,
                                   alpha=0.05,
@@ -154,7 +166,7 @@ getOverdispersedGenes <- function(counts,
   df$res <- -Inf;  df$res[vi] <- resid(m,type='response')
   n.cells <- ncol(mat)
   n.obs <- nrow(mat)
-  df$lp <- as.numeric(pf(exp(df$res),n.obs,n.obs,lower.tail=F,log.p=T))
+  df$lp <- as.numeric(pf(exp(df$res),n.obs,n.obs,lower.tail=FALSE,log.p=TRUE))
   df$lpa <- bh.adjust(df$lp,log=TRUE)
   df$qv <- as.numeric(qchisq(df$lp, n.cells-1, lower.tail = FALSE,log.p=TRUE)/n.cells)
   
@@ -196,7 +208,8 @@ getOverdispersedGenes <- function(counts,
   }
 }
 
-fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=F,unclassified.cell.color='lightgrey',level.colors=NULL) {
+
+fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=FALSE,unclassified.cell.color='lightgrey',level.colors=NULL) {
   x <- as.factor(x);
   if(min.group.size>1) {
     x <- factor(x,exclude=levels(x)[unlist(tapply(rep(1,length(x)),x,length))<min.group.size])
@@ -228,7 +241,7 @@ fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=F,un
 #' @param x vector of p-values
 #' @param log log option (default: FALSE)
 #' 
-#' @export
+#' @noRd
 bh.adjust <- function(x, log = FALSE) {
   nai <- which(!is.na(x))
   ox <- x
@@ -259,8 +272,12 @@ bh.adjust <- function(x, log = FALSE) {
 #' @param verbose Verbosity (default: TRUE)
 #'
 #' @return a normalized matrix
+#' 
+#' @examples
+#' data(mOB)
+#' counts <- normalizeCounts(mOB$counts)
 #'
-#' @export
+#' @noRd
 #'
 #' @importFrom Matrix Matrix colSums t
 #'
@@ -307,7 +324,7 @@ normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseu
 #' 
 #' @return winsorized gene count matrix
 #' 
-#' @export
+#' @noRd
 winsorize <- function (x, qt=.05) {
   if(length(qt) != 1 || qt < 0 ||
      qt > 0.5) {

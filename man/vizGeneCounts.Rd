@@ -44,6 +44,20 @@ rows in df. Ex: c("0", "1", "0", ...)}
 
 \item{showLegend}{Boolean to show the plot legend}
 }
+\value{
+a plot where each point is a pixel colored by the expression level of the selected gene
+}
 \description{
 Visualize one gene at a time.
+}
+\examples{
+data(mOB)
+pos <- mOB$pos
+cd <- mOB$counts
+counts <- cleanCounts(cd, min.lib.size = 100) 
+df <- merge(as.data.frame(pos), as.data.frame(t(as.matrix(counts))), by = 0)
+vizGeneCounts(df = df, gene = "Sox11",
+    size = 3, stroke = 0.1, plotTitle = "Sox11",
+    winsorize = 0.05, showLegend = TRUE)
+
 }

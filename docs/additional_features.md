@@ -143,7 +143,7 @@ mobCorpus1 <- preprocess(t(cd),
 
     ## 171 overdispersed genes ...
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-2-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-7-1.png)
 
     ## - Using top 100 overdispersed genes.
 
@@ -155,7 +155,7 @@ mobCorpus1 <- preprocess(t(cd),
 
     ## Preprocess complete.
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-2-2.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-7-2.png)
 
 ``` r
 mobCorpus1$pos <- pos[rownames(mobCorpus1$corpus), ] # because positions were not available in the counts matrix itself, append after.
@@ -180,17 +180,28 @@ mobCorpus1$slm
 print(mobCorpus1$corpus[1:10,1:10])
 ```
 
-    ##                    Bpifb9a Bpifb9b Col1a1 Dcn Cyp2a5 Sox11 Omp Ogn Prokr2 Ptn
-    ## ACAACTATGGGTTGGCGG       0       0      1   0      0     1   0   0      0   2
-    ## ACACAGATCCTGTTCTGA       1       1      0   0      0     0   6   0      0  22
-    ## ACATCACCTGCGCGCTCT       0       0      1   2      0     6   0   0      0   0
-    ## ACATTTAAGGCGCATGAT       0       0      0   1      0     0   1   0      1   1
-    ## ACCACTGTAATCTCCCAT       0       0      0   1      1     0   1   0      0   1
-    ## ACCAGAGCCGTTGAGCAA       0       0      0   0      0     1   3   0      0   2
-    ## ACCCGGCGTAACTAGATA       0       1      0   1      0     3   0   0      1   2
-    ## ACCGGAGTAAATTAGCGG       0       0      0   0      0     2   2   0      0   2
-    ## ACCTGACAGCGGAAACTT       0       0      1   1      0     0   8   0      0   7
-    ## ACGGAAATCAGTGGTATT       0       1      0   1      0     4   3   0      1   0
+    ##                    Bpifb9a Bpifb9b Col1a1 Dcn Cyp2a5 Sox11 Omp Ogn Prokr2
+    ## ACAACTATGGGTTGGCGG       0       0      1   0      0     1   0   0      0
+    ## ACACAGATCCTGTTCTGA       1       1      0   0      0     0   6   0      0
+    ## ACATCACCTGCGCGCTCT       0       0      1   2      0     6   0   0      0
+    ## ACATTTAAGGCGCATGAT       0       0      0   1      0     0   1   0      1
+    ## ACCACTGTAATCTCCCAT       0       0      0   1      1     0   1   0      0
+    ## ACCAGAGCCGTTGAGCAA       0       0      0   0      0     1   3   0      0
+    ## ACCCGGCGTAACTAGATA       0       1      0   1      0     3   0   0      1
+    ## ACCGGAGTAAATTAGCGG       0       0      0   0      0     2   2   0      0
+    ## ACCTGACAGCGGAAACTT       0       0      1   1      0     0   8   0      0
+    ## ACGGAAATCAGTGGTATT       0       1      0   1      0     4   3   0      1
+    ##                    Ptn
+    ## ACAACTATGGGTTGGCGG   2
+    ## ACACAGATCCTGTTCTGA  22
+    ## ACATCACCTGCGCGCTCT   0
+    ## ACATTTAAGGCGCATGAT   1
+    ## ACCACTGTAATCTCCCAT   1
+    ## ACCAGAGCCGTTGAGCAA   2
+    ## ACCCGGCGTAACTAGATA   2
+    ## ACCGGAGTAAATTAGCGG   2
+    ## ACCTGACAGCGGAAACTT   7
+    ## ACGGAAATCAGTGGTATT   0
 
 ``` r
 print(mobCorpus1$pos[1:10,])
@@ -226,7 +237,7 @@ counts <- cleanCounts(counts = cd,
                       min.detected = 1)
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-4-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-9-1.png)
 
 ``` r
 odGenes <- getOverdispersedGenes(as.matrix(counts),
@@ -283,7 +294,7 @@ mobCorpus2 <- preprocess(t(cd),
 
     ## Preprocess complete.
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-4-2.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-9-2.png)
 
 # Selecting Optimal K
 
@@ -323,7 +334,49 @@ ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
                plot=TRUE, verbose=FALSE)
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-5-1.png)
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
+
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
+
+![](additional_features_files/figure-markdown_github/unnamed-chunk-10-1.png)
 
 While technically the lowest perplexity computed here is when K=18,
 perplexity appears to stabilize and decreases gradually after K=7.
@@ -445,7 +498,7 @@ plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-8-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-13-1.png)
 
 Scatterpies can be labeled as belonging to different groups and their
 borders colored to designate the group membership.
@@ -475,7 +528,7 @@ plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-9-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-14-1.png)
 
 Color scatter pies based on group membership (let’s use the coarse cell
 layers of the MOB)
@@ -503,7 +556,7 @@ plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-10-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-15-1.png)
 
 Can filter the `theta` matrix to only visualize certain cell-types:
 
@@ -529,7 +582,7 @@ vizAllTopics(theta = m,
 
     ## Plotting scatterpies for 260 pixels with 3 cell-types...this could take a while if the dataset is large.
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-11-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-16-1.png)
 
 ## Faster plotting via `vizTopic`
 
@@ -548,7 +601,7 @@ vizTopic(theta = m, pos = p, topic = "12", plotTitle = "X12",
          high = "red")
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-12-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-17-1.png)
 
 Again, we can also label the coarse cell layers for which the pixels
 were assigned to.
@@ -565,7 +618,7 @@ vizTopic(theta = m, pos = p, topic = "12", plotTitle = "X12",
          high = "red")
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-13-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-18-1.png)
 
 One last note: `vizAllTopics()` and `vizTopic()` return `ggplot2`
 objects, and so additional `ggplot2` aesthetics and themes can be added

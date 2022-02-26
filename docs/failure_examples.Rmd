@@ -266,7 +266,12 @@ cell-types across pixels is heterogeneous within tissues profiled by ST
 such that some pixels will have more of one cell-type and other pixels
 will have more of another cell-type.
 
-If we expand our example to a scenario in which we have 10 cell-types, we can see more clearly that when ***α*** > 1, each pixel is predicted to have an equal proportion of each cell-type, in which case the model is unable to deconvolve distinct cell-types in the pixels, compared to models where ***α*** < 1, and we are able to recover distinct cell-types in the pixels.
+If we expand our example to a scenario in which we have 10 cell-types,
+we can see more clearly that when ***α*** \> 1, each pixel is predicted
+to have an equal proportion of each cell-type, in which case the model
+is unable to deconvolve distinct cell-types in the pixels, compared to
+models where ***α*** \< 1, and we are able to recover distinct
+cell-types in the pixels.
 
 ```{r}
 
@@ -320,15 +325,31 @@ ggplot2::ggplot(data = dat2,
 
 ```
 
-Therefore, when choosing an optimal model for a given *K*, we also want models in which ***α*** < 1. When fitting LDA models, `STdeconvolve` not only tracks the perplexity and % of rare cell-types, but will also indicate to users models in which ***α*** > 1 by shading them out on the plot returned by `fitLDA()`.
+Therefore, when choosing an optimal model for a given *K*, we also want
+models in which ***α*** \< 1. When fitting LDA models, `STdeconvolve`
+not only tracks the perplexity and % of rare cell-types, but will also
+indicate to users models in which ***α*** \> 1 by shading them out on
+the plot returned by `fitLDA()`.
 
 # `STdeconvolve` failures
 
-## model where ***α*** > 1
+## model where ***α*** \> 1
 
-To illustrate the above point, let's fit several models to the `mOB` test data using preprocessing parameters that result in some models with an ***α*** > 1.
+To illustrate the above point, let's fit several LDA models to the `mOB`
+test data that result in some models with an ***α*** \> 1.
 
-For a more extreme example, let's limit ourselves to just the top 40 overdispersed genes for this dataset.
+An ***α*** \> 1 is indicates that the LDA was not able to deconvolve
+distinct cell-types in the pixels. The most likely reason for this is
+that the selected features (genes) included in the input dataset were
+not sufficient to distinguish between transcirptionally distinct
+cell-types.
+
+To illustrate this point, let's create an input dataset just using
+randomly sampled genes. Here, we are not selecting for overdispersed
+genes as a means to detect cell-type specific transcriptional profiles.
+We do not expect the random genes to provide enough information for the
+model to identify latent cell-types (i.e., non-overlapping groups of
+co-expressed, or frequently co-occurring, genes) in different pixels.
 
 ```{r, data}
 library(STdeconvolve)
@@ -339,24 +360,18 @@ annot <- mOB$annot
 ```
 
 ```{r, fig.width=6, fig.height=3}
-## get list of genes of interest, for an example.
+
+set.seed(888)
+
+## filter genes
 counts <- cleanCounts(counts = cd,
                       min.lib.size = 100,
                       min.reads = 1,
                       min.detected = 1,
                       plot = FALSE)
-odGenes <- getOverdispersedGenes(as.matrix(counts),
-                      gam.k=5,
-                      alpha=0.05,
-                      plot=FALSE,
-                      use.unadjusted.pvals=FALSE,
-                      do.par=TRUE,
-                      max.adjusted.variance=1e3,
-                      min.adjusted.variance=1e-3,
-                      verbose=FALSE, details=FALSE)
 
-# limit the number of overdispersed genes when building the input corpus
-genes <- odGenes[1:40]
+## random genes
+genes <- sample(x = rownames(as.matrix(counts)), size = 100)
 
 ## build corpus using just the selected genes
 mobCorpus2 <- preprocess(t(cd),
@@ -372,14 +387,14 @@ mobCorpus2 <- preprocess(t(cd),
 
 ```{r}
 ## fit LDA models to the corpus
-ks <- seq(from = 2, to = 10, by = 1) # range of K's to fit LDA models with given the input corpus
+ks <- seq(from = 2, to = 12, by = 1) # range of K's to fit LDA models with given the input corpus
 ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
                Ks = ks,
                ncores = parallel::detectCores(logical = TRUE) - 1, # number of cores to fit LDA models in parallel
                plot=TRUE, verbose=TRUE)
 ```
 
-Here, the LDA models have ***α***'s > 1. 
+Here, the LDA models have ***α***'s \> 1.
 
 We can obtain the ***α***'s for each model via:
 
@@ -389,11 +404,11 @@ unlist(sapply(ldas$models, slot, "alpha"))
 
 ```
 
-Let's check out the results for *K* = 10.
+Let's check out the results for *K* = 12.
 
 ```{r}
 
-optLDA <- optimalModel(models = ldas, opt = 10)
+optLDA <- optimalModel(models = ldas, opt = 12)
 results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 deconProp <- results$theta
 deconGexp <- results$beta
@@ -401,17 +416,27 @@ vizAllTopics(deconProp, pos, r=0.4, lwd = 0.1)
 
 ```
 
-We can see some spatial differences in cell-type proportions between the pixels, however, the cell-type proportions for most pixels are uniform, particularly for the pixels more towards the center of the tissue. While 40 genes is enough to begin seeing some cell-type proportional patterns, it isn't enough information to deconvolve distinct cell-types in the pixels.
+As expected, using only random genes did not provide enough information
+for the model to identify latent cell-types (i.e., non-overlapping
+groups of co-expressed, or frequently co-occurring, genes) in the
+pixels. As a result, the ***α***'s are very large for all of the fitted
+LDA models. `STdeconvolve` indicates this by shading the models for
+which ***α*** \> 1. Again, note that the cell-type distributions are
+uniform in the pixels.
 
-In this dataset, even increasing the number of genes to 100, we do much better.
+Instead, let's try fitting LDA models using feature selected
+overdispersed genes to serve as a proxy for identifying cell-type
+transcriptional profiles. We will limit the overdispersed genes to the
+top 100 to be consistent with the number of randomly selected genes.
 
 ```{r, fig.width=6, fig.height=3}
-## get list of genes of interest, for an example.
+
 counts <- cleanCounts(counts = cd,
                       min.lib.size = 100,
                       min.reads = 1,
                       min.detected = 1,
                       plot = FALSE)
+
 odGenes <- getOverdispersedGenes(as.matrix(counts),
                       gam.k=5,
                       alpha=0.05,
@@ -439,7 +464,7 @@ mobCorpus2 <- preprocess(t(cd),
 
 ```{r}
 ## fit LDA models to the corpus
-ks <- seq(from = 2, to = 10, by = 1) # range of K's to fit LDA models with given the input corpus
+ks <- seq(from = 2, to = 12, by = 1) # range of K's to fit LDA models with given the input corpus
 ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
                Ks = ks,
                ncores = parallel::detectCores(logical = TRUE) - 1, # number of cores to fit LDA models in parallel
@@ -452,7 +477,8 @@ unlist(sapply(ldas$models, slot, "alpha"))
 
 ```
 
-Here, let's choose  the model *K* = 7, because it has the lowest perplexity, number of rare cell-types is 0, and the ***α*** < 1.
+Here, let's choose the model *K* = 7, because it has the lowest
+perplexity, number of rare cell-types is 0, and the ***α*** \< 1.
 
 ```{r}
 
@@ -464,8 +490,6 @@ vizAllTopics(deconProp, pos, r=0.4, lwd = 0.1)
 
 ```
 
-Now we are able to see distinct cell-types across the pixels. Importantly, most pixels are enriched for just a few cell-types, as we would expect.
-
-
-
-
+Now we are able to see distinct cell-types across the pixels.
+Importantly, most pixels are enriched for just a few cell-types, as we
+would expect.

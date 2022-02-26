@@ -55,3 +55,12 @@ the returned list via: lda$models$k. The models are objects from
 the R package "topicmodels". The LDA models have slots with additional
 information.
 }
+\examples{
+data(mOB)
+pos <- mOB$pos
+cd <- mOB$counts
+counts <- cleanCounts(cd, min.lib.size = 100)
+corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6))
+
+}

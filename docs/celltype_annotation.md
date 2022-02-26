@@ -26,7 +26,7 @@ annot <- mOB$annot
 counts <- cleanCounts(cd, min.lib.size = 100)
 ```
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-6-1.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-1-1.png)
 
 ``` r
 ## feature select for genes
@@ -58,51 +58,51 @@ corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
 ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1))
 ```
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
 
     ## Time to fit LDA models was 0.44 mins
 
     ## Computing perplexity for each fitted model...
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be available
+    ## when loading
 
     ## Time to compute perplexities was 0.16 mins
 
@@ -112,7 +112,7 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1))
 
     ## Plotting...
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-6-2.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-1-2.png)
 
 ``` r
 ## get best model results
@@ -135,7 +135,7 @@ vizAllTopics(deconProp, pos,
 
     ## Plotting scatterpies for 260 pixels with 8 cell-types...this could take a while if the dataset is large.
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-6-3.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-1-3.png)
 
 For demonstration purposes, let’s use the 5 annotated tissue layer
 labels (i.e. “Granular Cell Layer”, “Mitral Cell Layer”, etc) assigned
@@ -181,7 +181,7 @@ correlationPlot(mat = corMtx_beta,
   ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0))
 ```
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-8-1.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-3-1.png)
 
 Notice that cell-type 1, 4, and 5 correlate the strongest with the
 Granular cell layer, cell-type 2 with the Olfactory nerve layer, etc.
@@ -211,7 +211,7 @@ correlationPlot(mat = corMtx_theta,
   ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0))
 ```
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-9-1.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-4-1.png)
 
 Finally, we can also pair up each reference cell-type with the
 deconvolved cell-type that has the highest correlation.
@@ -231,7 +231,7 @@ correlationPlot(mat = t(m), # transpose back
   ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0))
 ```
 
-![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-10-1.png)
+![](celltype_annotation_files/figure-markdown_github/unnamed-chunk-5-1.png)
 
 Note that only the paired deconvolved cell-types remain. Ones that
 paired less strongly with a given ground truth are dropped after
@@ -294,12 +294,9 @@ enriched in deconvolved cell-type 2:
 celltype_annotations$results$`2`
 ```
 
-    ##                              p.val      q.val    sscore
-    ## 5: Olfactory Nerve Layer 9.999e-05 0.00019998  2.258666
-    ## 1: Granular Cell Layer   9.999e-05 0.00019998 -1.860806
-    ##                              edge
-    ## 5: Olfactory Nerve Layer 4.660299
-    ## 1: Granular Cell Layer   1.369958
+    ##                              p.val      q.val    sscore     edge
+    ## 5: Olfactory Nerve Layer 9.999e-05 0.00019998  2.258666 4.660299
+    ## 1: Granular Cell Layer   9.999e-05 0.00019998 -1.860806 1.369958
 
 Note that the “5: Olfactory Nerve Layer” is significantly positively
 enriched in the transcriptional profiles of cell-type 2 whereas “1:

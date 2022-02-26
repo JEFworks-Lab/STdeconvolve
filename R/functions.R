@@ -16,6 +16,13 @@
 #' @param plot return histogram plots of genes per pixel and pixels per genes
 #'     for over dispersed genes and after corpus restriction. (default: FALSE)
 #' @param verbose (default: TRUE)
+#' 
+#' @return a gene by pixel matrix where the remaining genes have been filtered
+#' 
+#' @examples 
+#' data(mOB)
+#' corpus <- restrictCorpus(counts = mOB$counts)
+#' corpus
 #'
 #' @export
 restrictCorpus <- function(counts,
@@ -151,6 +158,11 @@ restrictCorpus <- function(counts,
 #' \item slm: slam::as.simple_triplet_matrix(corpus); required format for topicmodels::LDA input
 #' \item positions: matrix of x and y coordinates of pixels rownames = pixels, colnames = "x", "y"
 #' }
+#' 
+#' @examples 
+#' data(mOB)
+#' cd <- mOB$counts
+#' corpus <- preprocess(t(cd), removeAbove = 0.95, removeBelow = 0.05)
 #'
 #' @export
 preprocess <- function(dat,
@@ -408,7 +420,15 @@ preprocess <- function(dat,
 #' \item fitCorpus: the corpus that was used to fit each model
 #' \item testCorpus: the corpus used to compute model perplexity. If testSize = NULL then same as fitCorpus.
 #' }
-#'
+#' 
+#' @examples 
+#' data(mOB)
+#' pos <- mOB$pos
+#' cd <- mOB$counts
+#' counts <- cleanCounts(cd, min.lib.size = 100)
+#' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6))
+#' 
 #' @export
 fitLDA <- function(counts, Ks=seq(2, 10, by=2),
                     seed=0, testSize=NULL, perc.rare.thresh=0.05,
@@ -648,7 +668,19 @@ fitLDA <- function(counts, Ks=seq(2, 10, by=2),
 #' \item theta: pixel (rows) by cell-types (columns) distribution matrix. Each row
 #'     is the cell-type composition for a given pixel
 #' }
-#'
+#' 
+#' @examples 
+#' data(mOB)
+#' pos <- mOB$pos
+#' cd <- mOB$counts
+#' counts <- cleanCounts(cd, min.lib.size = 100)
+#' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6))
+#' optLDA <- optimalModel(models = ldas, opt = 6)
+#' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
+#' head(results$theta)
+#' head(results$beta)
+#' 
 #' @export
 getBetaTheta <- function(lda, corpus=NULL, perc.filt=0.05, betaScale=1, verbose=TRUE) {
   
@@ -704,6 +736,22 @@ getBetaTheta <- function(lda, corpus=NULL, perc.filt=0.05, betaScale=1, verbose=
 #' @param verbose control the verbosity (default: TRUE)
 #'
 #' @return matrix of Pearson's correlations; m1 (rows) by m2 (cols)
+#' 
+#' @examples 
+#' data(mOB)
+#' pos <- mOB$pos
+#' cd <- mOB$counts
+#' counts <- cleanCounts(cd, min.lib.size = 100)
+#' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 8)
+#' optLDA <- optimalModel(models = ldas, opt = 8)
+#' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
+#' deconProp <- results$theta
+#' corMtx <- getCorrMtx(m1 = as.matrix(deconProp), m2 = as.matrix(deconProp), type = "t")
+#' rownames(corMtx) <- paste0("X", seq(nrow(corMtx)))
+#' colnames(corMtx) <- paste0("X", seq(ncol(corMtx)))
+#' head(corMtx)
+#' 
 #' @export
 getCorrMtx <- function(m1, m2, type, thresh=NULL, verbose=TRUE) {
   
@@ -850,7 +898,16 @@ annotateCellTypesGSEA <- function(beta, gset, qval=0.05) {
 #'     "min" = K corresponding to minimum perplexity
 #'     "proportion" = K vs number of cell-type with mean proportion < 5% inflection point
 #'
-#' @return optimal LDA model fitted to the K based on `opt`
+#' @return optimal LDA model fitted to the K based on opt parameter
+#' 
+#' @examples 
+#' data(mOB)
+#' pos <- mOB$pos
+#' cd <- mOB$counts
+#' counts <- cleanCounts(cd, min.lib.size = 100)
+#' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,9))
+#' optLDA <- optimalModel(models = ldas, opt = "min")
 #'
 #' @export
 optimalModel <- function(models, opt) {
@@ -888,6 +945,20 @@ optimalModel <- function(models, opt) {
 #' \item rowix: the indices of the rows. Essentially seq_along(pairing)
 #' \item colsix: the indices of each column paired to each row
 #' }
+#' 
+#' @examples 
+#' data(mOB)
+#' pos <- mOB$pos
+#' cd <- mOB$counts
+#' counts <- cleanCounts(cd, min.lib.size = 100)
+#' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 8)
+#' optLDA <- optimalModel(models = ldas, opt = 8)
+#' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
+#' deconProp <- results$theta
+#' corMtx <- getCorrMtx(m1 = as.matrix(deconProp), m2 = as.matrix(deconProp), type = "t")
+#' pairs <- lsatPairs(corMtx)
+#' pairs
 #'
 #' @export
 lsatPairs <- function(mtx){
@@ -918,7 +989,7 @@ lsatPairs <- function(mtx){
 #' 
 #' @return A filtered pixel (rows) by cell-types (columns) distribution matrix.
 #' 
-#' @export 
+#' @noRd
 filterTheta <- function(theta, perc.filt=0.05, verbose=TRUE){
   ## remove rare cell-types in pixels
   theta[theta < perc.filt] <- 0
@@ -947,41 +1018,6 @@ filterTheta <- function(theta, perc.filt=0.05, verbose=TRUE){
 }
 
 
-#' Function to reduce theta matrices down to the top X cell-types in each
-#' pixel. 
-#' 
-#' @description The cell-types with the top X highest proportions are kept in each
-#'     pixel and the rest are set to 0. Then renormalizes the pixel proportions to sum to 1.
-#'     Cell-types that result in 0 in all pixels after this filtering step are removed.
-#'
-#' @param theta pixel (rows) by cell-types (columns) distribution matrix. Each row
-#'     is the cell-type composition for a given pixel
-#' @param top Seelct number of top cell-types in each pixel to keep (default: 3)
-#' 
-#' @return A filtered pixel (rows) by cell-types (columns) distribution matrix.
-#' 
-#' @export 
-reduceTheta <- function(theta, top=3){
-  
-  theta_filt <- do.call(rbind, lapply(seq(nrow(theta)), function(i){
-    p <- theta[i,]
-    thresh <- sort(p, decreasing=TRUE)[top]
-    p[p < thresh] <- 0
-    p
-  }))
-  
-  colnames(theta_filt) <- colnames(theta)
-  rownames(theta_filt) <- rownames(theta)
-  
-  theta_filt <- theta_filt/rowSums(theta_filt)
-  ## if NAs because all cts are 0 in a spot, replace with 0
-  theta_filt[is.na(theta_filt)] <- 0
-  ## drop any cts that are 0 for all pixels
-  theta_filt <- theta_filt[,which(colSums(theta_filt) > 0)]
-  
-  return(theta_filt)
-}
-
 #' Returns top n genes of each deconvolved cell-type for a given beta matrix
 #'
 #' @description For a given beta matrix (cell-type gene distribution matrix),
@@ -992,6 +1028,18 @@ reduceTheta <- function(theta, top=3){
 #' 
 #' @return a list where each item is a vector of the top genes and their associated probabilities for
 #'     a given deconvolved cell-type
+#'     
+#' @examples 
+#' data(mOB)
+#' pos <- mOB$pos
+#' cd <- mOB$counts
+#' counts <- cleanCounts(cd, min.lib.size = 100)
+#' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6))
+#' optLDA <- optimalModel(models = ldas, opt = 6)
+#' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
+#' deconGexp <- results$beta
+#' genes <- topGenes(deconGexp)
 #' 
 #' @export
 topGenes <- function(beta, n=10){
@@ -1002,12 +1050,14 @@ topGenes <- function(beta, n=10){
   return(topgenes)
 }
 
+
 #' Helper function to scale values to 0-1 range relative to each other. For use
 #' with lsatPairs()
 #'
 #' @param x vector or matrix
 #' @return vector or matrix with all values adjusted 0-1 scale relative to each other.
-#' @export
+#' 
+#' @noRd
 scale0_1 <- function(x) {
   xAdj <- (x - min(x, na.rm=TRUE)) / diff(range(x, na.rm=TRUE))
   return(xAdj)

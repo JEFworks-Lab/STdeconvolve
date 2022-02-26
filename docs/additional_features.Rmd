@@ -169,7 +169,7 @@ odGenes <- getOverdispersedGenes(as.matrix(counts),
                       max.adjusted.variance=1e3,
                       min.adjusted.variance=1e-3,
                       verbose=FALSE, details=TRUE)
-genes <- odGenes
+genes <- odGenes$ods
 length(genes)
 head(genes)
 

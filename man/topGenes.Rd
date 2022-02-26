@@ -19,3 +19,16 @@ a given deconvolved cell-type
 For a given beta matrix (cell-type gene distribution matrix),
 returns the top n genes based on their probability.
 }
+\examples{
+data(mOB)
+pos <- mOB$pos
+cd <- mOB$counts
+counts <- cleanCounts(cd, min.lib.size = 100)
+corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6))
+optLDA <- optimalModel(models = ldas, opt = 6)
+results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
+deconGexp <- results$beta
+genes <- topGenes(deconGexp)
+
+}

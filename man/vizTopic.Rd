@@ -47,6 +47,23 @@ Ex: c("0", "1", "0", ...)}
 
 \item{showLegend}{Boolean to show the plot legend}
 }
+\value{
+a plot where each point is a pixel colored by the proportion of the selected cell-type
+}
 \description{
 Visualize the pixel proportions of a single topic.
+}
+\examples{
+data(mOB)
+pos <- mOB$pos
+cd <- mOB$counts
+counts <- cleanCounts(cd, min.lib.size = 100)
+corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = 8)
+optLDA <- optimalModel(models = ldas, opt = 8)
+results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
+deconProp <- results$theta
+vizTopic(theta = deconProp, pos = pos, topic = "5", plotTitle = "X5",
+    size = 5, stroke = 1, alpha = 0.5, low = "white", high = "red")
+
 }
