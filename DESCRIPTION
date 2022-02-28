@@ -1,7 +1,7 @@
 Package: STdeconvolve
 Type: Package
-Title: Reference-free cell-type deconvolution of multi-cellular spatially resolved transcriptomics data 
-Version: 0.99.1
+Title: Reference-free Cell-Type Deconvolution of Multi-Cellular Spatially Resolved Transcriptomics Data 
+Version: 0.99.3
 Authors@R:
     c(person(given = "Brendan",
            family = "Miller",
@@ -14,7 +14,7 @@ Authors@R:
                   email = "jeanfan@jhu.edu",
                   comment = c(ORCID = "0000-0002-0212-5451"))
     )
-Description: STdeconvolve uses latent Dirichlet allocation to infer latent cell-type proportions and transcriptional profiles within multi-cellular spatially-resolved pixels from spatial transcriptomics datasets.  
+Description: This package uses latent Dirichlet allocation to infer latent cell-type proportions and transcriptional profiles within multi-cellular spatially-resolved pixels from spatial transcriptomics datasets.  
 biocViews: Transcriptomics, Visualization, RNASeq, Bayesian, Spatial, Software, GeneExpression
 License: GPL-3
 Encoding: UTF-8
@@ -41,8 +41,6 @@ Imports:
     dplyr,
     reshape2,
     methods
-LinkingTo:
-    Rcpp
 Depends:
     R (>= 3.6)
 Suggests: 
