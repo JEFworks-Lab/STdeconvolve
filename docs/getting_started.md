@@ -108,7 +108,7 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1),
     ## Warning in serialize(data, node$con): 'package:stats' may not be available
     ## when loading
 
-    ## Time to fit LDA models was 0.45 mins
+    ## Time to fit LDA models was 0.42 mins
 
     ## Computing perplexity for each fitted model...
 
@@ -133,7 +133,7 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 9, by = 1),
     ## Warning in serialize(data, node$con): 'package:stats' may not be available
     ## when loading
 
-    ## Time to compute perplexities was 0.18 mins
+    ## Time to compute perplexities was 0.16 mins
 
     ## Getting predicted cell-types at low proportions...
 

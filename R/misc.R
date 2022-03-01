@@ -17,68 +17,68 @@
 #' \item dendro: dendrogram of the clusters
 #' }
 #'
-#' @noRd
-clusterTopics <- function(beta,
-                          #distance = "euclidean",
-                          clustering = "ward.D",
-                          dynamic = "hybrid",
-                          deepSplit = 4,
-                          plot = TRUE) {
-  
-  if (deepSplit == 4) {
-    maxCoreScatter = 0.95
-    minGap = (1 - maxCoreScatter) * 3/4
-  } else if (deepSplit == 3) {
-    maxCoreScatter = 0.91
-    minGap = (1 - maxCoreScatter) * 3/4
-  } else if (deepSplit == 2) {
-    maxCoreScatter = 0.82
-    minGap = (1 - maxCoreScatter) * 3/4
-  } else if (deepSplit == 1) {
-    maxCoreScatter = 0.73
-    minGap = (1 - maxCoreScatter) * 3/4
-  } else if (deepSplit == 0) {
-    maxCoreScatter = 0.64
-    minGap = (1 - maxCoreScatter) * 3/4
-  }
-  
-  #d_ <- dist(beta, method = distance)
-  ## Jean: use correlation instead
-  d_ <- as.dist(1-cor(t(beta)))
-  hc_ <- stats::hclust(d_, method = clustering)
-  
-  groups <- dynamicTreeCut::cutreeDynamic(hc_,
-                                          method = dynamic,
-                                          distM = as.matrix(d_),
-                                          deepSplit = deepSplit,
-                                          minClusterSize=0,
-                                          maxCoreScatter = maxCoreScatter,
-                                          minGap = minGap,
-                                          maxAbsCoreScatter=NULL,
-                                          minAbsGap=NULL)
-  
-  names(groups) <- hc_$labels
-  groups <- factor(groups)
-  
-  if (plot) {
-    #plot(hc_)
-    d2_ <- as.dist(1-cor(beta))
-    rc_ <- hclust(d2_, method = clustering)
-    heatmap(t(beta),
-            Colv=as.dendrogram(hc_),
-            Rowv=as.dendrogram(rc_),
-            ColSideColors = fac2col(groups),
-            col = correlation_palette,
-            xlab = "Cell-types",
-            ylab = "Genes",
-            main = "Predicted cell-types and clusters")
-  }
-  
-  return(list(clusters = groups,
-              order = hc_$order,
-              dendro = as.dendrogram(hc_)))
-  
-}
+#'
+# clusterTopics <- function(beta,
+#                           #distance = "euclidean",
+#                           clustering = "ward.D",
+#                           dynamic = "hybrid",
+#                           deepSplit = 4,
+#                           plot = TRUE) {
+#   
+#   if (deepSplit == 4) {
+#     maxCoreScatter = 0.95
+#     minGap = (1 - maxCoreScatter) * 3/4
+#   } else if (deepSplit == 3) {
+#     maxCoreScatter = 0.91
+#     minGap = (1 - maxCoreScatter) * 3/4
+#   } else if (deepSplit == 2) {
+#     maxCoreScatter = 0.82
+#     minGap = (1 - maxCoreScatter) * 3/4
+#   } else if (deepSplit == 1) {
+#     maxCoreScatter = 0.73
+#     minGap = (1 - maxCoreScatter) * 3/4
+#   } else if (deepSplit == 0) {
+#     maxCoreScatter = 0.64
+#     minGap = (1 - maxCoreScatter) * 3/4
+#   }
+#   
+#   #d_ <- dist(beta, method = distance)
+#   ## Jean: use correlation instead
+#   d_ <- as.dist(1-cor(t(beta)))
+#   hc_ <- stats::hclust(d_, method = clustering)
+#   
+#   groups <- dynamicTreeCut::cutreeDynamic(hc_,
+#                                           method = dynamic,
+#                                           distM = as.matrix(d_),
+#                                           deepSplit = deepSplit,
+#                                           minClusterSize=0,
+#                                           maxCoreScatter = maxCoreScatter,
+#                                           minGap = minGap,
+#                                           maxAbsCoreScatter=NULL,
+#                                           minAbsGap=NULL)
+#   
+#   names(groups) <- hc_$labels
+#   groups <- factor(groups)
+#   
+#   if (plot) {
+#     #plot(hc_)
+#     d2_ <- as.dist(1-cor(beta))
+#     rc_ <- hclust(d2_, method = clustering)
+#     heatmap(t(beta),
+#             Colv=as.dendrogram(hc_),
+#             Rowv=as.dendrogram(rc_),
+#             ColSideColors = fac2col(groups),
+#             col = correlation_palette,
+#             xlab = "Cell-types",
+#             ylab = "Genes",
+#             main = "Predicted cell-types and clusters")
+#   }
+#   
+#   return(list(clusters = groups,
+#               order = hc_$order,
+#               dendro = as.dendrogram(hc_)))
+#   
+# }
 
 
 #' Aggregate cell-types in the same cluster into a single cell-type
