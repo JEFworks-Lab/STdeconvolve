@@ -163,6 +163,8 @@ restrictCorpus <- function(counts,
 #' data(mOB)
 #' cd <- mOB$counts
 #' corpus <- preprocess(t(cd), removeAbove = 0.95, removeBelow = 0.05)
+#' 
+#' @importFrom utils read.table
 #'
 #' @export
 preprocess <- function(dat,
@@ -400,11 +402,9 @@ preprocess <- function(dat,
 #' @param counts Gene expression counts with pixels as rows and genes as columns
 #' @param Ks vector of K parameters, or number of cell-types, to fit models with
 #' @param seed Random seed
-#' @param testSize fraction of pixels to set aside for test corpus when computing perplexity (default: NULL)
-#'    Either NULL or decimal between 0 and 1.
 #' @param perc.rare.thresh the number of deconvolved cell-types with mean pixel proportion below this fraction used to assess
 #'     performance of fitted models for each K. Recorded for each K. (default: 0.05)
-#' @param ncores Number of cores for parallelization
+#' @param ncores Number of cores for parallelization (default: 1). Suggest: parallel::detectCores()
 #' @param plot Boolean for plotting (default: TRUE)
 #' @param verbose Boolean for verbosity (default: TRUE)
 #'
@@ -418,7 +418,7 @@ preprocess <- function(dat,
 #' \item numRare: number of cell-types with mean pixel proportion < perc.rare.thresh for each K
 #' \item perplexities: perplexity scores for each model
 #' \item fitCorpus: the corpus that was used to fit each model
-#' \item testCorpus: the corpus used to compute model perplexity. If testSize = NULL then same as fitCorpus.
+#' \item testCorpus: the corpus used to compute model perplexity.
 #' }
 #' 
 #' @examples 
@@ -427,13 +427,18 @@ preprocess <- function(dat,
 #' cd <- mOB$counts
 #' counts <- cleanCounts(cd, min.lib.size = 100)
 #' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
-#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6))
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6), ncores=7)
+#' 
+#' @importFrom methods slot
 #' 
 #' @export
-fitLDA <- function(counts, Ks=seq(2, 10, by=2),
-                    seed=0, testSize=NULL, perc.rare.thresh=0.05,
-                    ncores=parallel::detectCores(logical=TRUE) - 1,
-                    plot=TRUE, verbose=TRUE) {
+fitLDA <- function(counts,
+                   Ks=seq(2, 10, by=2),
+                   seed=0,
+                   perc.rare.thresh=0.05,
+                   ncores=1,
+                   plot=TRUE,
+                   verbose=TRUE) {
   
   if ( min(Ks) < 2 | !isTRUE(all(Ks == floor(Ks))) ){
     stop("`Ks` must be a vector of integers greater than 2.")
@@ -449,19 +454,22 @@ fitLDA <- function(counts, Ks=seq(2, 10, by=2),
     stop("`counts` must contain integer gene counts")
   }
   
-  if (is.null(testSize)){
-    set.seed(seed)
-    testingPixels <- seq(nrow(counts))
-    fittingPixels <- seq(nrow(counts))
-  } else if ((0 < testSize) & (testSize < 1.0)){
-    message("Splitting pixels into ", testSize*100, "% and ",
-            100-testSize*100, "% testing and fitting corpuses", "\n")
-    set.seed(seed)
-    testingPixels <- sample(nrow(counts), round(nrow(counts)*testSize))
-    fittingPixels <- seq(nrow(counts))[-testingPixels]
-  } else {
-    stop("`testSize` must be NULL or decimal between 0 and 1")
-  }
+  ## never end up splitting pixels, so ignore this option
+  testingPixels <- seq(nrow(counts))
+  fittingPixels <- seq(nrow(counts))
+  # if (is.null(testSize)){
+  #   set.seed(seed)
+  #   testingPixels <- seq(nrow(counts))
+  #   fittingPixels <- seq(nrow(counts))
+  # } else if ((0 < testSize) & (testSize < 1.0)){
+  #   message("Splitting pixels into ", testSize*100, "% and ",
+  #           100-testSize*100, "% testing and fitting corpuses", "\n")
+  #   set.seed(seed)
+  #   testingPixels <- sample(nrow(counts), round(nrow(counts)*testSize))
+  #   fittingPixels <- seq(nrow(counts))[-testingPixels]
+  # } else {
+  #   stop("`testSize` must be NULL or decimal between 0 and 1")
+  # }
   
   ## counts must be pixels (rows) x genes (cols) matrix
   corpus <- slam::as.simple_triplet_matrix((as.matrix(counts)))
@@ -506,11 +514,13 @@ fitLDA <- function(counts, Ks=seq(2, 10, by=2),
     # if(verbose) print(paste("computing perplexity for LDA model with K =", k))
     model <- fitted_models[[as.character(k)]]
     ## if no splitting, then same corpus and thus no need to refit in order to save time
-    if(is.null(testSize)){
-      topicmodels::perplexity(model)
-    } else {
-      topicmodels::perplexity(model, newdata = corpusTest)
-    }
+    topicmodels::perplexity(model)
+    
+    # if(is.null(testSize)){
+    #   topicmodels::perplexity(model)
+    # } else {
+    #   topicmodels::perplexity(model, newdata = corpusTest)
+    # }
   }, BPPARAM=BiocParallel::SnowParam(workers=ncores))
   pScores <- unlist(pScores)
   
@@ -532,18 +542,24 @@ fitLDA <- function(counts, Ks=seq(2, 10, by=2),
   start_time <- Sys.time()
   out <- lapply(1:length(Ks), function(i) {
     ## if no splitting, then already fit to entire corpus and no need to refit
-    if(is.null(testSize)){
-      ## note that we are including all cell-types when computing theta here because we are trying to
-      ## assess the best model by the number of rare cell-types predicted.
-      apply(getBetaTheta(fitted_models[[i]], corpus=NULL, perc.filt=0,
-                         verbose=FALSE)$theta, 2, mean)
-    } else {
-      ## if splitting, then want to make sure that the rare celltypes
-      ## are determined for the entire corpus to begin with and thus
-      ## refit on the entire corpus to determine theta and rare cell-types
-      apply(getBetaTheta(fitted_models[[i]], corpus=corpus, perc.filt=0,
-                         verbose=FALSE)$theta, 2, mean)
-    }
+    
+    ## note that we are including all cell-types when computing theta here because we are trying to
+    ## assess the best model by the number of rare cell-types predicted.
+    apply(getBetaTheta(fitted_models[[i]], corpus=NULL, perc.filt=0,
+                       verbose=FALSE)$theta, 2, mean)
+    
+    # if(is.null(testSize)){
+    #   ## note that we are including all cell-types when computing theta here because we are trying to
+    #   ## assess the best model by the number of rare cell-types predicted.
+    #   apply(getBetaTheta(fitted_models[[i]], corpus=NULL, perc.filt=0,
+    #                      verbose=FALSE)$theta, 2, mean)
+    # } else {
+    #   ## if splitting, then want to make sure that the rare celltypes
+    #   ## are determined for the entire corpus to begin with and thus
+    #   ## refit on the entire corpus to determine theta and rare cell-types
+    #   apply(getBetaTheta(fitted_models[[i]], corpus=corpus, perc.filt=0,
+    #                      verbose=FALSE)$theta, 2, mean)
+    # }
   })
   ## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
   numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))
@@ -675,7 +691,7 @@ fitLDA <- function(counts, Ks=seq(2, 10, by=2),
 #' cd <- mOB$counts
 #' counts <- cleanCounts(cd, min.lib.size = 100)
 #' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
-#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6))
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6), ncores=7)
 #' optLDA <- optimalModel(models = ldas, opt = 6)
 #' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 #' head(results$theta)
@@ -751,6 +767,8 @@ getBetaTheta <- function(lda, corpus=NULL, perc.filt=0.05, betaScale=1, verbose=
 #' rownames(corMtx) <- paste0("X", seq(nrow(corMtx)))
 #' colnames(corMtx) <- paste0("X", seq(ncol(corMtx)))
 #' head(corMtx)
+#' 
+#' @importFrom stats cor
 #' 
 #' @export
 getCorrMtx <- function(m1, m2, type, thresh=NULL, verbose=TRUE) {
@@ -906,8 +924,10 @@ annotateCellTypesGSEA <- function(beta, gset, qval=0.05) {
 #' cd <- mOB$counts
 #' counts <- cleanCounts(cd, min.lib.size = 100)
 #' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
-#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,9))
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,9), ncores=7)
 #' optLDA <- optimalModel(models = ldas, opt = "min")
+#' 
+#' @importFrom methods slot
 #'
 #' @export
 optimalModel <- function(models, opt) {
@@ -1035,7 +1055,7 @@ filterTheta <- function(theta, perc.filt=0.05, verbose=TRUE){
 #' cd <- mOB$counts
 #' counts <- cleanCounts(cd, min.lib.size = 100)
 #' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
-#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6))
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6), ncores=7)
 #' optLDA <- optimalModel(models = ldas, opt = 6)
 #' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 #' deconGexp <- results$beta

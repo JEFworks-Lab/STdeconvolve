@@ -8,7 +8,7 @@ vizAllTopics(
   theta,
   pos,
   topicOrder = seq(ncol(theta)),
-  topicCols = grDevices::rainbow(ncol(theta)),
+  topicCols = rainbow(ncol(theta)),
   groups = NA,
   group_cols = NA,
   r = max(0.4, max(pos)/nrow(pos) * 4),

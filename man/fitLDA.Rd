@@ -8,9 +8,8 @@ fitLDA(
   counts,
   Ks = seq(2, 10, by = 2),
   seed = 0,
-  testSize = NULL,
   perc.rare.thresh = 0.05,
-  ncores = parallel::detectCores(logical = TRUE) - 1,
+  ncores = 1,
   plot = TRUE,
   verbose = TRUE
 )
@@ -22,13 +21,10 @@ fitLDA(
 
 \item{seed}{Random seed}
 
-\item{testSize}{fraction of pixels to set aside for test corpus when computing perplexity (default: NULL)
-Either NULL or decimal between 0 and 1.}
-
 \item{perc.rare.thresh}{the number of deconvolved cell-types with mean pixel proportion below this fraction used to assess
 performance of fitted models for each K. Recorded for each K. (default: 0.05)}
 
-\item{ncores}{Number of cores for parallelization}
+\item{ncores}{Number of cores for parallelization (default: 1). Suggest: parallel::detectCores()}
 
 \item{plot}{Boolean for plotting (default: TRUE)}
 
@@ -45,7 +41,7 @@ with mean proportion < perc.rare.thresh starts to increase steadily.
 \item numRare: number of cell-types with mean pixel proportion < perc.rare.thresh for each K
 \item perplexities: perplexity scores for each model
 \item fitCorpus: the corpus that was used to fit each model
-\item testCorpus: the corpus used to compute model perplexity. If testSize = NULL then same as fitCorpus.
+\item testCorpus: the corpus used to compute model perplexity.
 }
 }
 \description{
@@ -61,6 +57,6 @@ pos <- mOB$pos
 cd <- mOB$counts
 counts <- cleanCounts(cd, min.lib.size = 100)
 corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
-ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6))
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6), ncores=7)
 
 }

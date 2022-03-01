@@ -50,6 +50,8 @@ where.is.knee <- function(points=NULL) {
 #' data(mOB)
 #' counts <- cleanCounts(mOB$counts, min.lib.size = 100)
 #'
+#' @importFrom graphics hist par
+#'
 #' @export
 #'
 cleanCounts <- function(counts,
@@ -115,7 +117,9 @@ cleanCounts <- function(counts,
 #' head(od$ods)
 #' head(od$df)
 #'
-#' @importFrom mgcv s
+#' @importFrom mgcv s gam
+#' @importFrom stats lm as.formula pf predict qchisq resid var
+#' @importFrom graphics par
 #'
 #' @export
 getOverdispersedGenes <- function(counts,
@@ -159,7 +163,7 @@ getOverdispersedGenes <- function(counts,
       message(paste0("Using gam with k=", gam.k, "..."))
     }
     fm <- as.formula(sprintf("v ~ s(m, k = %s)", gam.k))
-    m <- mgcv::gam(fm, data = df[vi,])
+    m <- gam(fm, data = df[vi,])
   }
   df$res <- -Inf;  df$res[vi] <- resid(m,type='response')
   n.cells <- ncol(mat)
@@ -214,7 +218,7 @@ fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=FALS
     x <- droplevels(x)
   }
   if(is.null(level.colors)) {
-    col <- rainbow(length(levels(x)),s=s,v=v);
+    col <- grDevices::rainbow(length(levels(x)),s=s,v=v);
   } else {
     col <- level.colors[1:length(levels(x))];
   }
@@ -320,6 +324,8 @@ normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseu
 #' @param qt quantile for winsorization (default: 0.05)
 #' 
 #' @return winsorized gene count matrix
+#' 
+#' @importFrom stats quantile
 #' 
 #' @noRd
 winsorize <- function (x, qt=.05) {

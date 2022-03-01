@@ -188,58 +188,57 @@ combineTopics <- function(mtx, clusters, type) {
 #' \item k: number of cell-types K of the model
 #' }
 #'
-#' @noRd
-buildLDAobject <- function(LDAmodel,
-                           corpus = NULL,
-                           perc.filt = 0.05,
-                           clustering = "ward.D",
-                           dynamic = "hybrid",
-                           deepSplit = 4,
-                           colorScheme = "rainbow",
-                           plot = TRUE){
-  
-  # get beta and theta list object from the LDA model
-  m <- getBetaTheta(LDAmodel, corpus = corpus, perc.filt = perc.filt)
-  
-  # cluster cell-types
-  clust <- clusterTopics(beta = m$beta,
-                         clustering = clustering,
-                         dynamic = dynamic,
-                         deepSplit = deepSplit,
-                         plot = plot)
-  
-  # add cluster information to the list
-  m$clusters <- clust$clusters
-  m$dendro <- clust$dendro
-  
-  # colors for the cell-types. Essentially colored by the cluster they are in
-  cols <- m$clusters
-  if (colorScheme == "rainbow"){
-    levels(cols) <- grDevices::rainbow(length(levels(cols)))
-  }
-  if (colorScheme == "ggplot"){
-    levels(cols) <- gg_color_hue(length(levels(cols)))
-  }
-  m$cols <- cols
-  
-  # construct beta and thetas for the cell-type-clusters
-  m$betaCombn <- combineTopics(m$beta, clusters = m$clusters, type = "b")
-  m$thetaCombn <- combineTopics(m$theta, clusters = m$clusters, type = "t")
-  
-  # colors for the cell-type-clusters
-  # separate factor for ease of use with vizTopicClusters and others
-  # note that these color assignments are different than the
-  # cluster color assignments in the levels of `cols`
-  clusterCols <- as.factor(colnames(m$thetaCombn))
-  names(clusterCols) <- colnames(m$thetaCombn)
-  levels(clusterCols) <- levels(m$cols)
-  m$clustCols <- clusterCols
-  
-  m$k <- LDAmodel@k
-  
-  return(m)
-  
-}
+# buildLDAobject <- function(LDAmodel,
+#                            corpus = NULL,
+#                            perc.filt = 0.05,
+#                            clustering = "ward.D",
+#                            dynamic = "hybrid",
+#                            deepSplit = 4,
+#                            colorScheme = "rainbow",
+#                            plot = TRUE){
+#   
+#   # get beta and theta list object from the LDA model
+#   m <- getBetaTheta(LDAmodel, corpus = corpus, perc.filt = perc.filt)
+#   
+#   # cluster cell-types
+#   clust <- clusterTopics(beta = m$beta,
+#                          clustering = clustering,
+#                          dynamic = dynamic,
+#                          deepSplit = deepSplit,
+#                          plot = plot)
+#   
+#   # add cluster information to the list
+#   m$clusters <- clust$clusters
+#   m$dendro <- clust$dendro
+#   
+#   # colors for the cell-types. Essentially colored by the cluster they are in
+#   cols <- m$clusters
+#   if (colorScheme == "rainbow"){
+#     levels(cols) <- grDevices::rainbow(length(levels(cols)))
+#   }
+#   if (colorScheme == "ggplot"){
+#     levels(cols) <- gg_color_hue(length(levels(cols)))
+#   }
+#   m$cols <- cols
+#   
+#   # construct beta and thetas for the cell-type-clusters
+#   m$betaCombn <- combineTopics(m$beta, clusters = m$clusters, type = "b")
+#   m$thetaCombn <- combineTopics(m$theta, clusters = m$clusters, type = "t")
+#   
+#   # colors for the cell-type-clusters
+#   # separate factor for ease of use with vizTopicClusters and others
+#   # note that these color assignments are different than the
+#   # cluster color assignments in the levels of `cols`
+#   clusterCols <- as.factor(colnames(m$thetaCombn))
+#   names(clusterCols) <- colnames(m$thetaCombn)
+#   levels(clusterCols) <- levels(m$cols)
+#   m$clustCols <- clusterCols
+#   
+#   m$k <- LDAmodel@k
+#   
+#   return(m)
+#   
+# }
 
 
 
