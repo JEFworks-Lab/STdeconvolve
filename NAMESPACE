@@ -16,17 +16,4 @@ export(topGenes)
 export(vizAllTopics)
 export(vizGeneCounts)
 export(vizTopic)
-importFrom(Matrix,Matrix)
-importFrom(Matrix,colSums)
-importFrom(Matrix,rowSums)
-importFrom(Matrix,t)
 importFrom(mgcv,s)
-
-importFrom("grDevices", "col2rgb", "hcl", "rainbow", "rgb")
-importFrom("graphics", "abline", "hist", "lines", "par", "points",
-           "smoothScatter")
-importFrom("methods", "slot")
-importFrom("stats", "as.dendrogram", "as.dist", "as.formula", "cor",
-           "hclust", "heatmap", "lm", "pf", "predict", "qchisq",
-           "quantile", "resid", "var")
-importFrom("utils", "read.table")

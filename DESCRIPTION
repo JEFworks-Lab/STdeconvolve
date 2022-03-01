@@ -1,7 +1,7 @@
 Package: STdeconvolve
 Type: Package
 Title: Reference-free Cell-Type Deconvolution of Multi-Cellular Spatially Resolved Transcriptomics Data 
-Version: 0.99.3
+Version: 0.99.4
 Authors@R:
     c(person(given = "Brendan",
            family = "Miller",
@@ -29,7 +29,6 @@ Imports:
     ggplot2,
     scatterpie,
     viridis,
-    dynamicTreeCut,
     slam,
     mgcv,
     gridExtra,
@@ -40,7 +39,10 @@ Imports:
     liger,
     dplyr,
     reshape2,
-    methods
+    methods,
+    utils,
+    graphics,
+    grDevices
 Depends:
     R (>= 3.6)
 Suggests: 

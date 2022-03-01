@@ -42,7 +42,7 @@
 #' @export
 vizAllTopics <- function(theta, pos,
                          topicOrder=seq(ncol(theta)),
-                         topicCols=rainbow(ncol(theta)),
+                         topicCols=grDevices::rainbow(ncol(theta)),
                          groups = NA,
                          group_cols = NA,
                          r = max(0.4, max(pos)/nrow(pos)*4),
@@ -599,9 +599,9 @@ correlation_breaks <- c(seq(-1,-0.01,length=100),
 #' @noRd
 lighten <- function(color, factor = 0.5) {
   if ((factor > 1) | (factor < 0)) stop("factor needs to be within [0,1]")
-  col <- col2rgb(color)
+  col <- grDevices::col2rgb(color)
   col <- col + (255 - col)*factor
-  col <- rgb(t(col), maxColorValue=255)
+  col <- grDevices::rgb(t(col), maxColorValue=255)
   col
 }
 
@@ -615,9 +615,9 @@ lighten <- function(color, factor = 0.5) {
 #' 
 #' @noRd
 darken <- function(color, factor=1.4){
-  col <- col2rgb(color)
+  col <- grDevices::col2rgb(color)
   col <- col/factor
-  col <- rgb(t(col), maxColorValue=255)
+  col <- grDevices::rgb(t(col), maxColorValue=255)
   col
 }
 
@@ -631,7 +631,7 @@ darken <- function(color, factor=1.4){
 #' @noRd
 gg_color_hue <- function(n) {
   hues = seq(15, 375, length = n + 1)
-  hcl(h = hues, l = 65, c = 100)[1:n]
+  grDevices::hcl(h = hues, l = 65, c = 100)[1:n]
 }
 
 
@@ -647,13 +647,13 @@ gg_color_hue <- function(n) {
 #' @noRd
 transparentCol <- function(color, percent = 50, name = NULL) {
   ## Get RGB values for named color
-  rgb.val <- col2rgb(color)
+  rgb.val <- grDevices::col2rgb(color)
   
   ## Make new color using input color as base and alpha set by transparency
-  t.col <- rgb(rgb.val[1], rgb.val[2], rgb.val[3],
-               max = 255,
-               alpha = (100 - percent) * 255 / 100,
-               names = name)
+  t.col <- grDevices::rgb(rgb.val[1], rgb.val[2], rgb.val[3],
+                           maxColorValue = 255,
+                           alpha = (100 - percent) * 255 / 100,
+                           names = name)
   
   ## Save the color
   invisible(t.col)
