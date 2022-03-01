@@ -38,11 +38,13 @@
 #' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 #' deconProp <- results$theta
 #' vizAllTopics(deconProp,pos, groups = annot, group_cols = rainbow(length(levels(annot))), r=0.4)
+#' 
+#' @importFrom grDevices rainbow
 #'
 #' @export
 vizAllTopics <- function(theta, pos,
                          topicOrder=seq(ncol(theta)),
-                         topicCols=grDevices::rainbow(ncol(theta)),
+                         topicCols=rainbow(ncol(theta)),
                          groups = NA,
                          group_cols = NA,
                          r = max(0.4, max(pos)/nrow(pos)*4),
@@ -779,6 +781,8 @@ correlationPlot <- function(mat, colLabs = NA, rowLabs = NA, title = NA, annotat
 #' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
 #' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6))
 #' perplexityPlot(models = ldas, corpus = corpus)
+#' 
+#' @importFrom methods slot
 #' 
 #' @export
 perplexityPlot <- function(models, corpus = NULL, perc.rare.thresh = 0.05){

@@ -1,7 +1,7 @@
 Package: STdeconvolve
 Type: Package
 Title: Reference-free Cell-Type Deconvolution of Multi-Cellular Spatially Resolved Transcriptomics Data 
-Version: 0.99.4
+Version: 0.99.5
 Authors@R:
     c(person(given = "Brendan",
            family = "Miller",
@@ -23,24 +23,18 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
 Imports:
     topicmodels,
-    parallel,
     BiocParallel,
     Matrix,
+    methods,
+    mgcv,
     ggplot2,
     scatterpie,
     viridis,
     slam,
-    mgcv,
-    gridExtra,
-    KernSmooth,
     stats,
     clue,
-    hash,
     liger,
-    dplyr,
     reshape2,
-    methods,
-    utils,
     graphics,
     grDevices
 Depends:
@@ -50,6 +44,11 @@ Suggests:
     rmarkdown,
     testthat,
     rcmdcheck,
-    gplots
+    gplots,
+    gridExtra,
+    hash,
+    dplyr,
+    parallel,
+    utils,
 VignetteBuilder:
     knitr
