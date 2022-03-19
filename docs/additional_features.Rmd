@@ -343,8 +343,7 @@ colnames(m) <- c("3", "12", "Other")
 vizAllTopics(theta = m,
              pos = p,
              topicOrder=seq(ncol(m)),
-             # BONUS: `transparentCol` can make colors transparent, perhaps if overlaying scatterpies on top of an H&E image
-             topicCols=c(transparentCol("red", percent = 50), "black", "white"), # colors for cell-type 3, 12, and "other"
+             topicCols=c("red", "black", "white"), # colors for cell-type 3, 12, and "other"
              groups = rep("0", dim(m)[1]),
              group_cols = c("0" = "white"), # make scatterpie borders white to only show the cell-type proportions.
              r = 0.4,

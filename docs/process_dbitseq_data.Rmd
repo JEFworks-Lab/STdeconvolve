@@ -46,7 +46,7 @@ Note that the pixel IDs are essentially named based on their x-y coordinates.
 ## remove mt genes:
 dbit_e11_counts <- dbit_e11_counts[!grepl("mt.", rownames(dbit_e11_counts)), ]
 
-dbit_e11_clean <- cleanCounts(dbit_e11_counts_filt,
+dbit_e11_clean <- cleanCounts(dbit_e11_counts,
                         min.lib.size = 100,
                         max.lib.size = Inf,
                         min.reads = 100,
@@ -99,7 +99,6 @@ ks <- c(13)
 
 dbit_e11_LDAs <- fitLDA(counts = as.matrix(dbit_e11_corpus$corpus),
                         Ks = ks,
-                        testSize = NULL,
                         perc.rare.thresh = 0.05,
                         seed = 0,
                         ncores = 7,
@@ -119,17 +118,10 @@ Deconvolve the cell-types for each fitted model. Store in a list to access
 
 ```{r}
 
-## `buildLDAobject` is a wrapper around `getBetaTheta` that will also
-## cluster cell-types based on their txn profiles using `clusterTopics`.
-
-dbit_e11_LDAsDeconv <- lapply(c(13), function(l) {
-  lda <- buildLDAobject(LDAmodel = optimalModel(dbit_e11_LDAs, opt = l),
-                        deepSplit = 4,
-                        perc.filt = 0.05, 
-                        colorScheme = "rainbow")
-  lda
-})
-names(dbit_e11_LDAsDeconv) <- as.character(c(13))
+optLDA <- optimalModel(models = dbit_e11_LDAs, opt = 13)
+results <- getBetaTheta(lda = optLDA,
+                        perc.filt = 0.05, # remove cell-types from pixels that are predicted to be present at less than 5%. Then readjust pixel proportions to 100%
+                        betaScale = 1000) # scale the cell-type transcriptional profiles
 
 ```
 
@@ -137,14 +129,12 @@ names(dbit_e11_LDAsDeconv) <- as.character(c(13))
 
 ```{r, fig.height=9, fig.width=9}
 
-m <- dbit_e11_LDAsDeconv$`13`$theta
+m <- results$theta
 pos <- dbit_e11_corpus$posR
 
 p <- vizAllTopics(theta = m,
                    pos = pos,
                    topicOrder = seq(ncol(m)),
-                   groups = rep("0", dim(m)[1]),
-                   group_cols = c("0" = STdeconvolve::transparentCol("black", percent = 100)),
                    r = 0.4,
                    lwd = 0,
                    showLegend = TRUE,

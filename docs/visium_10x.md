@@ -148,17 +148,11 @@ own core.
 ldas <- fitLDA(t(as.matrix(corpus)), Ks = c(15))
 ```
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
-
-    ## Time to fit LDA models was 160.26 mins
+    ## Time to fit LDA models was 19.91 mins
 
     ## Computing perplexity for each fitted model...
 
-    ## Warning in serialize(data, node$con): 'package:stats' may
-    ## not be available when loading
-
-    ## Time to compute perplexities was 0.07 mins
+    ## Time to compute perplexities was 0 mins
 
     ## Getting predicted cell-types at low proportions...
 
@@ -166,10 +160,10 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = c(15))
 
     ## Plotting...
 
-    ## geom_path: Each group consists of only one observation.
-    ## Do you need to adjust the group aesthetic?
-    ## geom_path: Each group consists of only one observation.
-    ## Do you need to adjust the group aesthetic?
+    ## geom_path: Each group consists of only one observation. Do you need to
+    ## adjust the group aesthetic?
+    ## geom_path: Each group consists of only one observation. Do you need to
+    ## adjust the group aesthetic?
 
 ![](visium_10x_files/figure-markdown_github/unnamed-chunk-8-1.png)
 
@@ -198,8 +192,6 @@ cell-types in the form of scatterpies:
 ``` r
 plt <- vizAllTopics(theta = deconProp,
                    pos = pos,
-                   groups = rep("0", dim(deconProp)[1]),
-                   group_cols = c("0" = STdeconvolve::transparentCol("black", percent = 100)),
                    r = 45,
                    lwd = 0,
                    showLegend = TRUE,
@@ -282,18 +274,12 @@ colnames(deconGexp) <- geneSymbols[colnames(deconGexp)]
 deconGexp[1:5,1:5]
 ```
 
-    ##           Hcrt         Ttr       Pmch         Tac2
-    ## 1 0.0004215068 745.6130724 0.15579893 4.279703e-09
-    ## 2 0.0558873607   0.8638861 0.06944716 4.854540e-01
-    ## 3 0.0323369785   5.2950099 0.52119242 4.964383e-02
-    ## 4 0.0214080751   2.6083053 0.07572332 9.550938e-07
-    ## 5 0.1585215791   1.8399128 0.20456415 2.260985e-01
-    ##            Avp
-    ## 1 0.0025853966
-    ## 2 0.0002897860
-    ## 3 0.0179151567
-    ## 4 0.0001541264
-    ## 5 0.0068843261
+    ##           Hcrt         Ttr       Pmch         Tac2          Avp
+    ## 1 0.0004215068 745.6130724 0.15579893 4.279703e-09 0.0025853966
+    ## 2 0.0558873607   0.8638861 0.06944716 4.854540e-01 0.0002897860
+    ## 3 0.0323369785   5.2950099 0.52119242 4.964383e-02 0.0179151567
+    ## 4 0.0214080751   2.6083053 0.07572332 9.550938e-07 0.0001541264
+    ## 5 0.1585215791   1.8399128 0.20456415 2.260985e-01 0.0068843261
 
 Now, let’s get the differentially expressed genes for each deconvolved
 cell-type transcriptional profile and label the top expressed genes for
@@ -321,12 +307,12 @@ ps <- lapply(colnames(deconProp), function(celltype) {
                                    fill = factor(selectedLabels == ""),
                                    color = factor(selectedLabels == "")), width = 1) +
     
-    ggplot2::scale_fill_manual(values = c(STdeconvolve::transparentCol("darkblue", percent = 0),
-                                          STdeconvolve::transparentCol("darkblue", percent = 0)
+    ggplot2::scale_fill_manual(values = c("darkblue",
+                                          "darkblue"
                                           )) +
-    ggplot2::scale_color_manual(values = c(STdeconvolve::transparentCol("darkblue", percent = 0),
-                                           STdeconvolve::transparentCol("darkblue", percent = 0)
-                                           )) +
+    ggplot2::scale_color_manual(values = c("darkblue",
+                                          "darkblue"
+                                          )) +
     
     ggplot2::scale_y_continuous(expand = c(0, 0), limits = c(min(log2fc) - 0.3, max(log2fc) + 0.3)) +
     # ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(-2, NA)) +
@@ -349,7 +335,7 @@ ps <- lapply(colnames(deconProp), function(celltype) {
                    legend.title = ggplot2::element_text(size = 15, colour = "black", angle = 90),
                    panel.background = ggplot2::element_blank(),
                    plot.background = ggplot2::element_blank(),
-                   panel.grid.major.y = ggplot2::element_line(size = 0.3, colour = STdeconvolve::transparentCol("gray80", percent = 0)),
+                   panel.grid.major.y = ggplot2::element_line(size = 0.3, colour = "gray80"),
                    axis.line = ggplot2::element_line(size = 1, colour = "black"),
                    legend.position="none"
                    )

@@ -128,8 +128,6 @@ First, let's visualize the barcode proportions of all the deconvolved cell-types
 ```{r, fig.height=8, fig.width=7}
 plt <- vizAllTopics(theta = deconProp,
                    pos = pos,
-                   groups = rep("0", dim(deconProp)[1]),
-                   group_cols = c("0" = STdeconvolve::transparentCol("black", percent = 100)),
                    r = 45,
                    lwd = 0,
                    showLegend = TRUE,
@@ -216,12 +214,12 @@ ps <- lapply(colnames(deconProp), function(celltype) {
                                    fill = factor(selectedLabels == ""),
                                    color = factor(selectedLabels == "")), width = 1) +
     
-    ggplot2::scale_fill_manual(values = c(STdeconvolve::transparentCol("darkblue", percent = 0),
-                                          STdeconvolve::transparentCol("darkblue", percent = 0)
+    ggplot2::scale_fill_manual(values = c("darkblue",
+                                          "darkblue"
                                           )) +
-    ggplot2::scale_color_manual(values = c(STdeconvolve::transparentCol("darkblue", percent = 0),
-                                           STdeconvolve::transparentCol("darkblue", percent = 0)
-                                           )) +
+    ggplot2::scale_color_manual(values = c("darkblue",
+                                          "darkblue"
+                                          )) +
     
     ggplot2::scale_y_continuous(expand = c(0, 0), limits = c(min(log2fc) - 0.3, max(log2fc) + 0.3)) +
     # ggplot2::scale_x_continuous(expand = c(0, 0), limits = c(-2, NA)) +
@@ -244,7 +242,7 @@ ps <- lapply(colnames(deconProp), function(celltype) {
                    legend.title = ggplot2::element_text(size = 15, colour = "black", angle = 90),
                    panel.background = ggplot2::element_blank(),
                    plot.background = ggplot2::element_blank(),
-                   panel.grid.major.y = ggplot2::element_line(size = 0.3, colour = STdeconvolve::transparentCol("gray80", percent = 0)),
+                   panel.grid.major.y = ggplot2::element_line(size = 0.3, colour = "gray80"),
                    axis.line = ggplot2::element_line(size = 1, colour = "black"),
                    legend.position="none"
                    )
