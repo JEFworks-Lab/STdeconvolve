@@ -11,7 +11,7 @@ cleanCounts(
   min.reads = 1,
   min.detected = 1,
   verbose = FALSE,
-  plot = TRUE
+  plot = FALSE
 )
 }
 \arguments{
@@ -32,7 +32,7 @@ not seen in a sufficient number of cells will be removed (default: 1)}
 
 \item{verbose}{Verbosity (default: FALSE)}
 
-\item{plot}{Whether to plot (default: TRUE)}
+\item{plot}{Whether to plot (default: FALSE)}
 }
 \value{
 a filtered read count matrix

@@ -97,7 +97,6 @@ annot <- mOB$annot
 
 ``` r
 mobCorpus1 <- preprocess(t(cd),
-                       alignFile = NA, # if there is a file to adjust pixel coordinates this can be included.
                        extractPos = FALSE, # optional argument
                        selected.genes = NA, # 
                        nTopGenes = 3, # remove the top 3 expressed genes (genes with most counts) in dataset
@@ -111,7 +110,8 @@ mobCorpus1 <- preprocess(t(cd),
                        nTopOD = 100, # number of top over dispersed genes to use, otherwise use all that pass filters if `NA`
                        od.genes.alpha = 0.05, # alpha param for over dispersed genes
                        gam.k = 5, # gam param for over dispersed genes
-                       verbose = TRUE)
+                       verbose = TRUE,
+                       plot = TRUE)
 ```
 
     ## Initial genes: 15928 Initial pixels: 262
@@ -143,7 +143,7 @@ mobCorpus1 <- preprocess(t(cd),
 
     ## 171 overdispersed genes ...
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-27-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-2-1.png)
 
     ## - Using top 100 overdispersed genes.
 
@@ -155,7 +155,7 @@ mobCorpus1 <- preprocess(t(cd),
 
     ## Preprocess complete.
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-27-2.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-2-2.png)
 
 ``` r
 mobCorpus1$pos <- pos[rownames(mobCorpus1$corpus), ] # because positions were not available in the counts matrix itself, append after.
@@ -180,28 +180,28 @@ mobCorpus1$slm
 print(mobCorpus1$corpus[1:10,1:10])
 ```
 
-    ##                    Bpifb9a Bpifb9b Col1a1 Dcn Cyp2a5 Sox11 Omp Ogn Prokr2
-    ## ACAACTATGGGTTGGCGG       0       0      1   0      0     1   0   0      0
-    ## ACACAGATCCTGTTCTGA       1       1      0   0      0     0   6   0      0
-    ## ACATCACCTGCGCGCTCT       0       0      1   2      0     6   0   0      0
-    ## ACATTTAAGGCGCATGAT       0       0      0   1      0     0   1   0      1
-    ## ACCACTGTAATCTCCCAT       0       0      0   1      1     0   1   0      0
-    ## ACCAGAGCCGTTGAGCAA       0       0      0   0      0     1   3   0      0
-    ## ACCCGGCGTAACTAGATA       0       1      0   1      0     3   0   0      1
-    ## ACCGGAGTAAATTAGCGG       0       0      0   0      0     2   2   0      0
-    ## ACCTGACAGCGGAAACTT       0       0      1   1      0     0   8   0      0
-    ## ACGGAAATCAGTGGTATT       0       1      0   1      0     4   3   0      1
-    ##                    Ptn
-    ## ACAACTATGGGTTGGCGG   2
-    ## ACACAGATCCTGTTCTGA  22
-    ## ACATCACCTGCGCGCTCT   0
-    ## ACATTTAAGGCGCATGAT   1
-    ## ACCACTGTAATCTCCCAT   1
-    ## ACCAGAGCCGTTGAGCAA   2
-    ## ACCCGGCGTAACTAGATA   2
-    ## ACCGGAGTAAATTAGCGG   2
-    ## ACCTGACAGCGGAAACTT   7
-    ## ACGGAAATCAGTGGTATT   0
+    ##                    Bpifb9a Bpifb9b Col1a1 Dcn Cyp2a5 Sox11 Omp Ogn
+    ## ACAACTATGGGTTGGCGG       0       0      1   0      0     1   0   0
+    ## ACACAGATCCTGTTCTGA       1       1      0   0      0     0   6   0
+    ## ACATCACCTGCGCGCTCT       0       0      1   2      0     6   0   0
+    ## ACATTTAAGGCGCATGAT       0       0      0   1      0     0   1   0
+    ## ACCACTGTAATCTCCCAT       0       0      0   1      1     0   1   0
+    ## ACCAGAGCCGTTGAGCAA       0       0      0   0      0     1   3   0
+    ## ACCCGGCGTAACTAGATA       0       1      0   1      0     3   0   0
+    ## ACCGGAGTAAATTAGCGG       0       0      0   0      0     2   2   0
+    ## ACCTGACAGCGGAAACTT       0       0      1   1      0     0   8   0
+    ## ACGGAAATCAGTGGTATT       0       1      0   1      0     4   3   0
+    ##                    Prokr2 Ptn
+    ## ACAACTATGGGTTGGCGG      0   2
+    ## ACACAGATCCTGTTCTGA      0  22
+    ## ACATCACCTGCGCGCTCT      0   0
+    ## ACATTTAAGGCGCATGAT      1   1
+    ## ACCACTGTAATCTCCCAT      0   1
+    ## ACCAGAGCCGTTGAGCAA      0   2
+    ## ACCCGGCGTAACTAGATA      1   2
+    ## ACCGGAGTAAATTAGCGG      0   2
+    ## ACCTGACAGCGGAAACTT      0   7
+    ## ACGGAAATCAGTGGTATT      1   0
 
 ``` r
 print(mobCorpus1$pos[1:10,])
@@ -235,11 +235,6 @@ counts <- cleanCounts(counts = cd,
                       min.lib.size = 100,
                       min.reads = 1,
                       min.detected = 1)
-```
-
-![](additional_features_files/figure-markdown_github/unnamed-chunk-29-1.png)
-
-``` r
 odGenes <- getOverdispersedGenes(as.matrix(counts),
                       gam.k=5,
                       alpha=0.05,
@@ -294,7 +289,7 @@ mobCorpus2 <- preprocess(t(cd),
 
     ## Preprocess complete.
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-29-2.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-4-1.png)
 
 # Selecting Optimal K
 
@@ -334,49 +329,49 @@ ldas <- fitLDA(as.matrix(mobCorpus2$corpus),
                plot=TRUE, verbose=FALSE)
 ```
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available
-    ## when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be
+    ## available when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available
-    ## when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be
+    ## available when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available
-    ## when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be
+    ## available when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available
-    ## when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be
+    ## available when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available
-    ## when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be
+    ## available when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available
-    ## when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be
+    ## available when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available
-    ## when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be
+    ## available when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available
-    ## when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be
+    ## available when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available
-    ## when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be
+    ## available when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available
-    ## when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be
+    ## available when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available
-    ## when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be
+    ## available when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available
-    ## when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be
+    ## available when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available
-    ## when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be
+    ## available when loading
 
-    ## Warning in serialize(data, node$con): 'package:stats' may not be available
-    ## when loading
+    ## Warning in serialize(data, node$con): 'package:stats' may not be
+    ## available when loading
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-30-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-5-1.png)
 
 While technically the lowest perplexity computed here is when K=18,
 perplexity appears to stabilize and decreases gradually after K=7.
@@ -445,31 +440,37 @@ head(deconProp)
     ## ACATTTAAGGCGCATGAT 0.0000000 0.37756487 0.3953213 0.00000000 0.0000000
     ## ACCACTGTAATCTCCCAT 0.0000000 0.14123112 0.0000000 0.06897838 0.4642933
     ## ACCAGAGCCGTTGAGCAA 0.1665213 0.06325533 0.0000000 0.11304888 0.0000000
-    ##                             6          7          8          9        10
-    ## ACAACTATGGGTTGGCGG 0.00000000 0.00000000 0.07789951 0.09685039 0.1802519
-    ## ACACAGATCCTGTTCTGA 0.00000000 0.07295572 0.00000000 0.00000000 0.0000000
-    ## ACATCACCTGCGCGCTCT 0.00000000 0.00000000 0.20243136 0.00000000 0.0000000
-    ## ACATTTAAGGCGCATGAT 0.08546443 0.00000000 0.07073303 0.00000000 0.0000000
-    ## ACCACTGTAATCTCCCAT 0.00000000 0.00000000 0.00000000 0.00000000 0.1670547
-    ## ACCAGAGCCGTTGAGCAA 0.16841514 0.00000000 0.00000000 0.10886146 0.0000000
-    ##                            11         12
-    ## ACAACTATGGGTTGGCGG 0.20188560 0.06773367
-    ## ACACAGATCCTGTTCTGA 0.00000000 0.51277872
-    ## ACATCACCTGCGCGCTCT 0.24220959 0.00000000
-    ## ACATTTAAGGCGCATGAT 0.07091637 0.00000000
-    ## ACCACTGTAATCTCCCAT 0.06585669 0.09258578
-    ## ACCAGAGCCGTTGAGCAA 0.05451990 0.32537800
+    ##                             6          7          8          9
+    ## ACAACTATGGGTTGGCGG 0.00000000 0.00000000 0.07789951 0.09685039
+    ## ACACAGATCCTGTTCTGA 0.00000000 0.07295572 0.00000000 0.00000000
+    ## ACATCACCTGCGCGCTCT 0.00000000 0.00000000 0.20243136 0.00000000
+    ## ACATTTAAGGCGCATGAT 0.08546443 0.00000000 0.07073303 0.00000000
+    ## ACCACTGTAATCTCCCAT 0.00000000 0.00000000 0.00000000 0.00000000
+    ## ACCAGAGCCGTTGAGCAA 0.16841514 0.00000000 0.00000000 0.10886146
+    ##                           10         11         12
+    ## ACAACTATGGGTTGGCGG 0.1802519 0.20188560 0.06773367
+    ## ACACAGATCCTGTTCTGA 0.0000000 0.00000000 0.51277872
+    ## ACATCACCTGCGCGCTCT 0.0000000 0.24220959 0.00000000
+    ## ACATTTAAGGCGCATGAT 0.0000000 0.07091637 0.00000000
+    ## ACCACTGTAATCTCCCAT 0.1670547 0.06585669 0.09258578
+    ## ACCAGAGCCGTTGAGCAA 0.0000000 0.05451990 0.32537800
 
 ``` r
 deconGexp[1:5,1:5]
 ```
 
-    ##   1700015F17Rik 1700101I11Rik 1810020O05Rik 1810062O18Rik 2010300C02Rik
-    ## 1  2.264072e-02  5.293112e-16  1.814762e-21  1.514845e-01      1.459033
-    ## 2  2.586919e-13  2.819724e-05  6.525866e-05  5.433541e-03      8.924009
-    ## 3  1.294980e-15  3.789561e-07  1.671843e-04  1.405851e-01      2.292141
-    ## 4  2.963250e-12  3.847094e-14  4.911490e-11  5.908545e-02      2.053822
-    ## 5  8.011525e-02  6.606647e-02  1.291824e-65  9.117617e-11      2.240910
+    ##   1700015F17Rik 1700101I11Rik 1810020O05Rik 1810062O18Rik
+    ## 1  2.264072e-02  5.293112e-16  1.814762e-21  1.514845e-01
+    ## 2  2.586919e-13  2.819724e-05  6.525866e-05  5.433541e-03
+    ## 3  1.294980e-15  3.789561e-07  1.671843e-04  1.405851e-01
+    ## 4  2.963250e-12  3.847094e-14  4.911490e-11  5.908545e-02
+    ## 5  8.011525e-02  6.606647e-02  1.291824e-65  9.117617e-11
+    ##   2010300C02Rik
+    ## 1      1.459033
+    ## 2      8.924009
+    ## 3      2.292141
+    ## 4      2.053822
+    ## 5      2.240910
 
 # Visualization
 
@@ -498,7 +499,7 @@ plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-33-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-8-1.png)
 
 Scatterpies can be labeled as belonging to different groups and their
 borders colored to designate the group membership.
@@ -528,7 +529,7 @@ plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-34-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-9-1.png)
 
 Color scatter pies based on group membership (let’s use the coarse cell
 layers of the MOB)
@@ -556,7 +557,7 @@ plt <- plt + ggplot2::guides(fill=ggplot2::guide_legend(ncol=2))
 plt
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-35-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-10-1.png)
 
 Can filter the `theta` matrix to only visualize certain cell-types:
 
@@ -581,7 +582,7 @@ vizAllTopics(theta = m,
 
     ## Plotting scatterpies for 260 pixels with 3 cell-types...this could take a while if the dataset is large.
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-36-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-11-1.png)
 
 ## Faster plotting via `vizTopic`
 
@@ -600,7 +601,7 @@ vizTopic(theta = m, pos = p, topic = "12", plotTitle = "X12",
          high = "red")
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-37-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-12-1.png)
 
 Again, we can also label the coarse cell layers for which the pixels
 were assigned to.
@@ -617,7 +618,7 @@ vizTopic(theta = m, pos = p, topic = "12", plotTitle = "X12",
          high = "red")
 ```
 
-![](additional_features_files/figure-markdown_github/unnamed-chunk-38-1.png)
+![](additional_features_files/figure-markdown_github/unnamed-chunk-13-1.png)
 
 One last note: `vizAllTopics()` and `vizTopic()` return `ggplot2`
 objects, and so additional `ggplot2` aesthetics and themes can be added

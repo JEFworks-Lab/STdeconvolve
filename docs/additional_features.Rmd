@@ -119,7 +119,6 @@ annot <- mOB$annot
 
 ```{r}
 mobCorpus1 <- preprocess(t(cd),
-                       alignFile = NA, # if there is a file to adjust pixel coordinates this can be included.
                        extractPos = FALSE, # optional argument
                        selected.genes = NA, # 
                        nTopGenes = 3, # remove the top 3 expressed genes (genes with most counts) in dataset
@@ -133,7 +132,8 @@ mobCorpus1 <- preprocess(t(cd),
                        nTopOD = 100, # number of top over dispersed genes to use, otherwise use all that pass filters if `NA`
                        od.genes.alpha = 0.05, # alpha param for over dispersed genes
                        gam.k = 5, # gam param for over dispersed genes
-                       verbose = TRUE)
+                       verbose = TRUE,
+                       plot = TRUE)
 mobCorpus1$pos <- pos[rownames(mobCorpus1$corpus), ] # because positions were not available in the counts matrix itself, append after.
 ```
 

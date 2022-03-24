@@ -1,15 +1,19 @@
-The following code shows how to generate the gene counts and metadata
-tables of individual cells profiled by MERFISH from the Moffit et
-al. 2018 raw data.
+---
+editor_options: 
+  markdown: 
+    wrap: 80
+---
 
-After, the gene counts and metadata tables can be used as input in
-functions included in STdeconvolve functions in `R/misc.R` to generate
-simulated ST pixels.
+The following code shows how to generate the gene counts and metadata tables of
+individual cells profiled by MERFISH from the Moffit et al. 2018 raw data.
 
-Process raw data
-----------------
+After, the gene counts and metadata tables can be used as input in functions
+included in `STdeconvolve` functions in `R/misc.R` (on the `devel` branch) to
+generate simulated ST pixels.
 
-``` r
+## Process raw data
+
+``` {.r}
 ## Moffit et al. 2018 raw data downloaded from: https://datadryad.org/stash/dataset/doi:10.5061/dryad.8t8s248/
 moffit <- read.csv2(file = "Moffitt_and_Bambah-Mukku_et_al_merfish_all_cells.csv",
                     sep = ",")
@@ -25,7 +29,7 @@ rownames(annot.table_) <- annot.table_[,"Cell_ID"]
 rownames(counts_) <- annot.table_[,"Cell_ID"]
 ```
 
-``` r
+``` {.r}
 ## Moffit et al. 2018 Supplemental Table S6 contains the genes profiled
 merfish_genes <- readxl::read_excel(path = "aau5324_Moffitt_Table-S6.xlsx",
                                     range = "A2:D163")
@@ -33,19 +37,19 @@ merfish_genes <- readxl::read_excel(path = "aau5324_Moffitt_Table-S6.xlsx",
 smFISH_genes <- dplyr::filter(merfish_genes, Barcode == "Sequential stain")
 ```
 
-``` r
+``` {.r}
 ## filter for MERFISH profiled genes
 counts_ <- counts_[, which(!colnames(counts_) %in% smFISH_genes$`Gene name`)]
 ## remove Blank measurements
 counts_ <- counts_[, !grepl("Blank", colnames(counts_))]
 ```
 
-``` r
+``` {.r}
 ## transform the expression values to discrete counts
 ## divide by 1000 and multiply by each cell's volume
 ```
 
-``` r
+``` {.r}
 ## "171023_FN7_1_M22_M26" (posterior) and "171021_FN7_2_M22_M26" (anterior) are datasets for Female Naive "Animal_ID" = 2.
 ## Together they account for all 12 bregma tissue sections.
 
@@ -54,7 +58,7 @@ annot.table_ <- annot.table_[annot.table_$Animal_ID == 2,
                              c('Centroid_X', 'Centroid_Y', 'Bregma', "Cell_class", "Neuron_cluster_ID")]
 ```
 
-``` r
+``` {.r}
 ## collapse the Oligodendrocytes and Endothelial cell-types
 annot.table_[grep(pattern = "OD Mature",
                                 x = annot.table_$Cell_class),]$Cell_class <- "OD Mature"
@@ -70,18 +74,18 @@ dim(annot.table_)
 
     ## [1] 59651     5
 
-``` r
+``` {.r}
 ## remove rows with NA
 annot.table_ <- na.omit(annot.table_) 
 ```
 
-``` r
+``` {.r}
 ## change the type of some of the metadata columns to numerics
 annot.table_$Centroid_X <- as.numeric(as.character(annot.table_$Centroid_X))
 annot.table_$Centroid_Y <- as.numeric(as.character(annot.table_$Centroid_Y))
 ```
 
-``` r
+``` {.r}
 ## filter the gene counts matrix to only include the filtered cells
 counts_ <- counts_[rownames(annot.table_),]
 dim(counts_)
@@ -89,14 +93,13 @@ dim(counts_)
 
     ## [1] 59651   135
 
-Generate simulated pixels
--------------------------
+## Generate simulated pixels
 
-``` r
+``` {.r}
 library(STdeconvolve)
 ```
 
-``` r
+``` {.r}
 ## get list of major cell-types of each cell
 majorCellTypes <- annot.table_$Cell_class
 length(majorCellTypes)
@@ -104,7 +107,7 @@ length(majorCellTypes)
 
     ## [1] 59651
 
-``` r
+``` {.r}
 ## get a similar list but with neuronal cell-types expanded to subtypes
 neuronalCellsubtypes <- unlist(lapply(rownames(annot.table_), function(cell){
   class <- annot.table_[cell,]$Cell_class
@@ -121,7 +124,7 @@ length(neuronalCellsubtypes)
 
     ## [1] 59651
 
-``` r
+``` {.r}
 ## Using the gene counts of the individual cells, generate a ground truth gene expression profile
 ## for each of the cell-types
 
@@ -138,7 +141,7 @@ dim(gtGexpCellTypes)
 
     ## [1]   9 135
 
-``` r
+``` {.r}
 ## expanded neuronal cell-types:
 cellTypes <- neuronalCellsubtypes
 cells <- rownames(annot.table_)
@@ -152,13 +155,11 @@ dim(gtGexpNeuronalCellTypes)
 
     ## [1]  76 135
 
-100um2 simulated pixels for 9 major cell-types
-----------------------------------------------
+## 100um2 simulated pixels for 9 major cell-types
 
-This generates hash tables of simulated spots for each bregma
-separately:
+This generates hash tables of simulated spots for each bregma separately:
 
-``` r
+``` {.r}
 ## The function takes into account the cell-types in the "Cell_class" column of the metadata
 ## so make sure this is set to the cell-types of interest
 annot.table_$Cell_class <- majorCellTypes
@@ -181,10 +182,10 @@ FN7_hash <- simulateBregmaSpots(annot.table_,
     ## [1] "-0.24"
     ## [1] "-0.29"
 
-Tables of counts of the 9 major cell-types in each pixel for entire FN7
-animal (100um2):
+Tables of counts of the 9 major cell-types in each pixel for entire FN7 animal
+(100um2):
 
-``` r
+``` {.r}
 # table of number of cell types in each spot for entire FN7
 # spot IDs for all spots in FN7
 FN7_spotIDs <- unlist(lapply(hash::keys(FN7_hash), function(ix){
@@ -209,7 +210,7 @@ rownames(FN7_cellTypeTable) <- FN7_spotIDs
 
 Generation of list that contains each simulated corpus of each bregma:
 
-``` r
+``` {.r}
 simBregmasFN7 <- lapply(hash::keys(FN7_hash), function(ix){
   bregma <- buildBregmaCorpus(hashTable = FN7_hash, 
                                 bregmaID = ix)
@@ -257,26 +258,25 @@ simBregmasFN7 <- lapply(hash::keys(FN7_hash), function(ix){
     ## [1] 256   9
     ## [1]   9 135
 
-``` r
+``` {.r}
 names(simBregmasFN7) <- hash::keys(FN7_hash)
 ```
 
-Recall that the `$gtSpotTopics` of each simulated corpus are of primary
-interest to compare the fitted models to for each bregma.
+Recall that the `$gtSpotTopics` of each simulated corpus are of primary interest
+to compare the fitted models to for each bregma.
 
-The `$gtCtGenes` for these corpuses are based only using the cells that
-were in the given bregma and in simulated patches and so should be
-ignored if looking at the entire animal.
+The `$gtCtGenes` for these corpuses are based only using the cells that were in
+the given bregma and in simulated patches and so should be ignored if looking at
+the entire animal.
 
-Combine the simulated bregmas in the `simBregmaFN7` list to make a
-single corpus for all the bregmas to fit a single model to. The
-`gtSpotTopics` can be combined as well for a ground truth reference, but
-each `gtCtGenes` is built using just the cells in each given bregma. So
-instead use the ground truth gene expression profiles (ex:
-`gtGexpCellTypes`), which were average gene counts for cell types across
-all cells of given type.
+Combine the simulated bregmas in the `simBregmaFN7` list to make a single corpus
+for all the bregmas to fit a single model to. The `gtSpotTopics` can be combined
+as well for a ground truth reference, but each `gtCtGenes` is built using just
+the cells in each given bregma. So instead use the ground truth gene expression
+profiles (ex: `gtGexpCellTypes`), which were average gene counts for cell types
+across all cells of given type.
 
-``` r
+``` {.r}
 # 1. sim
 # combine the sim slam matrices to make the corpus for all spots across all bregmas
 sim_N7 <- slam::as.simple_triplet_matrix(do.call(rbind, lapply(names(simBregmasFN7), function(ix){
@@ -288,7 +288,7 @@ sim_N7
 
     ## A 3072x135 simple triplet matrix.
 
-``` r
+``` {.r}
 # 2. gtSpotTopics
 # each gtSpotTopics ref can have different numbers of cell types that are present in each bregma,
 # at least for the neuro. So need a way to combine and have all 75 columns,
@@ -303,7 +303,7 @@ dim(gtSpotTopics_N7)
 
     ## [1] 3072    9
 
-``` r
+``` {.r}
 gtSpotTopics_N7 <- as.matrix(gtSpotTopics_N7)
 rownames(gtSpotTopics_N7) <- rownames(sim_N7)
 # Cts not present in a bregma but columns added here have NA values
@@ -321,7 +321,7 @@ gtSpotTopics_N7[1:3,]
     ## -1971.778086_2845.402956 0.00000000   0.0000000 0.1818182         0
     ## -1971.778086_2945.402956 0.00000000   0.0625000 0.0000000         0
 
-``` r
+``` {.r}
 # 3. gtCtGenes
 # the `gtCtGenes` is the beta of the average gene expression for each cell cluster,
 # in this case using all of cells across the bregma in the animal
@@ -330,7 +330,7 @@ dim(gtGexpCellTypes)
 
     ## [1]   9 135
 
-``` r
+``` {.r}
 # 4. cellCounts
 # counts of cells in each simulated spot, but also has spot coordinates for easy plotting
 cellCounts_N7 <- do.call(rbind, lapply(names(simBregmasFN7), function(ix){
@@ -342,7 +342,7 @@ dim(cellCounts_N7)
 
     ## [1] 3072    3
 
-``` r
+``` {.r}
 cellCounts_N7[1:10,]
 ```
 
@@ -358,7 +358,7 @@ cellCounts_N7[1:10,]
     ## -1971.778086_3545.402956 -1971.778 3545.403     15
     ## -1971.778086_3645.402956 -1971.778 3645.403     21
 
-``` r
+``` {.r}
 # 5. annotDf
 # recall this is meta data data frame includes information for only the cells that were kept in simulated spots
 annotDf_N7 <- do.call(rbind, lapply(names(simBregmasFN7), function(ix){
@@ -370,7 +370,7 @@ dim(annotDf_N7)
 
     ## [1] 49142     6
 
-``` r
+``` {.r}
 annotDf_N7[1:10,]
 ```
 
@@ -397,7 +397,7 @@ annotDf_N7[1:10,]
     ## 61e14c8a-772e-40a5-aea0-e40a4a9a4eab                   -3471.778086_2745.402956
     ## eec3145b-79cc-497c-b807-b2902554c3e5                   -3471.778086_2745.402956
 
-``` r
+``` {.r}
 # construct the list similar to the output of `buildBregmaCorpus()`
 simFN7 <- list(sim = sim_N7,
                gtSpotTopics = gtSpotTopics_N7,
@@ -407,14 +407,14 @@ simFN7 <- list(sim = sim_N7,
                annotDf = annotDf_N7)
 ```
 
-`simFN7` is the simulated dataset for 9 major cell-types in 100um2
-pixels across all tissue sections of the animal.
+`simFN7` is the simulated dataset for 9 major cell-types in 100um2 pixels across
+all tissue sections of the animal.
 
-`simFN7$sim`: A 3072x135 simple triplet matrix (pixels x genes count
-matrix). Input for STdeconvolve
+`simFN7$sim`: A 3072x135 simple triplet matrix (pixels x genes count matrix).
+Input for STdeconvolve
 
-`simFN7$gtSpotTopics`: ground truth cell-type pixel proportions for 9
-major cell-types
+`simFN7$gtSpotTopics`: ground truth cell-type pixel proportions for 9 major
+cell-types
 
 `simFN7$gtCtGenes`: ground truth cell-type gene expression profiles
 

@@ -24,8 +24,7 @@ This tutorial demonstrates an analysis workflow on 10X Visium ST data. It includ
 
 We focus on the [Visium mouse brain section (coronal) dataset](https://www.10xgenomics.com/resources/datasets/mouse-brain-section-coronal-1-standard-1-1-0)
 
-In particular, we are interested in the filtered count matrix and the spatial positions of the barcodes. We can download these files into a folder, which we will use to load them into a [`SpatialExperiment`](https://bioconductor.org/packages/release/bioc/html/SpatialExperiment.html) object. 
-
+In particular, we are interested in the filtered count matrix and the spatial positions of the barcodes. We can download these files into a folder, which we will use to load them into a [`SpatialExperiment`](https://bioconductor.org/packages/release/bioc/html/SpatialExperiment.html) object.
 
 First, make a directory to store the downloaded files:
 
@@ -175,7 +174,7 @@ gridExtra::grid.arrange(
 
 Let's visualize some marker genes for each deconvolved cell-type using the deconvolved transcriptional profiles in the **beta** matrix (`deconGexp`).
 
-We will define the top marker genes here as genes highly expressed in the deconvolved cell-type (count > 2) that also have the highest log2(fold change) when comparing the deconvolved cell-type’s expression profile to the average of all other deconvolved cell-types’ expression profiles.
+We will define the top marker genes here as genes highly expressed in the deconvolved cell-type (count \> 2) that also have the highest log2(fold change) when comparing the deconvolved cell-type's expression profile to the average of all other deconvolved cell-types' expression profiles.
 
 First, let's convert the gene ENSEMBL IDs to Gene Symbols:
 
@@ -524,4 +523,3 @@ STdeconvolve::correlationPlot(mat = m,
     axis.text.x = ggplot2::element_text(angle = 90)
 )
 ```
-

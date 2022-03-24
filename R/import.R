@@ -42,7 +42,7 @@ where.is.knee <- function(points=NULL) {
 #' @param min.detected Minimum number of cells a gene must be seen in. Genes
 #'      not seen in a sufficient number of cells will be removed (default: 1)
 #' @param verbose Verbosity (default: FALSE)
-#' @param plot Whether to plot (default: TRUE)
+#' @param plot Whether to plot (default: FALSE)
 #'
 #' @return a filtered read count matrix
 #' 
@@ -60,7 +60,7 @@ cleanCounts <- function(counts,
                         min.reads=1,
                         min.detected=1,
                         verbose=FALSE,
-                        plot=TRUE) {
+                        plot=FALSE) {
   if (!any(class(counts) %in% c("dgCMatrix", "dgTMatrix"))) {
     if (verbose) {
       message("Converting to sparse matrix ...")
@@ -165,7 +165,8 @@ getOverdispersedGenes <- function(counts,
     fm <- as.formula(sprintf("v ~ s(m, k = %s)", gam.k))
     m <- gam(fm, data = df[vi,])
   }
-  df$res <- -Inf;  df$res[vi] <- resid(m,type='response')
+  df$res <- -Inf
+  df$res[vi] <- resid(m,type='response')
   n.cells <- ncol(mat)
   n.obs <- nrow(mat)
   df$lp <- as.numeric(pf(exp(df$res),n.obs,n.obs,lower.tail=FALSE,log.p=TRUE))
@@ -181,12 +182,12 @@ getOverdispersedGenes <- function(counts,
     message(paste0(length(ods), ' overdispersed genes ... ' ))
   }
   
-  df$gsf <- geneScaleFactors <- sqrt(pmax(min.adjusted.variance,pmin(max.adjusted.variance,df$qv))/exp(df$v));
-  df$gsf[!is.finite(df$gsf)] <- 0;
+  df$gsf <- geneScaleFactors <- sqrt(pmax(min.adjusted.variance,pmin(max.adjusted.variance,df$qv))/exp(df$v))
+  df$gsf[!is.finite(df$gsf)] <- 0
   
   if(plot) {
     if(do.par) {
-      par(mfrow=c(1,2), mar = c(3.5,3.5,2.0,0.5), mgp = c(2,0.65,0), cex = 1.0);
+      par(mfrow=c(1,2), mar = c(3.5,3.5,2.0,0.5), mgp = c(2,0.65,0), cex = 1.0)
     }
     graphics::smoothScatter(df$m,df$v,main='',xlab='log10[ magnitude ]',ylab='log10[ variance ]')
     grid <- seq(min(df$m[vi]),max(df$m[vi]),length.out=1000)
@@ -212,26 +213,27 @@ getOverdispersedGenes <- function(counts,
 
 
 fac2col <- function(x,s=1,v=1,shuffle=FALSE,min.group.size=1,return.details=FALSE,unclassified.cell.color='lightgrey',level.colors=NULL) {
-  x <- as.factor(x);
+  x <- as.factor(x)
   if(min.group.size>1) {
     x <- factor(x,exclude=levels(x)[unlist(tapply(rep(1,length(x)),x,length))<min.group.size])
     x <- droplevels(x)
   }
   if(is.null(level.colors)) {
-    col <- grDevices::rainbow(length(levels(x)),s=s,v=v);
+    col <- grDevices::rainbow(length(levels(x)),s=s,v=v)
   } else {
-    col <- level.colors[1:length(levels(x))];
+    col <- level.colors[1:length(levels(x))]
   }
-  names(col) <- levels(x);
+  names(col) <- levels(x)
   
-  if(shuffle) col <- sample(col);
+  if(shuffle) col <- sample(col)
   
-  y <- col[as.integer(x)]; names(y) <- names(x);
-  y[is.na(y)] <- unclassified.cell.color;
+  y <- col[as.integer(x)]
+  names(y) <- names(x)
+  y[is.na(y)] <- unclassified.cell.color
   if(return.details) {
     return(list(colors=y,palette=col))
   } else {
-    return(y);
+    return(y)
   }
 }
 
@@ -282,8 +284,12 @@ bh.adjust <- function(x, log = FALSE) {
 #' @noRd
 #'
 #'
-normalizeCounts <- function (counts, normFactor = NULL, depthScale = 1e+06, pseudo = 1, 
-                             log = TRUE, verbose = TRUE) {
+normalizeCounts <- function (counts,
+                             normFactor = NULL,
+                             depthScale = 1e+06,
+                             pseudo = 1, 
+                             log = TRUE,
+                             verbose = TRUE) {
   if (!class(counts) %in% c("dgCMatrix", "dgTMatrix")) {
     if (verbose) {
       message("Converting to sparse matrix ...")
