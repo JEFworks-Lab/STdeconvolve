@@ -60,14 +60,14 @@ restrictCorpus <- function(counts,
     message(paste0('Restricting to overdispersed genes with alpha = ', alpha, '...'))
   }
   OD <- getOverdispersedGenes(counts,
-                                   alpha=alpha,
-                                   plot=plot,
-                                   details=TRUE,
-                                   verbose=verbose)
+                              alpha=alpha,
+                              plot=plot,
+                              details=TRUE,
+                              verbose=verbose)
 
   # option to select just the top n overdispersed genes based on
   # log p-val adjusted
-  if (is.na(nTopOD) == FALSE){
+  if (!is.na(nTopOD)){
     if(verbose){
       message(" Using top ", nTopOD, " overdispersed genes.", "\n")
     }
@@ -118,9 +118,6 @@ restrictCorpus <- function(counts,
 #'              7. Choice to use the top over dispersed genes based on -log10(p.adj)
 #'
 #' @param dat pixel (row) x gene (columns) mtx with gene counts OR path to it
-#' @param alignFile path to 3x3 alignment file to adjust pixel coordinates
-#'     (optional).
-#'    Stahl 2016 datasets (default: NA)
 #' @param extractPos Boolean to extract pixel positional coordinates from pixel name
 #'     names
 #'    (default: FALSE)
@@ -151,6 +148,7 @@ restrictCorpus <- function(counts,
 #'     of the "basis" functions in the GAM used to fit, higher = "smoother"
 #'     (default: 5)
 #' @param verbose control verbosity (default: TRUE)
+#' @param plot control if plots are returned (default: TRUE)
 #'
 #' @return A list that contains
 #' \itemize{
@@ -168,7 +166,6 @@ restrictCorpus <- function(counts,
 #'
 #' @export
 preprocess <- function(dat,
-                       alignFile=NA,
                        extractPos=FALSE,
                        selected.genes=NA,
                        nTopGenes=NA,
@@ -182,15 +179,16 @@ preprocess <- function(dat,
                        nTopOD=1000,
                        od.genes.alpha=0.05,
                        gam.k=5,
-                       verbose=TRUE) {
+                       verbose=TRUE,
+                       plot=TRUE) {
   
   if (typeof(dat) == "character") {
-    if (file.exists(dat) == TRUE){
+    if (file.exists(dat)){
       counts <- read.table(dat)
     } else {
       message("path to file does not exist", "\n")
     }
-  } else if (is.matrix(dat) == TRUE){
+  } else if (is.matrix(dat)){
     counts <- dat
   } else {
     stop("`dat` is not a viable path or matrix")
@@ -204,7 +202,7 @@ preprocess <- function(dat,
   }
   
   # use specific genes in the corpus
-  if (is.na(selected.genes[1]) == FALSE) {
+  if (!is.na(selected.genes[1])) {
     if(verbose){
       message("- Using genes in `selected.genes` for corpus.", "\n")
     }
@@ -226,7 +224,7 @@ preprocess <- function(dat,
                              min.reads=min.reads,
                              min.lib.size=min.lib.size,
                              min.detected=min.detected,
-                             plot=TRUE,
+                             plot=plot,
                              verbose=FALSE)
   countsClean <- as.matrix(countsClean)
   if(verbose){
@@ -234,23 +232,8 @@ preprocess <- function(dat,
             " and remaining pixels: ", dim(countsClean)[2], "\n")
   }
   
-  # adjust pixel coordinates, optional.
-  # based on Stahl 2016 ST data with alignment matrices
-  if (is.na(alignFile) == FALSE) {
-    if (file.exists(alignFile) == TRUE){
-      if(verbose){
-        message("- Adjusting pixel positions based on alignment file.")
-      }
-      align <- matrix(unlist(read.table(alignFile)), nrow=3, ncol=3)
-      (positions[,"x"] * align[1,1]) - 290 # note that I found they were off by one pixel distance in pixels
-      (positions[,"y"] * align[2,2]) - 290
-    } else {
-      warning("Warning: `alignFile` path does not exists. Skipping position adjustments.", "\n")
-    }
-  }
-  
   # remove top expressed genes (nTopGenes needs to be integer or NA)
-  if (is.na(nTopGenes) == FALSE & is.numeric(nTopGenes) == TRUE) {
+  if (!is.na(nTopGenes) & is.numeric(nTopGenes)) {
     nTopGenes <- round(nTopGenes)
     if(verbose){
       message("- Removing the top ", nTopGenes, " expressed genes.", "\n")
@@ -258,14 +241,10 @@ preprocess <- function(dat,
     top_expressed <- names(Matrix::rowSums(countsClean)[order(Matrix::rowSums(countsClean),
                                                               decreasing = TRUE)][1:nTopGenes])
     countsClean <- countsClean[rownames(countsClean) %in% top_expressed == FALSE,]
-    
-    # print(paste("after removing top ",
-    #             as.character(nTopGenes),
-    #             " genes:", dim(countsClean)[1], "genes remain."))
   }
   
   # remove specific genes (if there are any). Use grepl to search for gene name pattern matches
-  if (is.na(genes.to.remove) == FALSE) {
+  if (!is.na(genes.to.remove)) {
     countsClean <- countsClean[!grepl(paste(genes.to.remove, collapse="|"), rownames(countsClean)),]
     if(verbose){
       message("- After filtering for `genes.to.remove`:", "\n",
@@ -274,7 +253,7 @@ preprocess <- function(dat,
   }
   
   # remove genes that appear in more than certain percentage of the pixels
-  if (is.na(removeAbove) == FALSE & is.numeric(removeAbove) == TRUE){
+  if (!is.na(removeAbove) & is.numeric(removeAbove)){
     if (removeAbove >= 0 & removeAbove <= 1){
       # matrix where all positive gene counts are set to 1
       countsClean_ <- countsClean
@@ -294,7 +273,7 @@ preprocess <- function(dat,
     }
   }
   # remove genes that appear in less than certain percentage of the pixels
-  if (is.na(removeBelow) == FALSE & is.numeric(removeBelow) == TRUE){
+  if (!is.na(removeBelow) & is.numeric(removeBelow)){
     if (removeBelow >= 0 & removeBelow <= 1){
       # matrix where all positive gene counts are set to 1
       countsClean_ <- countsClean
@@ -315,7 +294,7 @@ preprocess <- function(dat,
   }
   
   # use overdispersed variable genes for corpus
-  if (ODgenes == TRUE) {
+  if (ODgenes) {
     if(verbose){
       message("- Capturing only the overdispersed genes...", "\n")
     }
@@ -323,12 +302,12 @@ preprocess <- function(dat,
     OD <- getOverdispersedGenes(countsClean,
                                 alpha=od.genes.alpha,
                                 gam.k=gam.k,
-                                plot=TRUE,
+                                plot=plot,
                                 details=TRUE)
     
     # option to select just the top n overdispersed genes based on
     # log p-val adjusted
-    if (is.na(nTopOD) == FALSE){
+    if (!is.na(nTopOD)){
       if(verbose){
         message("- Using top ", nTopOD, " overdispersed genes.", "\n")
       }
@@ -454,39 +433,15 @@ fitLDA <- function(counts,
     stop("`counts` must contain integer gene counts")
   }
   
-  ## never end up splitting pixels, so ignore this option
   testingPixels <- seq(nrow(counts))
   fittingPixels <- seq(nrow(counts))
-  # if (is.null(testSize)){
-  #   set.seed(seed)
-  #   testingPixels <- seq(nrow(counts))
-  #   fittingPixels <- seq(nrow(counts))
-  # } else if ((0 < testSize) & (testSize < 1.0)){
-  #   message("Splitting pixels into ", testSize*100, "% and ",
-  #           100-testSize*100, "% testing and fitting corpuses", "\n")
-  #   set.seed(seed)
-  #   testingPixels <- sample(nrow(counts), round(nrow(counts)*testSize))
-  #   fittingPixels <- seq(nrow(counts))[-testingPixels]
-  # } else {
-  #   stop("`testSize` must be NULL or decimal between 0 and 1")
-  # }
   
   ## counts must be pixels (rows) x genes (cols) matrix
   corpus <- slam::as.simple_triplet_matrix((as.matrix(counts)))
   corpusFit <- slam::as.simple_triplet_matrix((as.matrix(counts[fittingPixels,])))
   corpusTest <- slam::as.simple_triplet_matrix((as.matrix(counts[testingPixels,])))
   
-  # if (slam::is.simple_triplet_matrix(counts) == TRUE){
-  #   corpus <- counts
-  # } else {
-  #   corpus <- slam::as.simple_triplet_matrix(t(as.matrix(counts)))
-  # }
-  
-  if (verbose == TRUE){
-    verbose <- 1
-  } else {
-    verbose <- 0
-  }
+  verbose <- as.integer(verbose)
   
   controls <- list(seed=seed,
                    verbose=0, keep=1, estimate.alpha=TRUE)
@@ -516,11 +471,6 @@ fitLDA <- function(counts,
     ## if no splitting, then same corpus and thus no need to refit in order to save time
     topicmodels::perplexity(model)
     
-    # if(is.null(testSize)){
-    #   topicmodels::perplexity(model)
-    # } else {
-    #   topicmodels::perplexity(model, newdata = corpusTest)
-    # }
   }, BPPARAM=BiocParallel::SnowParam(workers=ncores))
   pScores <- unlist(pScores)
   
@@ -548,18 +498,6 @@ fitLDA <- function(counts,
     apply(getBetaTheta(fitted_models[[i]], corpus=NULL, perc.filt=0,
                        verbose=FALSE)$theta, 2, mean)
     
-    # if(is.null(testSize)){
-    #   ## note that we are including all cell-types when computing theta here because we are trying to
-    #   ## assess the best model by the number of rare cell-types predicted.
-    #   apply(getBetaTheta(fitted_models[[i]], corpus=NULL, perc.filt=0,
-    #                      verbose=FALSE)$theta, 2, mean)
-    # } else {
-    #   ## if splitting, then want to make sure that the rare celltypes
-    #   ## are determined for the entire corpus to begin with and thus
-    #   ## refit on the entire corpus to determine theta and rare cell-types
-    #   apply(getBetaTheta(fitted_models[[i]], corpus=corpus, perc.filt=0,
-    #                      verbose=FALSE)$theta, 2, mean)
-    # }
   })
   ## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
   numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))
@@ -609,12 +547,6 @@ fitLDA <- function(counts,
       sec_ax_breaks <- 0
       dat$perplexAdj <- 0
     }
-
-    # print(dat)
-    # print(prim_ax_labs)
-    # print(prim_ax_breaks)
-    # print(sec_ax_labs)
-    # print(sec_ax_breaks)
 
     plt <- ggplot2::ggplot(dat) +
       ggplot2::geom_point(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", lwd=2) +
@@ -723,7 +655,6 @@ getBetaTheta <- function(lda, corpus=NULL, perc.filt=0.05, betaScale=1, verbose=
   
   theta <- result$topics
   beta <- result$terms
-  # topicFreqsOverall <- colSums(theta) / length(lda@documents)
   
   ## filter out cell-types with low proportions in pixels
   if(verbose){
@@ -771,14 +702,23 @@ getBetaTheta <- function(lda, corpus=NULL, perc.filt=0.05, betaScale=1, verbose=
 #' @importFrom stats cor
 #' 
 #' @export
-getCorrMtx <- function(m1, m2, type, thresh=NULL, verbose=TRUE) {
+getCorrMtx <- function(m1, m2, type=c("t", "b"), thresh=NULL, verbose=TRUE) {
   
-  if (is.matrix(m1) == FALSE | is.matrix(m2) == FALSE){
+  type <- match.arg(type)
+  
+  if (!is.matrix(m1) | !is.matrix(m2)){
     stop("`m1` and `m2` must be matrices")
   }
-  if (!type %in% c("t", "b")){
-    stop("`type` must be either 't' or 'b'")
+  
+  if(type == "t"){
+    message("NOTE: using type='t' and comparing thetas where the cell-types are
+            the columns (pixels x cell-types)")
   }
+  if(type == "b"){
+    message("NOTE: using type='b' and comparing betas where the cell-types are
+            the rows (cell-types x genes)")
+  }
+  
   
   # if comparing thetas the cell-types are the columns (pixels x cell-types)
   if (type == "t"){
@@ -835,7 +775,6 @@ getCorrMtx <- function(m1, m2, type, thresh=NULL, verbose=TRUE) {
           # at this point thresh should be between 0 and 1 and m1genes selected
           m2genes <- keep_genes[which(m2[j,keep_genes] > thresh)]
           genes <- intersect(m1genes, m2genes)
-          # cat(length(genes), "genes compared for m1 topic", i, "and m2 topic", j, "\n")
           if (length(genes) < 2){
             warning(cat("WARNING: 0 or 1 shared genes >", thresh,
                         "for both m1 cell-type", i, "and m2 cell-type", j,

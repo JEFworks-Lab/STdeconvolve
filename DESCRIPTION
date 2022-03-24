@@ -1,7 +1,8 @@
 Package: STdeconvolve
 Type: Package
-Title: Reference-free Cell-Type Deconvolution of Multi-Cellular Spatially Resolved Transcriptomics Data 
-Version: 0.99.6
+Title: Reference-free Cell-Type Deconvolution of Multi-Cellular Spatially
+    Resolved Transcriptomics Data 
+Version: 0.99.7
 Authors@R:
     c(person(given = "Brendan",
            family = "Miller",
@@ -14,8 +15,23 @@ Authors@R:
                   email = "jeanfan@jhu.edu",
                   comment = c(ORCID = "0000-0002-0212-5451"))
     )
-Description: This package uses latent Dirichlet allocation to infer latent cell-type proportions and transcriptional profiles within multi-cellular spatially-resolved pixels from spatial transcriptomics datasets.  
-biocViews: Transcriptomics, Visualization, RNASeq, Bayesian, Spatial, Software, GeneExpression
+URL: https://jef.works/STdeconvolve/
+BugReports: https://github.com/JEFworks-Lab/STdeconvolve/issues
+Description: STdeconvolve as an unsupervised, reference-free approach to infer
+    latent cell-type proportions and transcriptional profiles within
+    multi-cellular spatially-resolved pixels from spatial transcriptomics (ST)
+    datasets. STdeconvolve builds on latent Dirichlet allocation (LDA), a
+    generative statistical model commonly used in natural language processing
+    for discovering latent topics in collections of documents. In the context of
+    natural language processing, given a count matrix of words in documents, LDA
+    infers the distribution of words for each topic and the distribution of
+    topics in each document. In the context of ST data, given a count matrix of
+    gene expression in multi-cellular ST pixels, STdeconvolve applies LDA to
+    infer the putative transcriptional profile for each cell-type and the
+    proportional representation of each cell-type in each multi-cellular ST
+    pixel.
+biocViews: Transcriptomics, Visualization, RNASeq, Bayesian, Spatial, Software,
+    GeneExpression
 License: GPL-3
 Encoding: UTF-8
 LazyData: FALSE
@@ -42,6 +58,7 @@ Depends:
     R (>= 3.6)
 Suggests: 
     knitr,
+    BiocStyle,
     rmarkdown,
     testthat,
     rcmdcheck,

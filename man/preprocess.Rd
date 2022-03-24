@@ -6,7 +6,6 @@
 \usage{
 preprocess(
   dat,
-  alignFile = NA,
   extractPos = FALSE,
   selected.genes = NA,
   nTopGenes = NA,
@@ -20,15 +19,12 @@ preprocess(
   nTopOD = 1000,
   od.genes.alpha = 0.05,
   gam.k = 5,
-  verbose = TRUE
+  verbose = TRUE,
+  plot = TRUE
 )
 }
 \arguments{
 \item{dat}{pixel (row) x gene (columns) mtx with gene counts OR path to it}
-
-\item{alignFile}{path to 3x3 alignment file to adjust pixel coordinates
-(optional).
-Stahl 2016 datasets (default: NA)}
 
 \item{extractPos}{Boolean to extract pixel positional coordinates from pixel name
 names
@@ -73,6 +69,8 @@ of the "basis" functions in the GAM used to fit, higher = "smoother"
 (default: 5)}
 
 \item{verbose}{control verbosity (default: TRUE)}
+
+\item{plot}{control if plots are returned (default: TRUE)}
 }
 \value{
 A list that contains

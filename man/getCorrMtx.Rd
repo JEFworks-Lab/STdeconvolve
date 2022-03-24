@@ -6,7 +6,7 @@
 proportions across documents (pixels), i.e. thetas, or gene probabilities,
 i.e. betas.}
 \usage{
-getCorrMtx(m1, m2, type, thresh = NULL, verbose = TRUE)
+getCorrMtx(m1, m2, type = c("t", "b"), thresh = NULL, verbose = TRUE)
 }
 \arguments{
 \item{m1}{first matrix}
