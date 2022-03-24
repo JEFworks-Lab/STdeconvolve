@@ -8,14 +8,6 @@ vignette: >
   %\VignetteEngine{knitr::rmarkdown}
 ---
 
-<!--
-%% \VignetteEngine{knitr::knitr}
--->
-
-```{r style, echo = FALSE, results = 'asis'}
-BiocStyle::markdown()
-```
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, results = 'hide')
 ```
