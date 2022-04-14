@@ -55,7 +55,7 @@ Imports:
     grDevices,
     utils
 Depends:
-    R (>= 4.2)
+    R (>= 4.1)
 Suggests: 
     knitr,
     BiocStyle,
