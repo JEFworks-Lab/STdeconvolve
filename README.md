@@ -23,6 +23,10 @@ remotes::install_github('JEFworks-Lab/STdeconvolve')
 
 Installation should take a few minutes on a typical desktop computer.
 
+### Notes about package branches
+
+The default `package` branch R dependency is >=4.1, however, the `devel` branch is >=3.6. 
+
 ## Example
 
 ``` r
