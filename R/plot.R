@@ -70,12 +70,19 @@ vizAllTopics <- function(theta, pos,
   theta_ordered <- as.data.frame(theta_ordered)
   colnames(theta_ordered) <- paste0("Topic.", colnames(theta_ordered))
   
+  # ensure that `theta` and `pos` pixel rownames maintain same order
+  # after the merge so as to not mess up the order of `groups`
+  # if provided
+  # make sure only using the shared pixels
+  pixels <- intersect(rownames(theta_ordered), rownames(pos))
+  pixels <- rownames(theta_ordered)[which(rownames(theta_ordered) %in% pixels)]
+  
   # add columns "x", "y" with document positions from `pos`
   theta_ordered_pos <- merge(data.frame(theta_ordered),
                              data.frame(pos), by=0)
-  
-  # column names of cell-types, in order of topicOrder
-  # topicColumns <- paste0("Topic.", topicOrder)
+  rownames(theta_ordered_pos) <- theta_ordered_pos[,"Row.names"]
+  ## make sure pixels in the original order before the merge
+  theta_ordered_pos <- theta_ordered_pos[pixels,]
   
   # first column after merge is "Row.names", last two are "x" and "y"
   # problem is that data frame will replace "-" and " " with "."
@@ -216,9 +223,20 @@ vizTopic <- function(theta, pos, topic,
     stop("`pos` must have exactly 2 columns named `x` and `y`.")
   }
   
+  # ensure that `theta` and `pos` pixel rownames maintain same order
+  # after the merge so as to not mess up the order of `groups`
+  # if provided
+  # make sure only using the shared pixels
+  pixels <- intersect(rownames(theta), rownames(pos))
+  pixels <- rownames(theta)[which(rownames(theta) %in% pixels)]
+  
   proportion <- theta[,topic]
   dat <- merge(data.frame(proportion),
                data.frame(pos), by=0)
+  
+  rownames(dat) <- dat[,"Row.names"]
+  ## make sure pixels in the original order before the merge
+  dat <- dat[pixels,]
   
   # color spots by group:
   if (is.na(groups[1])) {
