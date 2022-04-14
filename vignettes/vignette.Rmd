@@ -388,7 +388,9 @@ From here, the count matrix can be accessed and setup for feature selection in
 
 ```{r, eval=FALSE}
 ## this is the genes x barcode sparse count matrix
-cd <- se@assays@data@listData$counts
+## make sure that SpatialExperiment is loaded because `assay` isn't an exported
+## object into the namespace
+cd <- assay(se, "counts")
 ```
 
 "x" and "y" coordinates of the barcodes can be obtained via:
