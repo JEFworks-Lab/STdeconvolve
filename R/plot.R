@@ -33,8 +33,8 @@
 #' annot <- mOB$annot
 #' counts <- cleanCounts(cd, min.lib.size = 100)
 #' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
-#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 8)
-#' optLDA <- optimalModel(models = ldas, opt = 8)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 3)
+#' optLDA <- optimalModel(models = ldas, opt = 3)
 #' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 #' deconProp <- results$theta
 #' vizAllTopics(deconProp,pos, groups = annot, group_cols = rainbow(length(levels(annot))), r=0.4)
@@ -192,11 +192,11 @@ vizAllTopics <- function(theta, pos,
 #' cd <- mOB$counts
 #' counts <- cleanCounts(cd, min.lib.size = 100)
 #' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
-#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 8)
-#' optLDA <- optimalModel(models = ldas, opt = 8)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 3)
+#' optLDA <- optimalModel(models = ldas, opt = 3)
 #' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 #' deconProp <- results$theta
-#' vizTopic(theta = deconProp, pos = pos, topic = "5", plotTitle = "X5",
+#' vizTopic(theta = deconProp, pos = pos, topic = "3", plotTitle = "X3",
 #'     size = 5, stroke = 1, alpha = 0.5, low = "white", high = "red")
 #' 
 #' @export
@@ -427,8 +427,8 @@ correlation_breaks <- c(seq(-1,-0.01,length=100),
 #' cd <- mOB$counts
 #' counts <- cleanCounts(cd, min.lib.size = 100)
 #' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
-#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 8)
-#' optLDA <- optimalModel(models = ldas, opt = 8)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 3)
+#' optLDA <- optimalModel(models = ldas, opt = 3)
 #' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 #' deconProp <- results$theta
 #' corMtx <- getCorrMtx(m1 = as.matrix(deconProp), m2 = as.matrix(deconProp), type = "t")
@@ -522,7 +522,7 @@ correlationPlot <- function(mat, colLabs = NA, rowLabs = NA, title = NA, annotat
 #' cd <- mOB$counts
 #' counts <- cleanCounts(cd, min.lib.size = 100)
 #' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
-#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,6))
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,5))
 #' perplexityPlot(models = ldas, corpus = corpus)
 #' 
 #' @importFrom methods slot
