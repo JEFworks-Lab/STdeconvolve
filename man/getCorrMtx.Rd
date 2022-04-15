@@ -34,8 +34,8 @@ pos <- mOB$pos
 cd <- mOB$counts
 counts <- cleanCounts(cd, min.lib.size = 100)
 corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
-ldas <- fitLDA(t(as.matrix(corpus)), Ks = 8)
-optLDA <- optimalModel(models = ldas, opt = 8)
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = 3)
+optLDA <- optimalModel(models = ldas, opt = 3)
 results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 deconProp <- results$theta
 corMtx <- getCorrMtx(m1 = as.matrix(deconProp), m2 = as.matrix(deconProp), type = "t")

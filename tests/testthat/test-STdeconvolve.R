@@ -67,19 +67,16 @@ test_that("STdeconvolve fits models and visualizes results", {
   ## feature select for genes
   corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow=0.05)
   
-  ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 8, by = 1),
+  ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2, 5, by = 1),
                  perc.rare.thresh = 0.05,
                  plot=FALSE,
                  verbose=TRUE)
   
   alphas <- unlist(sapply(ldas$models, slot, "alpha"))
-  expected_alphas <- c(44.2343385, 0.7856869, 0.6548315, 0.7804621,
-                       0.7925479, 0.8418388, 0.8020433)
+  expected_alphas <- c(44.2343385, 0.7856869, 0.6548315, 0.7804621)
   perplexities <- ldas$perplexities
   expected_perplexities <- c(157.947571324413, 142.851762473055,
-                             141.437602764842, 140.679764694871, 
-                             140.791104475222, 140.559273522924,
-                             140.313615320489)
+                             141.437602764842, 140.679764694871)
   
   ## test by finding correlation between the observed and expected values
   ## in order to avoid cases where maybe the values differ by very small amounts
@@ -91,7 +88,7 @@ test_that("STdeconvolve fits models and visualizes results", {
   
   ## check that optimal model obtained
   optLDA <- optimalModel(models = ldas, opt = "min")
-  expect_equal(optLDA@k, 8)
+  expect_equal(optLDA@k, 5)
   
   ## check that beta and theta extractable and scaled properly
   results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
@@ -101,12 +98,13 @@ test_that("STdeconvolve fits models and visualizes results", {
   ## scaled expression of first value in beta matrix
   ## use some leniency in case of small fluctuations
   ## in either case, the scaling by 1000 should give 5.8 for very first cell
-  expect_gt(deconGexp[1], 5.8) ## real value is: 5.83391590037716
+  expect_gt(deconGexp[1], 3.06) ## real value is: 3.06909812664901
   
   ## cell-type proportions of first pixel
-  first_pixel_proportions <- c(0.142091577455864, 0.0554052065020088,
-                               0.29023879941459, 0, 0.165793512438039,
-                               0, 0.132934115561849, 0.21353678862765)
+  first_pixel_proportions <- c(0, 0.0744826390670371,
+                               0.578165711570332,
+                               0.158247284814881, 
+                               0.189104364547749)
   
   ## test the correlation in case some small fluctuations
   theta_cor <- cor(as.vector(deconProp[1,]), first_pixel_proportions)
@@ -127,15 +125,12 @@ test_that("STdeconvolve fits models and visualizes results", {
                                                                    "Topic.2",
                                                                    "Topic.3", 
                                                                    "Topic.4",
-                                                                   "Topic.5",
-                                                                   "Topic.6",
-                                                                   "Topic.7",
-                                                                   "Topic.8"),
+                                                                   "Topic.5"),
                                                     class = "factor"), 
-                                 value = 0.142091577455864), row.names = 1L,
+                                 value = 0.0), row.names = 1L,
                             class = "data.frame")
   
-  expect_gt(plt$layers[[1]]$data[1,"value"], 0.142)
+  expect_equal(plt$layers[[1]]$data[1,"value"], 0.0)
   expect_equal(plt$layers[[1]]$data[1,"Pixel.Groups"], "3: Outer Plexiform Layer")
   expect_equal(plt$layers[[1]]$data[1,"Row.names"], structure("ACAACTATGGGTTGGCGG",
                                                               class = "AsIs"))
@@ -149,11 +144,11 @@ test_that("STdeconvolve fits models and visualizes results", {
   ## test to see if the first row of the plot data and its structure looks correct
   expected_plt2 <- structure(list(Row.names = structure("ACAACTATGGGTTGGCGG",
                                                         class = "AsIs"), 
-                                  proportion = 0.165793512438039,
+                                  proportion = 0.189104364547749,
                                   x = 16.001, y = 16.036), row.names = 1L,
                              class = "data.frame")
   
-  expect_gt(plt2$layers[[1]]$data[1,"proportion"], 0.165)
+  expect_gt(plt2$layers[[1]]$data[1,"proportion"], 0.189)
   expect_equal(plt2$layers[[1]]$data[1,"Row.names"], structure("ACAACTATGGGTTGGCGG",
                                                                class = "AsIs"))
   
@@ -210,11 +205,11 @@ test_that("STdeconvolve fits models and visualizes results", {
   rownames(corMtx_theta) <- paste0("decon_", seq(nrow(corMtx_theta)))
   
   ## check that the correlation worked
-  expected_corr <- c(`1: Granular Cell Layer` = 0.5125191586133,
-                     `2: Mitral Cell Layer` = 0.0412055311279961, 
-                     `3: Outer Plexiform Layer` = -0.216245607077475,
-                     `4: Glomerular Layer` = -0.0952637652606451, 
-                     `5: Olfactory Nerve Layer` = -0.284524025530588)
+  expected_corr <- c(`1: Granular Cell Layer` = -0.276244855335915,
+                     `2: Mitral Cell Layer` = -0.142174337478699, 
+                     `3: Outer Plexiform Layer` = 0.0338622840004436,
+                     `4: Glomerular Layer` = 0.367178778101782, 
+                     `5: Olfactory Nerve Layer` = 0.0300295669474897)
   
   ## test the correlation in case some small fluctuations
   corMtx_cor <- cor(corMtx_theta[1,], expected_corr)
@@ -224,9 +219,11 @@ test_that("STdeconvolve fits models and visualizes results", {
   m <- t(corMtx_theta)[pairs$rowix, pairs$colsix]
   
   ## check that the pairing worked
-  expected_pairs <- c(decon_4 = 0.843863312259067, decon_3 = -0.399532316836037, 
-                      decon_8 = -0.338018856944863, decon_7 = -0.472845266459734,
-                      decon_2 = -0.372693107286035)
+  expected_pairs <- c(decon_4 = 0.803095452168013,
+                      decon_3 = -0.560104806711357, 
+                      decon_5 = 0.546757310198154,
+                      decon_1 = -0.276244855335915,
+                      decon_2 = -0.431325040365262)
   
   ## test the correlation in case some small fluctuations
   pair_cor <- cor(m[1,], expected_pairs)
@@ -262,17 +259,17 @@ test_that("STdeconvolve fits models and visualizes results", {
                                               9.99900009999e-05),
                                     q.val = c(0.0001999800019998,
                                               0.0001999800019998),
-                                    sscore = c(2.25866596491621,
-                                               -1.86080586080586),
-                                    edge = c(4.66029904941191,
-                                             1.36995846036833)),
+                                    sscore = c(2.36876122685379,
+                                               -2.07135070110146),
+                                    edge = c(3.24141633337745,
+                                             1.35028517017407)),
                                row.names = c("5: Olfactory Nerve Layer",
                                              "1: Granular Cell Layer"),
                                class = "data.frame")
   
   expect_equal(rownames(celltype_annotations$results$`2`),
                 c("5: Olfactory Nerve Layer", "1: Granular Cell Layer"))
-  expect_gt(celltype_annotations$results$`2`$edge[1], 4.66)
+  expect_gt(celltype_annotations$results$`2`$edge[1], 3.24)
   
 })
 

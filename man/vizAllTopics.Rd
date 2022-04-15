@@ -64,8 +64,8 @@ cd <- mOB$counts
 annot <- mOB$annot
 counts <- cleanCounts(cd, min.lib.size = 100)
 corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
-ldas <- fitLDA(t(as.matrix(corpus)), Ks = 8)
-optLDA <- optimalModel(models = ldas, opt = 8)
+ldas <- fitLDA(t(as.matrix(corpus)), Ks = 3)
+optLDA <- optimalModel(models = ldas, opt = 3)
 results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 deconProp <- results$theta
 vizAllTopics(deconProp,pos, groups = annot, group_cols = rainbow(length(levels(annot))), r=0.4)
