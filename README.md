@@ -4,7 +4,7 @@
 [![R build status](https://github.com/JEFworks/STdeconvolve/workflows/R-CMD-check/badge.svg)](https://github.com/JEFworks/STdeconvolve/actions)
 <!-- badges: end -->
 
-`STdeconvolve` enables reference-free cell-type deconvolution of multi-cellular pixel-resolution spatial transcriptomics data. The overall approach is detailed on [bioRxiv](https://www.biorxiv.org/content/10.1101/2021.06.15.448381v2)
+`STdeconvolve` enables reference-free cell-type deconvolution of multi-cellular pixel-resolution spatial transcriptomics data. The overall approach is detailed in the official paper out in [Nature Communications](https://www.nature.com/articles/s41467-022-30033-z).
 
 ## Overview
 
@@ -19,6 +19,20 @@ To install `STdeconvolve`, we recommend using `remotes`:
 ``` r
 require(remotes)
 remotes::install_github('JEFworks-Lab/STdeconvolve')
+```
+
+`STdeconvolve` is also now available through [Bioconductor](https://bioconductor.org/packages/devel/bioc/html/STdeconvolve.html).
+
+Note that through Bioconductor (release 3.15), the R version must be >=4.2.
+
+```{r}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+# The following initializes usage of Bioc devel
+BiocManager::install(version='devel')
+
+BiocManager::install("STdeconvolve")
 ```
 
 Installation should take a few minutes on a typical desktop computer.

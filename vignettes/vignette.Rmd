@@ -198,9 +198,9 @@ correlationPlot(mat = corMtx_beta,
 ```
 
 Notice that cell-type 1, 4, and 5 correlate the strongest with the Granular cell
-layer, cell-type 2 with the Olfactory nerve layer, etc. These agree with there
+layer, cell-type 2 with the Olfactory nerve layer, etc. These agree with their
 predicted spatial proportions in the MOB dataset. We can also confirm this by
-also computing the correlation between the predicted and ground truth cell-type
+computing the correlation between the predicted and ground truth cell-type
 proportions via comparing the `theta` matrices.
 
 ```{r, correlation_theta, fig.width=6, fig.height=5}
