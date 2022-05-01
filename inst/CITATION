@@ -1,0 +1,15 @@
+citHeader("To cite STdeconvolve in publications use:")
+
+citEntry(
+  entry    = "Article",
+  title    = "Reference-free cell type deconvolution of multi-cellular pixel-resolution spatially resolved transcriptomics data",
+  author   = c("Brendan F. Miller", "Feiyang Huang", "Lyla Atta", "Arpan Sahoo", "Jean Fan"),
+  journal  = "Nature Communications",
+  year     = 2022,
+  volume   = 13,
+  number   = 2339,
+  url      = "https://doi.org/10.1038/s41467-022-30033-z",
+  textVersion = paste(
+
+  )
+)

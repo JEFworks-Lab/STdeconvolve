@@ -8,7 +8,7 @@
 
 <img src="https://github.com/JEFworks/STdeconvolve/blob/devel/docs/img/STdeconvolve_logo.png?raw=true"/>
 
-The overall approach is detailed on [bioRxiv](https://www.biorxiv.org/content/10.1101/2021.06.15.448381v2)
+The overall approach is now published in [Nature Communications](https://www.nature.com/articles/s41467-022-30033-z)
 
 ## Overview
 
@@ -62,6 +62,20 @@ To install `STdeconvolve`, we recommend using `remotes`:
 ``` r
 require(remotes)
 remotes::install_github('JEFworks-Lab/STdeconvolve')
+```
+
+`STdeconvolve` is also now available through [Bioconductor](https://bioconductor.org/packages/devel/bioc/html/STdeconvolve.html).
+
+Note that through Bioconductor (release 3.15), the R version must be >=4.2.
+
+```{r}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+# The following initializes usage of Bioc devel
+BiocManager::install(version='devel')
+
+BiocManager::install("STdeconvolve")
 ```
 
 ## Contributing
