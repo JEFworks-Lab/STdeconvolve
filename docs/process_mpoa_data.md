@@ -9,7 +9,7 @@ individual cells profiled by MERFISH from the Moffit et al. 2018 raw data.
 
 After, the gene counts and metadata tables can be used as input in functions
 included in `STdeconvolve` functions in `R/misc.R` (on the `devel` branch) to
-generate simulated ST pixels.
+generate simulated ST pixels. (specifically, the functions: `simulateBregmaSpots()` and `buildBregmaCorpus()`)
 
 ## Process raw data
 
