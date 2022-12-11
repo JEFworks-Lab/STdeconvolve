@@ -79,9 +79,12 @@ More details can be found in the tutorials.
 - [Annotating deconvolved cell-types](https://github.com/JEFworks/STdeconvolve/blob/devel/docs/celltype_annotation.md)
 - [Analysis of 10X Visium data](https://github.com/JEFworks/STdeconvolve/blob/devel/docs/visium_10x.md)
 - [Examples of when `STdeconvolve` may fail](https://github.com/JEFworks/STdeconvolve/blob/devel/docs/failure_examples.md)
+- [Discussion and examples of processing multiple datasets together or separately](https://github.com/JEFworks/STdeconvolve/blob/devel/docs/combining_datasets.md)
 
 ## Preprocessing datasets
 
 For commands to reproduce the preprocessing of certain datasets used in the manuscript, check out:
 
 [https://jef.works/STdeconvolve/](https://jef.works/STdeconvolve/)
+
+and scroll down to the section: `Reproducing Analyses`.
