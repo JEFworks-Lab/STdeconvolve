@@ -54,6 +54,7 @@ More details can be found in the tutorials.
 - [Annotating deconvolved cell-types](celltype_annotation.md)
 - [Analysis of 10X Visium data](visium_10x.md)
 - [Examples of when `STdeconvolve` may fail](failure_examples.md)
+- [Discussion and examples of processing multiple datasets together or separately](combining_datasets.md)
 
 ## Installation
 
@@ -90,3 +91,7 @@ Links below point to code outlining the preprocessing of datasets used for analy
 - [Mouse Olfactory Bulb (Stahl et al. 2016)](process_mob_data.md)
 - [Breast cancer sections (Yoosuf et al. 2020)](process_bcl_data.md)
 - [DBiT-seq of E11 mouse lower embryo and tail (Liu et al. 2020)](process_dbitseq_data.md)
+
+## Examples of `STdeconvolve` being used in "the wild"
+
+We are extremely excited and humbled that `STdeconvolve` is being applied by members of the scientific community! Examples of these applications will be listed here when available to give other users an idea of how this tool is being used.
