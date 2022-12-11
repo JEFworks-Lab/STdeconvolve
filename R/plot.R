@@ -16,7 +16,7 @@
 #' @param group_cols Color labels for the groups. Can be a vector or factor. (default: NA)
 #' @param r Radius of the scatterpie circles. Adjust based on positions of pixels (default: max(0.4, max(pos)/nrow(pos)*4))
 #' @param lwd Width of lines of the pie charts. Increasing helps visualize
-#'     group_cols if being used.
+#'     group_cols if being used (default: 0.01)
 #' @param showLegend Boolean to show the legend indicating cell-types and their color
 #' @param plotTitle add title to the resulting plot (default: NA)
 #' @param overlay raster image of an H&E tissue (for example) to plot the scatterpies on top of
@@ -48,7 +48,7 @@ vizAllTopics <- function(theta, pos,
                          groups = NA,
                          group_cols = NA,
                          r = max(0.4, max(pos)/nrow(pos)*4),
-                         lwd = 0.5,
+                         lwd = 0.01,
                          showLegend = TRUE,
                          plotTitle = NA,
                          overlay = NA) {
@@ -68,7 +68,7 @@ vizAllTopics <- function(theta, pos,
   # pixel cell-type distribution reordered based on topicOrder
   theta_ordered <- theta[, topicOrder]
   theta_ordered <- as.data.frame(theta_ordered)
-  colnames(theta_ordered) <- paste0("Topic.", colnames(theta_ordered))
+  colnames(theta_ordered) <- paste0("X", colnames(theta_ordered))
   
   # ensure that `theta` and `pos` pixel rownames maintain same order
   # after the merge so as to not mess up the order of `groups`
@@ -123,7 +123,7 @@ vizAllTopics <- function(theta, pos,
                                   lwd = lwd,
                                   data = theta_ordered_pos,
                                   cols = topicColumns,
-                                  legend_name = "Topics") +
+                                  legend_name = "CellTypes") +
       ggplot2::scale_fill_manual(values = as.vector(topicCols)) +
       ggplot2::scale_color_manual(values = group_cols)
   } else {
@@ -145,7 +145,7 @@ vizAllTopics <- function(theta, pos,
                                   lwd = lwd,
                                   data = theta_ordered_pos,
                                   cols = topicColumns,
-                                  legend_name = "Topics") +
+                                  legend_name = "CellTypes") +
       ggplot2::scale_fill_manual(values = as.vector(topicCols)) +
       ggplot2::scale_color_manual(values = group_cols)
   }

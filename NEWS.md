@@ -1,3 +1,10 @@
+# Version 1.3.1 (2022-12-10)
+
++ Based on `Pull requests` after being published, made some minor changes to help guide users:
++ Added new vignette: Discussion and examples of processing multiple datasets together or separately
++ Minor aesthetic updates to `VizAllTopics()`. Now lwd = 0.01 and "Topics" changes to "CellTypes"
++ Emphasis that functions `simulateBregmaSpots()` and `buildBregmaCorpus()` to generate MPOA multi-cellular spots are on the `devel` branch
+
 # Version 0.99.12 (2022-04-22)
 
 + Accepted into Bioconductor 3.15 devel branch
