@@ -12,7 +12,7 @@ vizAllTopics(
   groups = NA,
   group_cols = NA,
   r = max(0.4, max(pos)/nrow(pos) * 4),
-  lwd = 0.5,
+  lwd = 0.01,
   showLegend = TRUE,
   plotTitle = NA,
   overlay = NA
@@ -38,7 +38,7 @@ pixel. Needs to be in the same order as the pixel rows in "theta" (default: NA)}
 \item{r}{Radius of the scatterpie circles. Adjust based on positions of pixels (default: max(0.4, max(pos)/nrow(pos)*4))}
 
 \item{lwd}{Width of lines of the pie charts. Increasing helps visualize
-group_cols if being used.}
+group_cols if being used (default: 0.01)}
 
 \item{showLegend}{Boolean to show the legend indicating cell-types and their color}
 
