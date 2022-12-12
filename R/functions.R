@@ -623,7 +623,7 @@ fitLDA <- function(counts,
 #' cd <- mOB$counts
 #' counts <- cleanCounts(cd, min.lib.size = 100)
 #' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
-#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 3, ncores=7)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 3, ncores=2)
 #' optLDA <- optimalModel(models = ldas, opt = 3)
 #' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 #' head(results$theta)
@@ -863,7 +863,7 @@ annotateCellTypesGSEA <- function(beta, gset, qval=0.05) {
 #' cd <- mOB$counts
 #' counts <- cleanCounts(cd, min.lib.size = 100)
 #' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
-#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,4), ncores=7)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,4), ncores=2)
 #' optLDA <- optimalModel(models = ldas, opt = "min")
 #' 
 #' @importFrom methods slot
@@ -994,7 +994,7 @@ filterTheta <- function(theta, perc.filt=0.05, verbose=TRUE){
 #' cd <- mOB$counts
 #' counts <- cleanCounts(cd, min.lib.size = 100)
 #' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
-#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 3, ncores=7)
+#' ldas <- fitLDA(t(as.matrix(corpus)), Ks = 3, ncores=2)
 #' optLDA <- optimalModel(models = ldas, opt = 3)
 #' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 #' deconGexp <- results$beta
