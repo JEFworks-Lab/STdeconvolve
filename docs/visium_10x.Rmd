@@ -59,6 +59,7 @@ untar(tarfile = paste0(f, "V1_Adult_Mouse_Brain_spatial.tar.gz"),
 ```
 
 Load the filtered counts and spatial barcode information into a `SpatialExperiment`:
+(Make sure to specify the `sparse` matrices so that the `counts` will be compatible with `cleanCounts()`)
 
 ```{r}
 se <- SpatialExperiment::read10xVisium(samples = f,
