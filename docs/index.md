@@ -95,3 +95,5 @@ Links below point to code outlining the preprocessing of datasets used for analy
 ## Examples of `STdeconvolve` being used in "the wild"
 
 We are extremely excited and humbled that `STdeconvolve` is being applied by members of the scientific community! Examples of these applications will be listed here when available to give other users an idea of how this tool is being used.
+
+- [STdeconvolve is incorporated into 10X Genomics `spaceranger` v2.1 spot deconvolution pipeline!](https://www.10xgenomics.com/support/software/space-ranger/algorithms-overview/gene-expression). Thank you 10X!
