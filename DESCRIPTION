@@ -2,7 +2,7 @@ Package: STdeconvolve
 Type: Package
 Title: Reference-free Cell-Type Deconvolution of Multi-Cellular Spatially
     Resolved Transcriptomics Data 
-Version: 1.7.0
+Version: 1.8.0
 Authors@R:
     c(person(given = "Brendan",
            family = "Miller",
