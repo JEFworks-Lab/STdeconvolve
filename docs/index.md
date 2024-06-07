@@ -94,6 +94,11 @@ Links below point to code outlining the preprocessing of datasets used for analy
 
 ## Examples of `STdeconvolve` being used in "the wild"
 
-We are extremely excited and humbled that `STdeconvolve` is being applied by members of the scientific community! Examples of these applications will be listed here when available to give other users an idea of how this tool is being used.
+We are extremely excited and humbled that `STdeconvolve` is being applied by members of the scientific community! [STdeconvolve is incorporated into 10X Genomics `spaceranger` v2.1 spot deconvolution pipeline!](https://www.10xgenomics.com/support/software/space-ranger/algorithms-overview/gene-expression).
 
-- [STdeconvolve is incorporated into 10X Genomics `spaceranger` v2.1 spot deconvolution pipeline!](https://www.10xgenomics.com/support/software/space-ranger/algorithms-overview/gene-expression). Thank you 10X!
+## Citing `STdeconvolve`
+
+If you use `STdeconvolve` in your research paper, please cite:
+> Miller BF, Huang F, Atta L, Sahoo A, Fan J. Reference-free cell type deconvolution of multi-cellular pixel-resolution spatially resolved transcriptomics data. Nat Commun. 2022 Apr 29;13(1):2339.
+
+Similarly, if you use the reference-free spot deconvolution results from Space Ranger v2.1 and later, please cite to refer readers to our original work demonstrating its utility and application to multi-cellular pixel-resolution spatial transcriptomics data. 
