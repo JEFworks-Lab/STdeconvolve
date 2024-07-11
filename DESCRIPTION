@@ -53,6 +53,8 @@ Imports:
     graphics,
     grDevices,
     utils
+Remotes:
+    JEFworks/liger
 Depends:
     R (>= 3.6)
 Suggests: 
@@ -65,7 +67,6 @@ Suggests:
     gridExtra,
     hash,
     dplyr,
-    parallel,
-    liger
+    parallel
 VignetteBuilder:
     knitr
