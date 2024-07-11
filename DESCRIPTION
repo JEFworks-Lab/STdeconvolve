@@ -49,11 +49,12 @@ Imports:
     slam,
     stats,
     clue,
-    liger,
     reshape2,
     graphics,
     grDevices,
     utils
+Remotes:
+    JEFworks/liger
 Depends:
     R (>= 4.1)
 Suggests: 
