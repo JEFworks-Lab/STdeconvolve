@@ -67,6 +67,7 @@ Suggests:
     gridExtra,
     hash,
     dplyr,
-    parallel
+    parallel,
+    magick
 VignetteBuilder:
     knitr
