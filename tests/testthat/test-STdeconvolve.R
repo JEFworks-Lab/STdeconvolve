@@ -118,7 +118,7 @@ test_that("STdeconvolve fits models and visualizes results", {
   
   ## test to see if the first row of the plot data and its structure looks correct
   expected_plt <- structure(list(Row.names = structure("ACAACTATGGGTTGGCGG",
-                                                       class = "AsIs"), 
+                                                       class = "character"), 
                                  x = 16.001, y = 16.036,
                                  Pixel.Groups = "3: Outer Plexiform Layer", 
                                  Topics = structure(1L, .Label = c("Topic.1",
@@ -133,7 +133,7 @@ test_that("STdeconvolve fits models and visualizes results", {
   expect_equal(plt$layers[[1]]$data[1,"value"], 0.0)
   expect_equal(plt$layers[[1]]$data[1,"Pixel.Groups"], "3: Outer Plexiform Layer")
   expect_equal(plt$layers[[1]]$data[1,"Row.names"], structure("ACAACTATGGGTTGGCGG",
-                                                              class = "AsIs"))
+                                                              class = "character"))
   
   ## test individual cell-type plotting
   plt2 <- vizTopic(theta = deconProp, pos = pos, topic = "5", plotTitle = "X5",
@@ -143,14 +143,14 @@ test_that("STdeconvolve fits models and visualizes results", {
   
   ## test to see if the first row of the plot data and its structure looks correct
   expected_plt2 <- structure(list(Row.names = structure("ACAACTATGGGTTGGCGG",
-                                                        class = "AsIs"), 
+                                                        class = "character"), 
                                   proportion = 0.189104364547749,
                                   x = 16.001, y = 16.036), row.names = 1L,
                              class = "data.frame")
   
   expect_gt(plt2$layers[[1]]$data[1,"proportion"], 0.189)
   expect_equal(plt2$layers[[1]]$data[1,"Row.names"], structure("ACAACTATGGGTTGGCGG",
-                                                               class = "AsIs"))
+                                                               class = "character"))
   
   ## test gene expression
   celltype <- 5
@@ -178,7 +178,7 @@ test_that("STdeconvolve fits models and visualizes results", {
   
   ## test to see if the first row of the plot data and its structure looks correct
   expected_plt3 <- structure(list(Row.names = structure("ACAACTATGGGTTGGCGG",
-                                                        class = "AsIs"), 
+                                                        class = "character"), 
                                   x = 16.001, y = 16.036, Mag = 0, Sox11 = 1,
                                   Cnp = 2, Nrep = 5), row.names = 1L,
                              class = "data.frame")
@@ -186,7 +186,7 @@ test_that("STdeconvolve fits models and visualizes results", {
   expect_equal(plt3$layers[[1]]$data[1,"Sox11"], 1)
   expect_equal(plt3$layers[[1]]$data[1,"Mag"], 0)
   expect_equal(plt3$layers[[1]]$data[1,"Row.names"], structure("ACAACTATGGGTTGGCGG",
-                                                               class = "AsIs"))
+                                                               class = "character"))
   
   ## finally, check that cell-type annotation assignment is working
   
