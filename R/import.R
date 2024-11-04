@@ -167,11 +167,11 @@ getOverdispersedGenes <- function(counts,
   }
   df$res <- -Inf
   df$res[vi] <- resid(m,type='response')
-  n.cells <- ncol(mat)
-  n.obs <- nrow(mat)
-  df$lp <- as.numeric(pf(exp(df$res),n.obs,n.obs,lower.tail=FALSE,log.p=TRUE))
+  n.feat <- ncol(mat) ## gene
+  n.obs <- nrow(mat) ## cell
+  df$lp <- as.numeric(pf(exp(df$res),n.obs,n.obs,lower.tail=FALSE,log.p=TRUE)) ## degrees of freedom based on number of cells to focus on cellular differences in expression
   df$lpa <- bh.adjust(df$lp,log=TRUE)
-  df$qv <- as.numeric(qchisq(df$lp, n.cells-1, lower.tail = FALSE,log.p=TRUE)/n.cells)
+  df$qv <- as.numeric(qchisq(df$lp, n.feat-1, lower.tail = FALSE,log.p=TRUE)/n.feat) ## we are interested in how variable each feature (gene) is relative to the total number of features
   
   if(use.unadjusted.pvals) {
     ods <- which(df$lp<log(alpha))

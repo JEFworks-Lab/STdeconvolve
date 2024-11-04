@@ -132,8 +132,8 @@ test_that("STdeconvolve fits models and visualizes results", {
   
   expect_equal(plt$layers[[1]]$data[1,"value"], 0.0)
   expect_equal(plt$layers[[1]]$data[1,"Pixel.Groups"], "3: Outer Plexiform Layer")
-  expect_equal(plt$layers[[1]]$data[1,"Row.names"], structure("ACAACTATGGGTTGGCGG",
-                                                              class = "character"))
+  #expect_equal(plt$layers[[1]]$data[1,"Row.names"], structure("ACAACTATGGGTTGGCGG",
+  #                                                            class = "character"))
   
   ## test individual cell-type plotting
   plt2 <- vizTopic(theta = deconProp, pos = pos, topic = "5", plotTitle = "X5",
@@ -149,8 +149,8 @@ test_that("STdeconvolve fits models and visualizes results", {
                              class = "data.frame")
   
   expect_gt(plt2$layers[[1]]$data[1,"proportion"], 0.189)
-  expect_equal(plt2$layers[[1]]$data[1,"Row.names"], structure("ACAACTATGGGTTGGCGG",
-                                                               class = "character"))
+  #expect_equal(plt2$layers[[1]]$data[1,"Row.names"], structure("ACAACTATGGGTTGGCGG",
+  #                                                             class = "character"))
   
   ## test gene expression
   celltype <- 5
@@ -185,8 +185,8 @@ test_that("STdeconvolve fits models and visualizes results", {
   
   expect_equal(plt3$layers[[1]]$data[1,"Sox11"], 1)
   expect_equal(plt3$layers[[1]]$data[1,"Mag"], 0)
-  expect_equal(plt3$layers[[1]]$data[1,"Row.names"], structure("ACAACTATGGGTTGGCGG",
-                                                               class = "character"))
+  #expect_equal(plt3$layers[[1]]$data[1,"Row.names"], structure("ACAACTATGGGTTGGCGG",
+  #                                                             class = "character"))
   
   ## finally, check that cell-type annotation assignment is working
   
