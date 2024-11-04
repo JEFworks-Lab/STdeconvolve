@@ -167,8 +167,8 @@ getOverdispersedGenes <- function(counts,
   }
   df$res <- -Inf
   df$res[vi] <- resid(m,type='response')
-  n.cells <- nrow(mat)
-  n.obs <- ncol(mat)
+  n.cells <- ncol(mat)
+  n.obs <- nrow(mat)
   df$lp <- as.numeric(pf(exp(df$res),n.obs,n.obs,lower.tail=FALSE,log.p=TRUE))
   df$lpa <- bh.adjust(df$lp,log=TRUE)
   df$qv <- as.numeric(qchisq(df$lp, n.cells-1, lower.tail = FALSE,log.p=TRUE)/n.cells)
