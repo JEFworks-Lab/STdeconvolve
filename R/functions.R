@@ -34,7 +34,7 @@ restrictCorpus <- function(counts,
                            verbose=TRUE) {
   
   ## remove genes that are present in more than X% of pixels
-  vi <- rowSums(as.matrix(counts) > 0) >= ncol(counts)*removeAbove
+  vi <- rowSums(as.matrix(counts) > 0) > ncol(counts)*removeAbove
   if(verbose) {
     message(paste0('Removing ', sum(vi), ' genes present in ',
                    removeAbove*100, '% or more of pixels...'))
@@ -45,7 +45,7 @@ restrictCorpus <- function(counts,
   }
   
   ## remove genes that are present in less than X% of pixels
-  vi <- rowSums(as.matrix(counts) > 0) <= ncol(counts)*removeBelow
+  vi <- rowSums(as.matrix(counts) > 0) < ncol(counts)*removeBelow
   if(verbose) {
     message(paste0('Removing ', sum(vi), ' genes present in ',
                    removeBelow*100, '% or less of pixels...'))
