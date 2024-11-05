@@ -189,13 +189,13 @@ getOverdispersedGenes <- function(counts,
     if(do.par) {
       par(mfrow=c(1,2), mar = c(3.5,3.5,2.0,0.5), mgp = c(2,0.65,0), cex = 1.0)
     }
-    graphics::smoothScatter(df$m,df$v,main='',xlab='log10[ magnitude ]',ylab='log10[ variance ]')
+    graphics::smoothScatter(df$m,df$v,main='',xlab='log[ magnitude ]',ylab='log[ variance ]')
     grid <- seq(min(df$m[vi]),max(df$m[vi]),length.out=1000)
     graphics::lines(grid,predict(m,newdata=data.frame(m=grid)),col="blue")
     if(length(ods)>0) {
       graphics::points(df$m[ods],df$v[ods],pch='.',col=2,cex=1)
     }
-    graphics::smoothScatter(df$m[vi],df$qv[vi],xlab='log10[ magnitude ]',ylab='',main='adjusted')
+    graphics::smoothScatter(df$m[vi],df$qv[vi],xlab='log[ magnitude ]',ylab='',main='adjusted')
     graphics::abline(h=1,lty=2,col=8)
     if(is.finite(max.adjusted.variance)) { graphics::abline(h=max.adjusted.variance,lty=2,col=1) }
     graphics::points(df$m[ods],df$qv[ods],col=2,pch='.')
