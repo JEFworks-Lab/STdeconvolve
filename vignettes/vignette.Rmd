@@ -15,9 +15,14 @@ knitr::opts_chunk$set(echo = TRUE, results = 'hide')
 # Installation
 
 ```{r, eval=FALSE}
+# from Bioconductor
 if(!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
 BiocManager::install("STdeconvolve")
+
+# alternatively the latest development version from Github
+require(remotes)
+remotes::install_github('JEFworks-Lab/STdeconvolve')
 ```
 
 # Introduction
@@ -151,7 +156,7 @@ known cell-types.
 
 In addition to the predicted pixel proportions, `STdeconvolve` also returns
 predicted transcriptional profiles of the deconvolved cell-types as the `beta`
-matrix. We can use these transcriptional profiles to compare to known cell-type
+matrix. We can interpret this `beta` matrix as a pseudobulk expression for that deconvolved cell-type. We can use these transcriptional profiles to compare to known cell-type
 transcriptional profiles and see if we can annotate them.
 
 For demonstration purposes, let's use the 5 annotated tissue layer labels
@@ -282,9 +287,10 @@ for (i in seq(length(rownames(gexp)))){
 ```
 
 ```{r, annotations}
-celltype_annotations <- annotateCellTypesGSEA(beta = results$beta,
+celltype_annotations <- annotateCellTypesGSEA(beta = deconGexp,
                                               gset = mobProxyLayerMarkers,
-                                              qval = 0.05)
+                                              qval = 0.05,
+                                              gseaParam = 0.1)
 ```
 
 `annotateCellTypesGSEA` returns a list where the first entry, `$results`,
@@ -299,8 +305,7 @@ celltype_annotations$results$`2`
 ```
 
 Note that the "5: Olfactory Nerve Layer" is significantly positively enriched in
-the transcriptional profiles of cell-type 2 whereas "1: Granular Cell Layer" is
-negatively enriched.
+the transcriptional profiles of cell-type 2.
 
 `annotateCellTypesGSEA` also contains `$predictions`, which is a named vector of
 the most significant matched reference cell-type with the highest positive
