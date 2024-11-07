@@ -4,7 +4,7 @@
 \alias{annotateCellTypesGSEA}
 \title{Match deconvolved cell-types to ground truth cell-types based on transcriptional profiles}
 \usage{
-annotateCellTypesGSEA(beta, gset, qval = 0.05)
+annotateCellTypesGSEA(beta, gset, qval = 0.05, ...)
 }
 \arguments{
 \item{beta}{cell-type (rows) x gene (columns) matrix of deconvolved cell-type transcriptional profiles}
@@ -12,6 +12,8 @@ annotateCellTypesGSEA(beta, gset, qval = 0.05)
 \item{gset}{named list where each entry is a vector of marker genes for a given ground truth cell-type.}
 
 \item{qval}{adjusted p-value threshold (default: 0.05)}
+
+\item{...}{additional options for fgsea}
 }
 \value{
 A list that contains
@@ -26,5 +28,5 @@ are the best matched ground truth cell-type that is also positively enriched.
 \description{
 Match deconvolved cell-types to ground truth cell-types by testing for
 enrichment of ground truth marker gene sets in the deconvolved transcriptional profiles.
-Uses liger::iterative.bulk.gsea.
+Uses fgsea Korotkevich G, Sukhov V, Sergushichev A (2019). “Fast gene set enrichment analysis.” bioRxiv. doi:10.1101/060012, http://biorxiv.org/content/early/2016/06/20/060012.
 }

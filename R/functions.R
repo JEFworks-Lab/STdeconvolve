@@ -564,7 +564,7 @@ fitLDA <- function(counts,
                                                              labels=round(sec_ax_labs, 2))) +
       ggplot2::scale_x_continuous(breaks=min(dat$K):max(dat$K)) +
       ggplot2::labs(title="Fitted model K's vs deconvolved cell-types and perplexity",
-                    subtitle="LDA models with \u03b1 > 1 shaded") +
+                    subtitle="LDA models with alpha > 1 shaded") +
       ggplot2::theme_classic() +
       ggplot2::theme(
         panel.background=ggplot2::element_blank(),
@@ -795,11 +795,12 @@ getCorrMtx <- function(m1, m2, type=c("t", "b"), thresh=NULL, verbose=TRUE) {
 #'
 #' @description Match deconvolved cell-types to ground truth cell-types by testing for
 #'     enrichment of ground truth marker gene sets in the deconvolved transcriptional profiles.
-#'     Uses liger::iterative.bulk.gsea.
+#'     Uses fgsea Korotkevich G, Sukhov V, Sergushichev A (2019). “Fast gene set enrichment analysis.” bioRxiv. doi:10.1101/060012, http://biorxiv.org/content/early/2016/06/20/060012.
 #'
 #' @param beta cell-type (rows) x gene (columns) matrix of deconvolved cell-type transcriptional profiles
 #' @param gset named list where each entry is a vector of marker genes for a given ground truth cell-type.
 #' @param qval adjusted p-value threshold (default: 0.05)
+#' @param ... additional options for fgsea
 #'
 #' @return A list that contains
 #' \itemize{
@@ -811,7 +812,7 @@ getCorrMtx <- function(m1, m2, type=c("t", "b"), thresh=NULL, verbose=TRUE) {
 #' }
 #'
 #' @export
-annotateCellTypesGSEA <- function(beta, gset, qval=0.05) {
+annotateCellTypesGSEA <- function(beta, gset, qval=0.05, ...) {
   
   results <- list()
   top.pos.enrich <- c()
@@ -820,26 +821,28 @@ annotateCellTypesGSEA <- function(beta, gset, qval=0.05) {
     celltype <- i
     vals <- sort(beta[celltype,], decreasing=TRUE)
     
-    gsea.results <- liger::iterative.bulk.gsea(values=vals, set.list=gset, rank=TRUE)
+    gsea.results <- fgsea::fgsea(stats=vals, pathways=gset, scoreType = "pos", ...)
     
     # filter for top hits
-    gsea.sig <- gsea.results[gsea.results$q.val < qval,]
+    gsea.sig <- gsea.results[gsea.results$padj < qval,]
     
     ## order of selection:
-    ## 1. q-val
-    ## 2. edge (the leading edge subset of a gene set is the subset of genes that contribute most to the Expression Score)
-    ## 3. sscore (Expression Score)
-    gsea.sig <- gsea.sig[order(gsea.sig$q.val, rev(gsea.sig$edge), rev(gsea.sig$sscore)), ]
+    ## 1. adjusted p-value
+    ## 2. leadingEdge (the leading edge subset of a gene set is the subset of genes that contribute most to the Enrichment Score)
+    ## 3. ES (Enrichment Score)
+    if(nrow(gsea.sig) > 1) {
+      gsea.sig <- gsea.sig[order(gsea.sig$padj, rev(gsea.sig$leadingEdge), rev(gsea.sig$ES)), ]
+    }
     
     results[[ rownames(beta)[celltype] ]] <- gsea.sig
     
     ## the top entry that is also positiviely enriched in the txn profile is predicted to be the best matching
-    gsea.sig.pos <- gsea.sig[which(gsea.sig$sscore > 0), ]
-    top.pos.enrich <- append(top.pos.enrich, rownames(gsea.sig.pos)[1])
+    gsea.sig.pos <- gsea.sig[which(gsea.sig$ES > 0), ]
+    top.pos.enrich <- append(top.pos.enrich, gsea.sig.pos[1]$pathway)
     
   }
   
-  names(top.pos.enrich) <- rownames(beta)
+  #names(top.pos.enrich) <- rownames(beta)
   
   return(list(results=results,
               predictions=top.pos.enrich))

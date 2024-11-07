@@ -1,3 +1,8 @@
+# Version 1.3.2 (2024-11-07)
+
++ Remove `liger` as a dependency. Replace with `fgsea` Korotkevich G, Sukhov V, Sergushichev A (2019). “Fast gene set enrichment analysis.” bioRxiv. doi:10.1101/060012, http://biorxiv.org/content/early/2016/06/20/060012. 
+
+
 # Version 1.3.1 (2022-12-10)
 
 + Based on `Pull requests` after being published, made some minor changes to help guide users:
