@@ -181,6 +181,8 @@ vizAllTopics <- function(theta, pos,
 #' @param alpha alpha value of colored pixels (default: 1)
 #' @param low sets the color for the low end of the topic proportion color scale (default: "white")
 #' @param high sets the color the the high end of the topic proportion color scale (default: "red")
+#' @param palette optional vector of colors for custom color scales (e.g., `viridis::viridis(200)`). 
+#'     If NULL, a gradient from `low` to `high` is used.
 #' @param plotTitle option to add a title to the plot (character)
 #' @param showLegend Boolean to show the plot legend
 #' 
@@ -196,8 +198,14 @@ vizAllTopics <- function(theta, pos,
 #' optLDA <- optimalModel(models = ldas, opt = 3)
 #' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 #' deconProp <- results$theta
+#' 
+#' # Using the default low/high color scheme:
 #' vizTopic(theta = deconProp, pos = pos, topic = "3", plotTitle = "X3",
 #'     size = 5, stroke = 1, alpha = 0.5, low = "white", high = "red")
+#'
+#' # Using a custom palette (e.g., viridis colors):
+#' vizTopic(theta = deconProp, pos = pos, topic = "3", plotTitle = "X3",
+#'     size = 5, stroke = 1, alpha = 0.5, palette = viridis::viridis(200))
 #' 
 #' @export
 vizTopic <- function(theta, pos, topic,
