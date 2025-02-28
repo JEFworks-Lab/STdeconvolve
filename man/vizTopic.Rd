@@ -15,6 +15,7 @@ vizTopic(
   alpha = 1,
   low = "white",
   high = "red",
+  palette = NULL,
   plotTitle = NA,
   showLegend = TRUE
 )
@@ -43,6 +44,9 @@ Ex: c("0", "1", "0", ...)}
 
 \item{high}{sets the color the the high end of the topic proportion color scale (default: "red")}
 
+\item{palette}{optional vector of colors for custom color scales (e.g., \code{viridis::viridis(200)}).
+If NULL, a gradient from \code{low} to \code{high} is used.}
+
 \item{plotTitle}{option to add a title to the plot (character)}
 
 \item{showLegend}{Boolean to show the plot legend}
@@ -63,7 +67,13 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = 3)
 optLDA <- optimalModel(models = ldas, opt = 3)
 results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 deconProp <- results$theta
+
+# Using the default low/high color scheme:
 vizTopic(theta = deconProp, pos = pos, topic = "3", plotTitle = "X3",
     size = 5, stroke = 1, alpha = 0.5, low = "white", high = "red")
+
+# Using a custom palette (e.g., viridis colors):
+vizTopic(theta = deconProp, pos = pos, topic = "3", plotTitle = "X3",
+    size = 5, stroke = 1, alpha = 0.5, palette = viridis::viridis(200))
 
 }
