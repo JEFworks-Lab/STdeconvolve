@@ -278,21 +278,12 @@ vizTopic <- function(theta, pos, topic,
       legend.title = ggplot2::element_text(size = 12, colour = "black")
     ) +
     
-    if (!is.null(palette)) {
-     ggplot2::scale_fill_gradientn(colours = palette,
-                                             limits = c(0, 1.0))
-    } else {
-      ggplot2::scale_fill_gradientn(limits = c(0, 1.0),
-                                      breaks = seq(0, 1, 0.2),
-                                      colors = grDevices::colorRampPalette(c(low, high))(209))
-    } +
-    
     ggplot2::guides(fill = ggplot2::guide_colorbar(title = "Proportion",
                                                    title.position = "left",
                                                    title.hjust = 0.5,
                                                    ticks.colour = "black",
                                                    ticks.linewidth = 2,
-                                                   frame.colour= "black",
+                                                   frame.colour = "black",
                                                    frame.linewidth = 2,
                                                    label.hjust = 0,
                                                    title.theme = ggplot2::element_text(angle = 90)
@@ -304,6 +295,17 @@ vizTopic <- function(theta, pos, topic,
   
   if (!is.na(plotTitle)) {
     p <- p + ggplot2::ggtitle(plotTitle)
+  }
+  
+  if (!is.null(palette)) {
+    p <- p +  ggplot2::scale_fill_gradientn(limits = c(0, 1.0),
+                                            breaks = c(0, 0.2, 0.4, 0.6, 0.8, 1.0),
+                                            colors = palette)
+  } else {
+    p <- p + ggplot2::scale_fill_gradientn(limits = c(0, 1.0),
+                                           breaks = c(0, 0.2, 0.4, 0.6, 0.8, 1.0),
+                                           colors = (grDevices::colorRampPalette(c(low, high)))(n = 209)
+    )
   }
   
   p <- p + ggplot2::coord_equal()
