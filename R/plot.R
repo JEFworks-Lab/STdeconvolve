@@ -208,6 +208,7 @@ vizTopic <- function(theta, pos, topic,
                      alpha = 1,
                      low = "white",
                      high = "red",
+                     palette = NULL,
                      plotTitle = NA,
                      showLegend = TRUE) {
   
@@ -269,10 +270,14 @@ vizTopic <- function(theta, pos, topic,
       legend.title = ggplot2::element_text(size = 12, colour = "black")
     ) +
     
-    ggplot2::scale_fill_gradientn(limits = c(0, 1.0),
-                                  breaks = c(0, 0.2, 0.4, 0.6, 0.8, 1.0),
-                                  colors=(grDevices::colorRampPalette(c(low, high)))(n = 209)
-    ) +
+    if (!is.null(palette)) {
+     ggplot2::scale_fill_gradientn(colours = palette,
+                                             limits = c(0, 1.0))
+    } else {
+      ggplot2::scale_fill_gradientn(limits = c(0, 1.0),
+                                      breaks = seq(0, 1, 0.2),
+                                      colors = grDevices::colorRampPalette(c(low, high))(209))
+    } +
     
     ggplot2::guides(fill = ggplot2::guide_colorbar(title = "Proportion",
                                                    title.position = "left",
