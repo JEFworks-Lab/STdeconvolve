@@ -831,7 +831,7 @@ annotateCellTypesGSEA <- function(beta, gset, qval=0.05, ...) {
     ## 2. leadingEdge (the leading edge subset of a gene set is the subset of genes that contribute most to the Enrichment Score)
     ## 3. ES (Enrichment Score)
     if(nrow(gsea.sig) > 1) {
-      gsea.sig <- gsea.sig[order(gsea.sig$padj, rev(gsea.sig$leadingEdge), rev(gsea.sig$ES)), ]
+      gsea.sig <- gsea.sig[order(gsea.sig$padj, rev(gsea.sig$ES)), ]
     }
     
     results[[ rownames(beta)[celltype] ]] <- gsea.sig
