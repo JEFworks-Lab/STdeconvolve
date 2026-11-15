@@ -210,25 +210,33 @@ Rcpp::List lda_vem_cpp(const Rcpp::IntegerVector& csc_p,
   std::vector<double> llh(D);
   int max_len = 0;
   for (int d = 0; d < D; ++d) max_len = std::max(max_len, rp[d + 1] - rp[d]);
-  // per thread: two gammas, word weights and the beta columns of one document
+  // per thread: three gammas, e, word weights (two) and the beta columns of
+  // one document
   std::vector<std::vector<double> > work(
-      nthreads, std::vector<double>(2 * static_cast<size_t>(K) + max_len +
+      nthreads, std::vector<double>(4 * static_cast<size_t>(K) + 2 * static_cast<size_t>(max_len) +
                                     static_cast<size_t>(K) * max_len));
+  std::vector<std::vector<int> > work_topic(nthreads, std::vector<int>(K));
   std::vector<double> iters_by_thread(nthreads, 0.0);
 
   int vmax = var_max_iter;
 
   // E-step: optimise gamma for every document given beta and alpha
   auto e_step = [&]() {
+    const double trigamma_alpha = R::trigamma(alpha);
     parallel_for(D, nthreads, 8, [&](int begin, int end, int tid) {
-      double* g1 = work[tid].data();
+      // Topics are addressed by their position in the working arrays; `topic`
+      // maps positions to topics. The first `na` positions are the topics that
+      // are being updated, the others are frozen (see below).
+      double* g = work[tid].data();
+      double* g1 = g + K;
       double* g2 = g1 + K;
-      double* wt = g2 + K;
-      double* Bd = wt + max_len;
+      double* e = g2 + K;
+      double* wt = e + K;
+      double* base = wt + max_len;
+      double* Bd = base + max_len;
+      int* topic = work_topic[tid].data();
       double niter = 0.0;
       for (int d = begin; d < end; ++d) {
-        double* g = &G[static_cast<size_t>(d) * K];
-        double* e = &E[static_cast<size_t>(d) * K];
         const int n0 = rp[d], len = rp[d + 1] - rp[d];
         const double* cnt = &rx[n0];
         // topic-word probabilities of the words in this document, one
@@ -238,10 +246,17 @@ Rcpp::List lda_vem_cpp(const Rcpp::IntegerVector& csc_p,
           const double* b = &B[static_cast<size_t>(rj[n0 + n]) * K];
           for (int k = 0; k < K; ++k) Bd[static_cast<size_t>(k) * len + n] = b[k];
         }
-        // wt[n] = sum_k e[k] * beta[k, word n]
+        int na = K;
+        bool frozen = false;
+        for (int k = 0; k < K; ++k) topic[k] = k;
+        // wt[n] = sum_k e[k] * beta[k, word n]; the frozen topics are in `base`
         auto word_weights = [&](const double* ek) {
-          for (int n = 0; n < len; ++n) wt[n] = 0.0;
-          for (int k = 0; k < K; ++k) {
+          if (frozen) {
+            for (int n = 0; n < len; ++n) wt[n] = base[n];
+          } else {
+            for (int n = 0; n < len; ++n) wt[n] = 0.0;
+          }
+          for (int k = 0; k < na; ++k) {
             const double v = ek[k];
             const double* RESTRICT col = Bd + static_cast<size_t>(k) * len;
             double* RESTRICT w = wt;
@@ -260,16 +275,64 @@ Rcpp::List lda_vem_cpp(const Rcpp::IntegerVector& csc_p,
         // with phi_n the optimal word-topic responsibilities given `in`.
         // Returns the L1 distance between `in` and `out`.
         auto update = [&](const double* in, double* out) {
-          for (int k = 0; k < K; ++k) e[k] = std::exp(digamma_pos(in[k]) - dgsum);
+          for (int k = 0; k < na; ++k) e[k] = std::exp(digamma_pos(in[k]) - dgsum);
           word_weights(e);
           for (int n = 0; n < len; ++n) wt[n] = cnt[n] / std::max(wt[n], 1e-300);
           double change = 0.0;
-          for (int k = 0; k < K; ++k) {
+          for (int k = 0; k < na; ++k) {
             out[k] = alpha + e[k] * dot_k(wt, Bd + static_cast<size_t>(k) * len, len);
             change += std::fabs(out[k] - in[k]);
           }
           niter += 1.0;
           return change;
+        };
+        const double thresh = var_tol * gsum;
+        // When alpha is small, a topic that is absent from a document ends up
+        // with a tiny, nearly constant number of pseudo-counts above alpha.
+        // Such topics are frozen: their (constant) contribution to the word
+        // weights is kept in `base` and they are left out of the updates. A
+        // topic is frozen when the effect of holding it fixed is far below the
+        // convergence threshold. Convergence is only accepted after an update
+        // of all topics, which also brings frozen topics back if needed.
+        const double freeze_below = accelerate ?
+          std::sqrt(thresh / (4.0 * K * trigamma_alpha)) : 0.0;
+        int failed_checks = 0;
+        auto freeze = [&]() {
+          if (failed_checks > 2) return;
+          for (int k = 0; k < na;) {
+            if (g[k] - alpha >= freeze_below) { ++k; continue; }
+            if (!frozen) {
+              for (int n = 0; n < len; ++n) base[n] = 0.0;
+              frozen = true;
+            }
+            const double v = std::exp(digamma_pos(g[k]) - dgsum);
+            double* RESTRICT col = Bd + static_cast<size_t>(k) * len;
+            double* RESTRICT last = Bd + static_cast<size_t>(na - 1) * len;
+            for (int n = 0; n < len; ++n) base[n] += v * col[n];
+            // move the topic behind the active ones
+            --na;
+            if (k != na) {
+              for (int n = 0; n < len; ++n) std::swap(col[n], last[n]);
+              std::swap(g[k], g[na]);
+              std::swap(topic[k], topic[na]);
+            }
+          }
+        };
+        double prev_res = std::numeric_limits<double>::infinity();
+        double step_max = 1.0;
+        // Called when the active topics have converged: true if an update of
+        // all topics confirms it. Leaves the result of that update in g.
+        auto confirmed = [&]() {
+          if (na == K) return true;
+          na = K;
+          frozen = false;
+          const double res = update(g, g1);
+          for (int k = 0; k < K; ++k) g[k] = g1[k];
+          if (res < thresh) return true;
+          ++failed_checks;
+          prev_res = std::numeric_limits<double>::infinity();
+          step_max = 1.0;
+          return false;
         };
         // The plain iteration g <- update(g) converges linearly and often
         // slowly, so it is accelerated with SQUAREM (Varadhan & Roland 2008):
@@ -282,15 +345,14 @@ Rcpp::List lda_vem_cpp(const Rcpp::IntegerVector& csc_p,
         // is only allowed to grow gradually, and no step may take away more
         // than a fraction of the pseudo-counts of any topic. Convergence is
         // always judged by the size of a plain update.
-        const double thresh = var_tol * gsum;
-        double prev_res = std::numeric_limits<double>::infinity();
-        double step_max = 1.0;
         const double step_growth = 4.0, shrink_limit = 0.5;
         for (int it = 0; it < vmax; it += 3) {
+          if (freeze_below > 0.0 && it > 0) freeze();
           const double res = update(g, g1);
           if (res < thresh) {
-            for (int k = 0; k < K; ++k) g[k] = g1[k];
-            break;
+            for (int k = 0; k < na; ++k) g[k] = g1[k];
+            if (confirmed()) break;
+            continue;
           }
           const double res2 = update(g1, g2);
           bool plain = res2 < thresh || !accelerate;
@@ -303,7 +365,7 @@ Rcpp::List lda_vem_cpp(const Rcpp::IntegerVector& csc_p,
           double step = 1.0;
           if (!plain) {
             double rr = 0.0, vv = 0.0;
-            for (int k = 0; k < K; ++k) {
+            for (int k = 0; k < na; ++k) {
               const double r = g1[k] - g[k], v = (g2[k] - g1[k]) - r;
               rr += r * r;
               vv += v * v;
@@ -317,7 +379,7 @@ Rcpp::List lda_vem_cpp(const Rcpp::IntegerVector& csc_p,
             // the pseudo-counts it has after the two plain updates
             while (step > 1.0) {
               bool ok = true;
-              for (int k = 0; k < K; ++k) {
+              for (int k = 0; k < na; ++k) {
                 const double r = g1[k] - g[k], v = (g2[k] - g1[k]) - r;
                 const double x = g[k] + 2.0 * step * r + step * step * v;
                 if (x < alpha + shrink_limit * (g2[k] - alpha)) { ok = false; break; }
@@ -328,24 +390,33 @@ Rcpp::List lda_vem_cpp(const Rcpp::IntegerVector& csc_p,
           }
           if (!(step > 1.0)) {
             // keep the result of the two plain updates
-            for (int k = 0; k < K; ++k) g[k] = g2[k];
-            if (res2 < thresh) break;
+            for (int k = 0; k < na; ++k) g[k] = g2[k];
+            if (res2 < thresh) {
+              if (confirmed()) break;
+              continue;
+            }
             prev_res = res2;
             continue;
           }
-          for (int k = 0; k < K; ++k) {
+          for (int k = 0; k < na; ++k) {
             const double r = g1[k] - g[k], v = (g2[k] - g1[k]) - r;
             g1[k] = g[k] + 2.0 * step * r + step * step * v;
           }
           update(g1, g); // stabilising step
         }
         // bound at the final gamma (with the optimal phi for that gamma)
+        na = K;
+        frozen = false;
+        double* gd = &G[static_cast<size_t>(d) * K];
+        double* ed = &E[static_cast<size_t>(d) * K];
         double p = 0.0, es = 0.0;
         for (int k = 0; k < K; ++k) {
           const double el = digamma_pos(g[k]) - dgsum;
           e[k] = std::exp(el);
           es += el;
           p += (alpha - g[k]) * el;
+          gd[topic[k]] = g[k];
+          ed[topic[k]] = e[k];
         }
         word_weights(e);
         for (int n = 0; n < len; ++n) p += cnt[n] * std::log(std::max(wt[n], 1e-300));

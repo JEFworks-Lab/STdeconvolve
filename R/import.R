@@ -8,10 +8,16 @@
 #'     Detecting Knee Points in System Behavior)
 #' @param points vector of perplexity values ordered by the corresponding LDA model K
 #' 
-#' @return the best K (i.e. inflection point of the perplexities)
+#' @return the index of the best K (i.e. inflection point of the perplexities).
+#'     With fewer than 3 points, the index of the lowest point.
 #' 
 #' @noRd
 where.is.knee <- function(points=NULL) {
+  
+  ## a knee needs at least 3 points; otherwise use the lowest point
+  if (length(points) < 3) {
+    return(which.min(points))
+  }
   
   lower.limit <- 2
   upper.limit <- length(points) -1
@@ -297,7 +303,7 @@ normalizeCounts <- function (counts,
                              pseudo = 1, 
                              log = TRUE,
                              verbose = TRUE) {
-  if (!class(counts) %in% c("dgCMatrix", "dgTMatrix")) {
+  if (!any(class(counts) %in% c("dgCMatrix", "dgTMatrix"))) {
     if (verbose) {
       message("Converting to sparse matrix ...")
     }

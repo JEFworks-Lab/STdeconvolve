@@ -130,7 +130,9 @@ test_that("STdeconvolve fits models and visualizes results", {
                                  value = 0.0), row.names = 1L,
                             class = "data.frame")
   
-  expect_equal(plt$layers[[1]]$data[1,"value"], 0.0)
+  ## the first cell-type has proportion 0 in the first pixel, so the first
+  ## wedge that is drawn belongs to the second cell-type
+  expect_equal(as.character(plt$layers[[1]]$data[1,"CellTypes"]), "X2")
   expect_equal(plt$layers[[1]]$data[1,"Pixel.Groups"], "3: Outer Plexiform Layer")
   #expect_equal(plt$layers[[1]]$data[1,"Row.names"], structure("ACAACTATGGGTTGGCGG",
   #                                                            class = "character"))
@@ -374,5 +376,78 @@ test_that("preprocessing accepts sparse matrices", {
   fromSparse <- preprocess(Matrix::t(sparse), min.lib.size=100, removeAbove=0.95,
                            removeBelow=0.05, plot=FALSE, verbose=FALSE)
   expect_equal(fromSparse$corpus, dense$corpus)
+  
+})
+
+
+test_that("vizAllTopics() draws one wedge per cell-type present in a pixel", {
+  
+  theta <- rbind(a = c(0.5, 0.25, 0.25), b = c(0, 1, 0), c = c(0.2, 0, 0.8))
+  colnames(theta) <- c("1", "2", "3")
+  pos <- cbind(x = c(1, 2, 3), y = c(1, 1, 2))
+  rownames(pos) <- rownames(theta)
+  
+  w <- STdeconvolve:::pieWedges(theta, x = pos[, "x"], y = pos[, "y"], r = rep(0.4, 3), n = 360)
+  expect_equal(length(unique(w$wedge)), 6)
+  ## area of each wedge (shoelace formula) is its share of the area of the pie
+  area <- vapply(split(seq_along(w$x), w$wedge), function(i) {
+    x <- w$x[i]; y <- w$y[i]; j <- c(seq_along(i)[-1], 1)
+    abs(sum(x * y[j] - x[j] * y)) / 2
+  }, numeric(1))
+  expect_equal(unname(area) / (pi * 0.4^2), c(0.5, 0.25, 0.25, 1, 0.2, 0.8), tolerance = 1e-3)
+  expect_equal(unique(w$topic[w$pixel == 3]), c(1, 3))
+  ## all points are on or inside the circle of their pixel
+  d <- sqrt((w$x - pos[w$pixel, "x"])^2 + (w$y - pos[w$pixel, "y"])^2)
+  expect_lte(max(d), 0.4 + 1e-12)
+  
+  ## pixels without a position are left out, groups stay with their pixels
+  p <- suppressMessages(vizAllTopics(theta, pos[c("c", "a"), ], r = 0.4,
+                                     groups = c("g1", "g2", "g3"),
+                                     group_cols = c(g1 = "red", g2 = "blue", g3 = "black")))
+  expect_s3_class(p, "ggplot")
+  dat <- p$layers[[1]]$data
+  expect_equal(levels(dat$CellTypes), c("X1", "X2", "X3"))
+  expect_equal(unique(dat$Pixel.Groups), c("g1", "g3"))
+  expect_silent(ggplot2::ggplot_build(p))
+  
+  ## data.frames are accepted by vizTopic()
+  p <- vizTopic(as.data.frame(theta), as.data.frame(pos), topic = "2")
+  expect_s3_class(p, "ggplot")
+  
+})
+
+
+test_that("edge cases of the helper functions", {
+  
+  data(mOB)
+  cd <- mOB$counts
+  
+  ## several patterns of genes to remove
+  pre <- preprocess(t(cd), min.lib.size=100, genes.to.remove=c("^mt-", "^Rpl", "^Rps"),
+                    ODgenes=FALSE, plot=FALSE, verbose=FALSE)
+  expect_false(any(grepl("^mt-|^Rpl|^Rps", colnames(pre$corpus))))
+  expect_error(preprocess("no/such/file.txt", plot=FALSE, verbose=FALSE), "does not exist")
+  
+  ## a single K has no knee
+  counts <- cleanCounts(cd, min.lib.size = 100)
+  corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow=0.05, verbose=FALSE)
+  ldas <- fitLDA(t(as.matrix(corpus)), Ks = 3, plot=FALSE, verbose=FALSE)
+  expect_equal(ldas$kneedOptK, 3)
+  expect_equal(ldas$ctPropOptK, 3)
+  expect_equal(optimalModel(ldas, opt = "kneed")@k, 3L)
+  
+  ## correlations restricted to highly expressed genes
+  beta <- getBetaTheta(ldas$models[[1]], verbose=FALSE)$beta
+  full <- suppressMessages(getCorrMtx(beta, beta, type="b"))
+  expect_equal(unname(diag(full)), rep(1, 3))
+  top <- suppressMessages(getCorrMtx(beta, beta, type="b", thresh=0.005))
+  expect_equal(dim(top), c(3, 3))
+  genes <- colnames(beta)[beta[1, ] > 0.005 & beta[2, ] > 0.005]
+  expect_equal(top[1, 2], cor(beta[1, genes], beta[2, genes]))
+  expect_error(suppressMessages(getCorrMtx(beta, beta, type="b", thresh=2)), "thresh")
+  
+  ## a single remaining cell-type keeps the matrix shape
+  theta <- cbind("1" = c(0.99, 0.98), "2" = c(0.01, 0.02))
+  expect_equal(dim(STdeconvolve:::filterTheta(theta, perc.filt=0.05, verbose=FALSE)), c(2, 1))
   
 })

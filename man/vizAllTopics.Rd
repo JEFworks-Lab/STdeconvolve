@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot.R
 \name{vizAllTopics}
 \alias{vizAllTopics}
-\title{Visualize all topic proportions across pixels with \code{scatterpie}}
+\title{Visualize all topic proportions across pixels as pie charts}
 \usage{
 vizAllTopics(
   theta,

@@ -188,10 +188,10 @@ preprocess <- function(dat,
                        plot=TRUE) {
   
   if (typeof(dat) == "character") {
-    if (file.exists(dat)){
-      counts <- read.table(dat)
+    if (length(dat) == 1 && file.exists(dat)){
+      counts <- as.matrix(read.table(dat))
     } else {
-      message("path to file does not exist", "\n")
+      stop("path to file does not exist")
     }
   } else if (is.matrix(dat) || methods::is(dat, "Matrix")){
     counts <- dat
@@ -249,7 +249,7 @@ preprocess <- function(dat,
   }
   
   # remove specific genes (if there are any). Use grepl to search for gene name pattern matches
-  if (!is.na(genes.to.remove)) {
+  if (!is.na(genes.to.remove[1])) {
     countsClean <- countsClean[!grepl(paste(genes.to.remove, collapse="|"), rownames(countsClean)),]
     if(verbose){
       message("- After filtering for `genes.to.remove`:", "\n",
@@ -295,11 +295,14 @@ preprocess <- function(dat,
     if(verbose){
       message("- Capturing only the overdispersed genes...", "\n")
     }
-    par(mfrow=c(4,2), mar=c(1,1,1,1))
+    if (plot) {
+      par(mfrow=c(4,2), mar=c(1,1,1,1))
+    }
     OD <- getOverdispersedGenes(countsClean,
                                 alpha=od.genes.alpha,
                                 gam.k=gam.k,
                                 plot=plot,
+                                verbose=verbose,
                                 details=TRUE)
     
     # option to select just the top n overdispersed genes based on
@@ -338,7 +341,7 @@ preprocess <- function(dat,
   if(verbose){
     message("- Check that each pixel has at least 1 non-zero gene count entry..", "\n")
   }
-  corpus <- corpus[which(!rowSums(corpus) == 0),]
+  corpus <- corpus[which(!rowSums(corpus) == 0), , drop=FALSE]
   corpus_slm <- slam::as.simple_triplet_matrix(corpus)
   message("Final corpus:", "\n")
   print(corpus_slm)
@@ -419,7 +422,7 @@ fitLDA <- function(counts,
                    verbose=TRUE) {
   
   if ( min(Ks) < 2 | !isTRUE(all(Ks == floor(Ks))) ){
-    stop("`Ks` must be a vector of integers greater than 2.")
+    stop("`Ks` must be a vector of integers of at least 2.")
   }
   
   ## pixels (rows) x genes (cols) sparse matrix; checks that the counts are
@@ -487,71 +490,9 @@ fitLDA <- function(counts,
       message("Plotting...")
     }
     
-    dat <- data.frame(K=as.double(Ks),
-                      rareCts=numrare,
-                      perplexity=pScores,
-                      rareCtsAdj=scale0_1(numrare),
-                      perplexAdj=scale0_1(pScores),
-                      alphas=unlist(sapply(fitted_models, slot, "alpha")))
-    dat[["alpha < 1"]] <- ifelse(dat$alphas < 1, 'gray90', 'gray50')
-    dat$alphaBool <- ifelse(dat$alphas < 1, 0, 1)
-
-    prim_ax_labs <- seq(min(dat$rareCts), max(dat$rareCts))
-    prim_ax_breaks <- scale0_1(prim_ax_labs)
-    ## if number rareCts stays constant, then only one break. scale0_1(prim_ax_labs) would be NaN so change to 0
-    if(length(prim_ax_labs) == 1){
-      prim_ax_breaks <- 0
-      ## also the rareCtsAdj <- scale0_1(rareCts) would be NaN, so set to 0, so at same position as the tick,
-      ## and its label will still be set to the constant value of rareCts
-      dat$rareCtsAdj <- 0
-    }
-
-    if(max(dat$rareCts) < 1){
-      sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity),
-                         (max(dat$perplexity)-min(dat$perplexity))/1)
-    } else {
-      sec_ax_labs <- seq(min(dat$perplexity), max(dat$perplexity),
-                         (max(dat$perplexity)-min(dat$perplexity))/max(dat$rareCts))
-    }
-    sec_ax_breaks <- scale0_1(sec_ax_labs)
-
-    if(length(sec_ax_labs) == 1){
-      sec_ax_breaks <- 0
-      dat$perplexAdj <- 0
-    }
-
-    plt <- ggplot2::ggplot(dat) +
-      ggplot2::geom_point(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", lwd=2) +
-      ggplot2::geom_point(ggplot2::aes(y=perplexAdj, x=K), col="red", lwd=2) +
-      ggplot2::geom_line(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", lwd=2) +
-      ggplot2::geom_line(ggplot2::aes(y=perplexAdj, x=K), col="red", lwd=2) +
-      ggplot2::geom_bar(ggplot2::aes(x=K, y=alphaBool), fill=dat$`alpha < 1`,
-                        stat="identity", width=1, alpha=0.5) +
-      ggplot2::scale_y_continuous(name=paste0("# cell-types with mean proportion < ",
-                                              round(perc.rare.thresh*100, 2), "%"),
-                                  breaks=prim_ax_breaks,
-                                  labels=prim_ax_labs,
-                                  sec.axis=ggplot2::sec_axis(~ ., name="perplexity",
-                                                             breaks=sec_ax_breaks,
-                                                             labels=round(sec_ax_labs, 2))) +
-      ggplot2::scale_x_continuous(breaks=min(dat$K):max(dat$K)) +
-      ggplot2::labs(title="Fitted model K's vs deconvolved cell-types and perplexity",
-                    subtitle="LDA models with alpha > 1 shaded") +
-      ggplot2::theme_classic() +
-      ggplot2::theme(
-        panel.background=ggplot2::element_blank(),
-        plot.title=ggplot2::element_text(size=15, face=NULL),
-        # plot.subtitle = ggplot2::element_text(size=13, face=NULL),
-        panel.grid.minor=ggplot2::element_blank(),
-        panel.grid.major=ggplot2::element_line(color="black", size=0.1),
-        panel.ontop=TRUE,
-        axis.title.y.left=ggplot2::element_text(color="blue", size=13),
-        axis.text.y.left=ggplot2::element_text(color="blue", size=13),
-        axis.title.y.right=ggplot2::element_text(color="red", size=15, vjust=1.5),
-        axis.text.y.right=ggplot2::element_text(color="red", size=13),
-        axis.text.x=ggplot2::element_text(angle=0, size=13),
-        axis.title.x=ggplot2::element_text(size=13)
-      )
+    plt <- plotPerplexity(Ks=Ks, numrare=numrare, pScores=pScores,
+                          alphas=unlist(sapply(fitted_models, slot, "alpha")),
+                          perc.rare.thresh=perc.rare.thresh)
     print(plt)
     
   }
@@ -735,32 +676,24 @@ getCorrMtx <- function(m1, m2, type=c("t", "b"), thresh=NULL, verbose=TRUE) {
       return(corMtx)
     }
     
-    corMtx <- do.call(rbind, lapply(1:nrow(m1), function(i) {
-      
-      # if choosing top genes for a cell-type using thresh
-      if (is.null(thresh)){
-        genes <- keep_genes
-      } else if (is.numeric(thresh) & thresh > 0 & thresh < 1){
-        m1genes <- keep_genes[which(m1[i,keep_genes] > thresh)]
-      } else {
-        stop("thresh must be NULL or numeric > 0 and < 1")
-      }
-      
-      sapply(1:nrow(m2), function(j) {
-        if (is.null(thresh)){
-          genes <- keep_genes
-        } else {
-          # at this point thresh should be between 0 and 1 and m1genes selected
-          m2genes <- keep_genes[which(m2[j,keep_genes] > thresh)]
-          genes <- intersect(m1genes, m2genes)
-          if (length(genes) < 2){
-            warning(cat("WARNING: 0 or 1 shared genes >", thresh,
-                        "for both m1 cell-type", i, "and m2 cell-type", j,
-                        "; corr will be NA.", "\n"))
-          }
+    if (!is.numeric(thresh) || length(thresh) != 1 || thresh <= 0 || thresh >= 1) {
+      stop("thresh must be NULL or numeric > 0 and < 1")
+    }
+    
+    ## genes above the threshold in each cell-type
+    above1 <- m1[, keep_genes, drop=FALSE] > thresh
+    above2 <- m2[, keep_genes, drop=FALSE] > thresh
+    corMtx <- do.call(rbind, lapply(seq_len(nrow(m1)), function(i) {
+      vapply(seq_len(nrow(m2)), function(j) {
+        genes <- keep_genes[above1[i, ] & above2[j, ]]
+        if (length(genes) < 2){
+          warning("0 or 1 shared genes > ", thresh,
+                  " for both m1 cell-type ", i, " and m2 cell-type ", j,
+                  "; corr will be NA.", call.=FALSE)
+          return(NA_real_)
         }
-        cor(m1[i,genes], m2[j,genes])
-      })
+        cor(m1[i, genes], m2[j, genes])
+      }, numeric(1))
     }))
     rownames(corMtx) <- rownames(m1)
     colnames(corMtx) <- rownames(m2)
@@ -809,7 +742,7 @@ annotateCellTypesGSEA <- function(beta, gset, qval=0.05, ...) {
     ## 2. leadingEdge (the leading edge subset of a gene set is the subset of genes that contribute most to the Enrichment Score)
     ## 3. ES (Enrichment Score)
     if(nrow(gsea.sig) > 1) {
-      gsea.sig <- gsea.sig[order(gsea.sig$padj, rev(gsea.sig$ES)), ]
+      gsea.sig <- gsea.sig[order(gsea.sig$padj, -gsea.sig$ES), ]
     }
     
     results[[ rownames(beta)[celltype] ]] <- gsea.sig
@@ -942,10 +875,10 @@ filterTheta <- function(theta, perc.filt=0.05, verbose=TRUE){
   if(length(dropped_cts) > 0){
     if(verbose){
       message("Cell-types with no proportions in pixels after filtering dropped:\n",
-              dropped_cts, "\n")
+              paste(dropped_cts, collapse=", "), "\n")
     }
   }
-  theta <- theta[,which(colSums(theta) > 0)]
+  theta <- theta[, which(colSums(theta) > 0), drop=FALSE]
   
   empty_pixels <- names(which(rowSums(theta) == 0))
   if(length(empty_pixels) > 0){
