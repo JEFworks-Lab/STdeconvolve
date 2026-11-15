@@ -10,7 +10,8 @@ getBetaTheta(
   corpus = NULL,
   perc.filt = 0.05,
   betaScale = 1,
-  verbose = TRUE
+  verbose = TRUE,
+  ncores = 1
 )
 }
 \arguments{
@@ -27,6 +28,8 @@ Each row needs at least 1 nonzero entry (default: NULL)}
 \item{betaScale}{factor to scale the predicted cell-type gene expression profiles (default: 1)}
 
 \item{verbose}{Boolean for verbosity (default: TRUE)}
+
+\item{ncores}{Number of threads used when \code{corpus} is given (default: 1)}
 }
 \value{
 A list that contains

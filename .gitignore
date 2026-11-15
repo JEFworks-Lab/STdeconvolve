@@ -15,3 +15,7 @@ figures/pdfs
 *.tar.gz
 data/BCL.rda
 docs/
+src/*.o
+src/*.so
+src/*.dll
+bench/*.rds

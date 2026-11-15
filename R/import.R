@@ -144,8 +144,16 @@ getOverdispersedGenes <- function(counts,
   if(verbose) {
     message("Calculating variance fit ...")
   }
-  dfm <- log(Matrix::colMeans(mat))
-  dfv <- log(apply(mat, 2, var))
+  ## mean and variance of each gene, computed from the non-zero counts only:
+  ## sum (x - m)^2 = sum over non-zero x of (x - m)^2 + (number of zeros) * m^2
+  mat <- methods::as(mat, "CsparseMatrix")
+  gm <- Matrix::colMeans(mat)
+  nz <- diff(mat@p)
+  dev <- mat
+  dev@x <- (mat@x - rep(gm, nz))^2
+  gv <- (Matrix::colSums(dev) + (nrow(mat) - nz) * gm^2) / (nrow(mat) - 1)
+  dfm <- log(gm)
+  dfv <- log(gv)
   names(dfm) <- names(dfv) <- colnames(mat)
   df <- data.frame(m=dfm, v=dfv)
   
@@ -201,12 +209,11 @@ getOverdispersedGenes <- function(counts,
     graphics::points(df$m[ods],df$qv[ods],col=2,pch='.')
   }
   
-  ## variance normalize
-  norm.mat <- counts*df$gsf
   if(!details) {
     return(colnames(mat)[ods])
   } else {
-    ## return normalization factor
+    ## variance normalize and return normalization factor
+    norm.mat <- counts*df$gsf
     return(list(mat=norm.mat, ods=colnames(mat)[ods], df=df))
   }
 }

@@ -24,7 +24,8 @@ preprocess(
 )
 }
 \arguments{
-\item{dat}{pixel (row) x gene (columns) mtx with gene counts OR path to it}
+\item{dat}{pixel (row) x gene (columns) mtx with gene counts OR path to it.
+Can be a sparse matrix from the Matrix package.}
 
 \item{extractPos}{Boolean to extract pixel positional coordinates from pixel name
 names

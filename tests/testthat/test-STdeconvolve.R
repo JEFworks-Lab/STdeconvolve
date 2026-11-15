@@ -278,3 +278,101 @@ test_that("STdeconvolve fits models and visualizes results", {
 })
 
 
+
+
+test_that("fitLDA() agrees with topicmodels and does not depend on input type or threads", {
+  
+  data(mOB)
+  counts <- cleanCounts(mOB$counts, min.lib.size = 100)
+  corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow=0.05, verbose=FALSE)
+  
+  ## dense matrix, 1 thread
+  ldas <- fitLDA(t(as.matrix(corpus)), Ks = 4, plot=FALSE, verbose=FALSE)
+  model <- ldas$models[[1]]
+  expect_s4_class(model, "LDA_VEM")
+  expect_equal(dim(model@gamma), c(260, 4))
+  expect_equal(rowSums(model@gamma), rep(1, 260))
+  expect_equal(rowSums(exp(model@beta)), rep(1, 4))
+  expect_equal(ldas$perplexities, topicmodels::perplexity(model))
+  ## the likelihood bound should not decrease from one EM iteration to the next
+  expect_true(all(diff(model@logLiks) > -1e-6 * abs(model@logLiks[1])))
+  
+  ## sparse matrix, 2 threads: identical model
+  ldas2 <- fitLDA(Matrix::t(corpus), Ks = 4, ncores=2, plot=FALSE, verbose=FALSE)
+  expect_identical(ldas2$models[[1]]@beta, model@beta)
+  expect_identical(ldas2$models[[1]]@gamma, model@gamma)
+  expect_identical(ldas2$models[[1]]@alpha, model@alpha)
+  
+  ## same model as topicmodels::LDA up to the convergence tolerances
+  ref <- topicmodels::LDA(ldas$fitCorpus, k=4,
+                          control=list(seed=0, verbose=0, keep=1, estimate.alpha=TRUE))
+  expect_equal(ldas$perplexities, topicmodels::perplexity(ref), tolerance=0.005)
+  expect_gt(min(diag(cor(t(exp(model@beta)), t(exp(ref@beta))))), 0.99)
+  expect_gt(min(diag(cor(model@gamma, ref@gamma))), 0.99)
+  
+  ## invalid input
+  bad <- t(as.matrix(corpus))
+  bad[1,] <- 0
+  expect_error(fitLDA(bad, Ks = 2, plot=FALSE, verbose=FALSE), "at least one non-zero")
+  bad[1,] <- 0.5
+  expect_error(fitLDA(bad, Ks = 2, plot=FALSE, verbose=FALSE), "integer")
+  
+})
+
+
+test_that("getBetaTheta() deconvolves a new corpus with a fitted model", {
+  
+  data(mOB)
+  counts <- cleanCounts(mOB$counts, min.lib.size = 100)
+  corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow=0.05, verbose=FALSE)
+  x <- t(as.matrix(corpus))
+  model <- fitLDA(x, Ks = 4, plot=FALSE, verbose=FALSE)$models[[1]]
+  fitted <- getBetaTheta(model, perc.filt = 0, verbose=FALSE)
+  
+  ## the corpus the model was fitted to, with pixels and genes shuffled
+  set.seed(1)
+  shuffled <- x[sample(nrow(x)), sample(ncol(x))]
+  new <- getBetaTheta(model, corpus = shuffled, perc.filt = 0, verbose=FALSE)
+  expect_equal(new$beta, fitted$beta)
+  expect_equal(rownames(new$theta), rownames(shuffled))
+  expect_equal(new$theta[rownames(x),], fitted$theta, tolerance=1e-4)
+  
+  ## sparse input and several threads give the same result
+  new2 <- getBetaTheta(model, corpus = Matrix::Matrix(shuffled, sparse=TRUE),
+                       perc.filt = 0, verbose=FALSE, ncores=2)
+  expect_identical(new2$theta, new$theta)
+  
+  ## genes missing from the new corpus are treated as not detected,
+  ## and the result agrees with topicmodels
+  sub <- shuffled[1:50, 1:150]
+  new3 <- getBetaTheta(model, corpus = sub, perc.filt = 0, verbose=FALSE)
+  ref <- topicmodels::posterior(model, newdata = slam::as.simple_triplet_matrix(sub))$topics
+  expect_equal(dim(new3$theta), c(50, 4))
+  expect_lt(max(abs(new3$theta - ref)), 0.02)
+  
+  ## pixels without any counts of the genes in the model
+  colnames(sub) <- paste0("unknown", seq_len(ncol(sub)))
+  expect_error(getBetaTheta(model, corpus = sub, verbose=FALSE), "at least one non-zero")
+  
+})
+
+
+test_that("preprocessing accepts sparse matrices", {
+  
+  data(mOB)
+  cd <- mOB$counts
+  sparse <- Matrix::Matrix(cd, sparse=TRUE)
+  
+  expect_equal(getOverdispersedGenes(sparse, verbose=FALSE),
+               getOverdispersedGenes(cd, verbose=FALSE))
+  ## gene variances computed from the non-zero counts
+  od <- getOverdispersedGenes(cd, verbose=FALSE, details=TRUE)
+  expect_equal(exp(od$df$v), unname(apply(cd, 1, var)))
+  
+  dense <- preprocess(t(cd), min.lib.size=100, removeAbove=0.95, removeBelow=0.05,
+                      plot=FALSE, verbose=FALSE)
+  fromSparse <- preprocess(Matrix::t(sparse), min.lib.size=100, removeAbove=0.95,
+                           removeBelow=0.05, plot=FALSE, verbose=FALSE)
+  expect_equal(fromSparse$corpus, dense$corpus)
+  
+})

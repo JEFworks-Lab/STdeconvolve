@@ -523,7 +523,7 @@ correlationPlot <- function(mat, colLabs = NA, rowLabs = NA, title = NA, annotat
 #' counts <- cleanCounts(cd, min.lib.size = 100)
 #' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
 #' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,5))
-#' perplexityPlot(models = ldas, corpus = corpus)
+#' perplexityPlot(models = ldas, corpus = t(as.matrix(corpus)))
 #' 
 #' @importFrom methods slot
 #' 
@@ -535,7 +535,7 @@ perplexityPlot <- function(models, corpus = NULL, perc.rare.thresh = 0.05){
   pScores <- models$perplexities
   
   out <- lapply(1:length(Ks), function(i) {
-    apply(getBetaTheta(fitted_models[[i]], corpus = corpus, verbose = FALSE)$theta, 2, mean)
+    colMeans(getBetaTheta(fitted_models[[i]], corpus = corpus, verbose = FALSE)$theta)
   })
   ## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
   numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))

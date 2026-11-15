@@ -33,19 +33,23 @@ restrictCorpus <- function(counts,
                            plot=FALSE,
                            verbose=TRUE) {
   
+  ## number of pixels each gene is detected in
+  detected <- Matrix::rowSums(counts > 0)
+  
   ## remove genes that are present in more than X% of pixels
-  vi <- rowSums(as.matrix(counts) > 0) >= ncol(counts)*removeAbove
+  vi <- detected >= ncol(counts)*removeAbove
   if(verbose) {
     message(paste0('Removing ', sum(vi), ' genes present in ',
                    removeAbove*100, '% or more of pixels...'))
   }
   counts <- counts[!vi,]
+  detected <- detected[!vi]
   if(verbose) {
     message(paste0(nrow(counts), ' genes remaining...'))
   }
   
   ## remove genes that are present in less than X% of pixels
-  vi <- rowSums(as.matrix(counts) > 0) <= ncol(counts)*removeBelow
+  vi <- detected <= ncol(counts)*removeBelow
   if(verbose) {
     message(paste0('Removing ', sum(vi), ' genes present in ',
                    removeBelow*100, '% or less of pixels...'))
@@ -117,7 +121,8 @@ restrictCorpus <- function(counts,
 #'                 after filtering steps 1-5 (if selected)
 #'              7. Choice to use the top over dispersed genes based on -log10(p.adj)
 #'
-#' @param dat pixel (row) x gene (columns) mtx with gene counts OR path to it
+#' @param dat pixel (row) x gene (columns) mtx with gene counts OR path to it.
+#'     Can be a sparse matrix from the Matrix package.
 #' @param extractPos Boolean to extract pixel positional coordinates from pixel name
 #'     names
 #'    (default: FALSE)
@@ -188,7 +193,7 @@ preprocess <- function(dat,
     } else {
       message("path to file does not exist", "\n")
     }
-  } else if (is.matrix(dat)){
+  } else if (is.matrix(dat) || methods::is(dat, "Matrix")){
     counts <- dat
   } else {
     stop("`dat` is not a viable path or matrix")
@@ -196,9 +201,9 @@ preprocess <- function(dat,
   
   if(verbose) {
     message("Initial genes: ",
-            dim(t(counts))[1],
+            ncol(counts),
             " Initial pixels: ",
-            dim(t(counts))[2], "\n")
+            nrow(counts), "\n")
   }
   
   # use specific genes in the corpus
@@ -220,13 +225,13 @@ preprocess <- function(dat,
             " reads across pixels and detected in <= ",
             min.detected, " pixels", "\n")
   }
-  countsClean <- cleanCounts(counts=t(counts),
+  ## the counts are kept sparse until the genes of the corpus are selected
+  countsClean <- cleanCounts(counts=Matrix::t(counts),
                              min.reads=min.reads,
                              min.lib.size=min.lib.size,
                              min.detected=min.detected,
                              plot=plot,
                              verbose=FALSE)
-  countsClean <- as.matrix(countsClean)
   if(verbose){
     message("  Remaining genes: ", dim(countsClean)[1],
             " and remaining pixels: ", dim(countsClean)[2], "\n")
@@ -238,8 +243,8 @@ preprocess <- function(dat,
     if(verbose){
       message("- Removing the top ", nTopGenes, " expressed genes.", "\n")
     }
-    top_expressed <- names(Matrix::rowSums(countsClean)[order(Matrix::rowSums(countsClean),
-                                                              decreasing = TRUE)][1:nTopGenes])
+    top_expressed <- rownames(countsClean)[order(Matrix::rowSums(countsClean),
+                                                 decreasing = TRUE)][1:nTopGenes]
     countsClean <- countsClean[rownames(countsClean) %in% top_expressed == FALSE,]
   }
   
@@ -255,14 +260,10 @@ preprocess <- function(dat,
   # remove genes that appear in more than certain percentage of the pixels
   if (!is.na(removeAbove) & is.numeric(removeAbove)){
     if (removeAbove >= 0 & removeAbove <= 1){
-      # matrix where all positive gene counts are set to 1
-      countsClean_ <- countsClean
-      countsClean_[which(countsClean_ > 0)] <- 1
       # convert the percentage to number of pixels
-      numberSpots <- (removeAbove * ncol(countsClean_))
-      # rowSums of countsClean_ equate to number of pixels where each gene is expressed
+      numberSpots <- (removeAbove * ncol(countsClean))
       # remove genes expressed in "numberSpots" or more pixels
-      countsClean <- countsClean[which(Matrix::rowSums(countsClean_) < numberSpots),]
+      countsClean <- countsClean[which(Matrix::rowSums(countsClean > 0) < numberSpots),]
       if(verbose){
         message("- Removed genes present in ",
                 as.character(removeAbove*100), "% or more of pixels", "\n",
@@ -275,14 +276,10 @@ preprocess <- function(dat,
   # remove genes that appear in less than certain percentage of the pixels
   if (!is.na(removeBelow) & is.numeric(removeBelow)){
     if (removeBelow >= 0 & removeBelow <= 1){
-      # matrix where all positive gene counts are set to 1
-      countsClean_ <- countsClean
-      countsClean_[which(countsClean_ > 0)] <- 1
       # convert the percentage to number of pixels
-      numberSpots <- (removeBelow * ncol(countsClean_))
-      # rowSums of countsClean_ equate to number of pixels where each gene is expressed
+      numberSpots <- (removeBelow * ncol(countsClean))
       # remove genes expressed in "numberSpots" or less pixels
-      countsClean <- countsClean[which(Matrix::rowSums(countsClean_) > numberSpots),]
+      countsClean <- countsClean[which(Matrix::rowSums(countsClean > 0) > numberSpots),]
       if(verbose){
         message("- Removed genes present in ",
                 as.character(removeBelow*100), "% or less of pixels", "\n",
@@ -341,7 +338,7 @@ preprocess <- function(dat,
   if(verbose){
     message("- Check that each pixel has at least 1 non-zero gene count entry..", "\n")
   }
-  corpus <- corpus[which(!Matrix::rowSums(corpus) == 0),]
+  corpus <- corpus[which(!rowSums(corpus) == 0),]
   corpus_slm <- slam::as.simple_triplet_matrix(corpus)
   message("Final corpus:", "\n")
   print(corpus_slm)
@@ -372,18 +369,20 @@ preprocess <- function(dat,
 
 #' Find the optimal number of cell-types K for the LDA model
 #'
-#' @description The input for topicmodels::LDA needs to be a
-#'     slam::as.simple_triplet_matrix (docs x words). Access a given model in
-#'     the returned list via: lda$models$k. The models are objects from
-#'     the R package "topicmodels". The LDA models have slots with additional
-#'     information.
+#' @description Fits an LDA model for each K by variational
+#'     expectation-maximization. Access a given model in
+#'     the returned list via: lda$models$k. The models are "LDA_VEM" objects as
+#'     defined in the R package "topicmodels". The LDA models have slots with
+#'     additional information.
 #'
-#' @param counts Gene expression counts with pixels as rows and genes as columns
+#' @param counts Gene expression counts with pixels as rows and genes as columns.
+#'     A matrix or a sparse matrix from the Matrix package.
 #' @param Ks vector of K parameters, or number of cell-types, to fit models with
 #' @param seed Random seed
 #' @param perc.rare.thresh the number of deconvolved cell-types with mean pixel proportion below this fraction used to assess
 #'     performance of fitted models for each K. Recorded for each K. (default: 0.05)
-#' @param ncores Number of cores for parallelization (default: 1). Suggest: parallel::detectCores()
+#' @param ncores Number of threads used to fit each model (default: 1). Suggest: parallel::detectCores().
+#'     The fitted models do not depend on the number of threads.
 #' @param plot Boolean for plotting (default: TRUE)
 #' @param verbose Boolean for verbosity (default: TRUE)
 #'
@@ -423,35 +422,22 @@ fitLDA <- function(counts,
     stop("`Ks` must be a vector of integers greater than 2.")
   }
   
-  counts <- as.matrix(counts)
+  ## pixels (rows) x genes (cols) sparse matrix; checks that the counts are
+  ## integers and that each pixel has at least one count
+  corpus <- asCorpus(counts, what="counts")
   
-  if (length(which(rowSums(counts) == 0))){
-    stop("Each row (pixel) of `counts` needs to contain at least one non-zero entry")
-  }
-  
-  if ( !isTRUE(all(counts == floor(counts))) ){
-    stop("`counts` must contain integer gene counts")
-  }
-  
-  testingPixels <- seq(nrow(counts))
-  fittingPixels <- seq(nrow(counts))
-  
-  ## counts must be pixels (rows) x genes (cols) matrix
-  corpus <- slam::as.simple_triplet_matrix((as.matrix(counts)))
-  corpusFit <- slam::as.simple_triplet_matrix((as.matrix(counts[fittingPixels,])))
-  corpusTest <- slam::as.simple_triplet_matrix((as.matrix(counts[testingPixels,])))
-  
-  verbose <- as.integer(verbose)
-  
-  controls <- list(seed=seed,
-                   verbose=0, keep=1, estimate.alpha=TRUE)
+  ## all pixels are used both to fit the models and to compute their perplexity
+  tm <- methods::as(corpus, "TsparseMatrix")
+  corpusFit <- slam::simple_triplet_matrix(i=tm@i + 1L, j=tm@j + 1L, v=tm@x,
+                                           nrow=nrow(corpus), ncol=ncol(corpus),
+                                           dimnames=dimnames(corpus))
+  corpusTest <- corpusFit
   
   start_time <- Sys.time()
-  fitted_models <- BiocParallel::bplapply(Ks, function(k){
-    if(verbose) system(paste("echo 'now fitting LDA model with K =", k, "'"))
-    # if(verbose) print(paste("now fitting LDA model with K =", k))
-    topicmodels::LDA(corpusFit, k=k, control=controls)
-  }, BPPARAM=BiocParallel::SnowParam(workers=ncores))
+  fitted_models <- lapply(Ks, function(k){
+    if(verbose) message("now fitting LDA model with K = ", k)
+    ldaVEM(corpus, k=k, seed=seed, ncores=ncores)
+  })
   names(fitted_models) <- Ks
   
   if(verbose) {
@@ -459,25 +445,11 @@ fitLDA <- function(counts,
     message(sprintf("Time to fit LDA models was %s mins", total_t))
   }
   
-  if(verbose) {
-    message("Computing perplexity for each fitted model...")
-  }
-  
-  start_time <- Sys.time()
-  pScores <- BiocParallel::bplapply(Ks, function(k){
-    if(verbose) system(paste("echo 'computing perplexity for LDA model with K =", k, "'"))
-    # if(verbose) print(paste("computing perplexity for LDA model with K =", k))
-    model <- fitted_models[[as.character(k)]]
-    ## if no splitting, then same corpus and thus no need to refit in order to save time
-    topicmodels::perplexity(model)
-    
-  }, BPPARAM=BiocParallel::SnowParam(workers=ncores))
-  pScores <- unlist(pScores)
-  
-  if(verbose) {
-    total_t <- round(difftime(Sys.time(), start_time, units="mins"), 2)
-    message(sprintf("Time to compute perplexities was %s mins", total_t))
-  }
+  ## the models are fit to all pixels, so the perplexity follows from the
+  ## likelihood bound of each fitted model
+  pScores <- unlist(lapply(fitted_models, function(model) {
+    exp(-sum(model@loglikelihood) / model@n)
+  }), use.names=FALSE)
   
   ## Kneed algorithm
   kOpt1 <- Ks[where.is.knee(pScores)]
@@ -495,8 +467,8 @@ fitLDA <- function(counts,
     
     ## note that we are including all cell-types when computing theta here because we are trying to
     ## assess the best model by the number of rare cell-types predicted.
-    apply(getBetaTheta(fitted_models[[i]], corpus=NULL, perc.filt=0,
-                       verbose=FALSE)$theta, 2, mean)
+    colMeans(getBetaTheta(fitted_models[[i]], corpus=NULL, perc.filt=0,
+                          verbose=FALSE)$theta)
     
   })
   ## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
@@ -607,6 +579,7 @@ fitLDA <- function(counts,
 #' @param perc.filt proportion threshold to remove cell-types in pixels (default: 0.05)
 #' @param betaScale factor to scale the predicted cell-type gene expression profiles (default: 1)
 #' @param verbose Boolean for verbosity (default: TRUE)
+#' @param ncores Number of threads used when `corpus` is given (default: 1)
 #'
 #' @return A list that contains
 #' \itemize{
@@ -630,7 +603,7 @@ fitLDA <- function(counts,
 #' head(results$beta)
 #' 
 #' @export
-getBetaTheta <- function(lda, corpus=NULL, perc.filt=0.05, betaScale=1, verbose=TRUE) {
+getBetaTheta <- function(lda, corpus=NULL, perc.filt=0.05, betaScale=1, verbose=TRUE, ncores=1) {
   
   ## If corpus is NULL, then it will use the original fitted data
   ## otherwise, use new corpus to predict topic proportions based on the 
@@ -638,18 +611,19 @@ getBetaTheta <- function(lda, corpus=NULL, perc.filt=0.05, betaScale=1, verbose=
   ## to slam matrix format to be compatible with topicmodels package.
   if(is.null(corpus)){
     result <- topicmodels::posterior(lda)
+  } else if (methods::is(lda, "LDA_VEM")) {
+    corpus <- asCorpus(corpus, what="corpus")
+    corpus <- matchGenes(corpus, lda)
+    if (any(Matrix::rowSums(corpus) == 0)) {
+      stop("Each row (pixel) of `corpus` needs to contain at least one non-zero count of a gene in the model")
+    }
+    result <- topicmodels::posterior(ldaVEM(corpus, model=lda, ncores=ncores))
   } else {
-    
-    corpus <- as.matrix(corpus)
-    
-    if (length(which(rowSums(corpus) == 0))){
-      stop("Each row (pixel) of `corpus` needs to contain at least one non-zero entry")
-    }
-    if ( !isTRUE(all(corpus == floor(corpus))) ){
-      stop("`corpus` must contain integer gene counts")
-    }
-    
-    corpus <- slam::as.simple_triplet_matrix((as.matrix(corpus)))
+    corpus <- asCorpus(corpus, what="corpus")
+    tm <- methods::as(corpus, "TsparseMatrix")
+    corpus <- slam::simple_triplet_matrix(i=tm@i + 1L, j=tm@j + 1L, v=tm@x,
+                                          nrow=nrow(corpus), ncol=ncol(corpus),
+                                          dimnames=dimnames(corpus))
     result <- topicmodels::posterior(lda, newdata = corpus)
   }
   
@@ -730,11 +704,7 @@ getCorrMtx <- function(m1, m2, type=c("t", "b"), thresh=NULL, verbose=TRUE) {
               length(keep_spots),
               " shared pixels between m1 and m2.", "\n")
     }
-    corMtx <- do.call(rbind, lapply(1:ncol(m1), function(i) {
-      sapply(1:ncol(m2), function(j) {
-        cor(m1[keep_spots,i], m2[keep_spots,j])
-      })
-    }))
+    corMtx <- cor(m1[keep_spots, , drop=FALSE], m2[keep_spots, , drop=FALSE])
     rownames(corMtx) <- colnames(m1)
     colnames(corMtx) <- colnames(m2)
     return(corMtx)
@@ -755,6 +725,14 @@ getCorrMtx <- function(m1, m2, type=c("t", "b"), thresh=NULL, verbose=TRUE) {
       if(verbose){
         message("comparing genes with cell-type probability > ", thresh, "\n")
       }
+    }
+    
+    if (is.null(thresh)) {
+      ## all shared genes are compared for every pair of cell-types
+      corMtx <- cor(t(m1[, keep_genes, drop=FALSE]), t(m2[, keep_genes, drop=FALSE]))
+      rownames(corMtx) <- rownames(m1)
+      colnames(corMtx) <- rownames(m2)
+      return(corMtx)
     }
     
     corMtx <- do.call(rbind, lapply(1:nrow(m1), function(i) {

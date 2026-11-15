@@ -15,7 +15,8 @@ fitLDA(
 )
 }
 \arguments{
-\item{counts}{Gene expression counts with pixels as rows and genes as columns}
+\item{counts}{Gene expression counts with pixels as rows and genes as columns.
+A matrix or a sparse matrix from the Matrix package.}
 
 \item{Ks}{vector of K parameters, or number of cell-types, to fit models with}
 
@@ -24,7 +25,8 @@ fitLDA(
 \item{perc.rare.thresh}{the number of deconvolved cell-types with mean pixel proportion below this fraction used to assess
 performance of fitted models for each K. Recorded for each K. (default: 0.05)}
 
-\item{ncores}{Number of cores for parallelization (default: 1). Suggest: parallel::detectCores()}
+\item{ncores}{Number of threads used to fit each model (default: 1). Suggest: parallel::detectCores().
+The fitted models do not depend on the number of threads.}
 
 \item{plot}{Boolean for plotting (default: TRUE)}
 
@@ -45,11 +47,11 @@ with mean proportion < perc.rare.thresh starts to increase steadily.
 }
 }
 \description{
-The input for topicmodels::LDA needs to be a
-slam::as.simple_triplet_matrix (docs x words). Access a given model in
-the returned list via: lda$models$k. The models are objects from
-the R package "topicmodels". The LDA models have slots with additional
-information.
+Fits an LDA model for each K by variational
+expectation-maximization. Access a given model in
+the returned list via: lda$models$k. The models are "LDA_VEM" objects as
+defined in the R package "topicmodels". The LDA models have slots with
+additional information.
 }
 \examples{
 data(mOB)
