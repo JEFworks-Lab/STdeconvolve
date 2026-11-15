@@ -37,17 +37,75 @@ asCorpus <- function(counts, what="counts") {
 }
 
 
+#' Fitted LDA model
+#'
+#' @description Latent Dirichlet allocation model fitted by variational EM, as
+#'     returned by [fitLDA()]. Use [getBetaTheta()] to get the cell-type gene
+#'     expression profiles and the cell-type proportions of the pixels.
+#'     The slots have the same names and content as those of the "LDA_VEM"
+#'     class of the `topicmodels` package.
+#'
+#' @slot call the call that fitted the model
+#' @slot Dim number of pixels and genes of the corpus
+#' @slot control list of the settings used to fit the model
+#' @slot k number of cell-types
+#' @slot terms names of the genes
+#' @slot documents names of the pixels
+#' @slot beta cell-types x genes matrix, logarithm of the probability of each
+#'     gene in each cell-type
+#' @slot gamma pixels x cell-types matrix of cell-type proportions
+#' @slot loglikelihood lower bound of the log-likelihood of each pixel
+#' @slot iter number of EM iterations
+#' @slot logLiks lower bound of the log-likelihood of the corpus at each EM iteration
+#' @slot n total number of counts in the corpus
+#' @slot alpha parameter of the Dirichlet prior of the cell-type proportions
+#'
+#' @exportClass STdeconvolveLDA
+methods::setClass("STdeconvolveLDA",
+                  representation(call="call", Dim="integer", control="list",
+                                 k="integer", terms="character", documents="character",
+                                 beta="matrix", gamma="matrix",
+                                 loglikelihood="numeric", iter="integer",
+                                 logLiks="numeric", n="integer", alpha="numeric"))
+
+methods::setMethod("show", "STdeconvolveLDA", function(object) {
+  cat("LDA model with ", object@k, " cell-types fitted to ", object@Dim[1],
+      " pixels and ", object@Dim[2], " genes (alpha = ", signif(object@alpha, 4),
+      ", ", object@iter, " EM iterations)\n", sep="")
+})
+
+
+#' Check that an object is a fitted LDA model
+#'
+#' @description Models are "STdeconvolveLDA" objects. "LDA_VEM" objects of
+#'     the `topicmodels` package, as returned by previous versions of
+#'     fitLDA(), have the same slots and are accepted as well.
+#'
+#' @param lda object to check
+#'
+#' @return `lda`, invisibly
+#'
+#' @noRd
+checkModel <- function(lda) {
+  slots <- c("k", "alpha", "beta", "gamma", "terms", "documents", "Dim")
+  if (!isS4(lda) || !all(slots %in% names(attributes(lda)))) {
+    stop("`lda` must be a model fitted with fitLDA()")
+  }
+  invisible(lda)
+}
+
+
 #' Fit an LDA model, or infer cell-type proportions with a fitted model
 #'
 #' @description Variational EM for latent Dirichlet allocation, implemented in
 #'     C++. It fits the same model, with the same initialization for a given
 #'     seed and the same stopping rule for the EM iterations, as
-#'     `topicmodels::LDA(method = "VEM")`, and returns an object of the same
-#'     class, but is much faster and can use several threads.
+#'     `topicmodels::LDA(method = "VEM")`, but is much faster and can use
+#'     several threads.
 #'
 #' @param corpus pixels x genes dgCMatrix, see asCorpus()
 #' @param k number of cell-types
-#' @param model a fitted "LDA_VEM" model. If given, its cell-type gene
+#' @param model a fitted model. If given, its cell-type gene
 #'     distributions (and alpha) are kept fixed and only the cell-type
 #'     proportions of the pixels in `corpus` are inferred.
 #' @param seed seed for the random initialization
@@ -61,7 +119,7 @@ asCorpus <- function(counts, what="counts") {
 #'     of these proportions (sum of absolute differences) between iterations
 #' @param ncores number of threads
 #'
-#' @return an "LDA_VEM" object as defined in the topicmodels package
+#' @return an "STdeconvolveLDA" object
 #'
 #' @noRd
 ldaVEM <- function(corpus, k, model=NULL, seed=0, alpha=50/k, estimate.alpha=TRUE,
@@ -86,29 +144,19 @@ ldaVEM <- function(corpus, k, model=NULL, seed=0, alpha=50/k, estimate.alpha=TRU
                      as.integer(var.max.iter), var.tol,
                      as.integer(max(1, ncores)))
   
-  ## the classes are defined, but not exported, by topicmodels
-  tm <- asNamespace("topicmodels")
-  control <- methods::new(methods::getClass("LDA_VEMcontrol", where=tm),
-                          seed=as.integer(seed), alpha=alpha,
-                          estimate.alpha=estimate.alpha, keep=1L, verbose=0L,
-                          estimate.beta=is.null(model),
-                          initialize=if (is.null(model)) "random" else "model",
-                          var=methods::new(methods::getClass("OPTcontrol", where=tm),
-                                           iter.max=as.integer(var.max.iter), tol=var.tol),
-                          em=methods::new(methods::getClass("OPTcontrol", where=tm),
-                                          iter.max=as.integer(em.max.iter), tol=em.tol))
+  control <- list(seed=as.integer(seed), alpha=alpha, estimate.alpha=estimate.alpha,
+                  em=list(iter.max=as.integer(em.max.iter), tol=em.tol),
+                  var=list(iter.max=as.integer(var.max.iter), tol=var.tol))
   
-  methods::new(methods::getClass("LDA_VEM", where=tm),
+  methods::new("STdeconvolveLDA",
                call=match.call(),
                Dim=dim(corpus),
                control=control,
                k=as.integer(k),
-               terms=colnames(corpus),
-               documents=rownames(corpus),
+               terms=as.character(colnames(corpus)),
+               documents=as.character(rownames(corpus)),
                beta=fit$beta,
                gamma=fit$gamma / rowSums(fit$gamma),
-               wordassignments=slam::simple_triplet_matrix(i=fit$wa_i, j=fit$wa_j, v=fit$wa_v,
-                                                           nrow=nrow(corpus), ncol=ncol(corpus)),
                loglikelihood=fit$loglikelihood,
                iter=fit$iter,
                logLiks=fit$logLiks,
@@ -128,7 +176,7 @@ ldaVEM <- function(corpus, k, model=NULL, seed=0, alpha=50/k, estimate.alpha=TRU
 #' @noRd
 matchGenes <- function(corpus, model) {
   genes <- model@terms
-  if (is.null(genes) || is.null(colnames(corpus))) {
+  if (length(genes) == 0 || is.null(colnames(corpus))) {
     if (ncol(corpus) != model@Dim[2]) {
       stop("The number of genes in `corpus` and in the fitted model need to match")
     }

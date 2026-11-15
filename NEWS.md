@@ -1,11 +1,20 @@
-# Version 1.3.3 (2026-11-15)
+# Version 1.4.0 (2026-11-15)
 
 + `fitLDA()` fits the LDA models with a new C++ implementation of variational
   EM instead of `topicmodels::LDA()`. It fits the same model with the same
-  initialization for a given `seed`, and returns objects of the same class
-  ("LDA_VEM"), so results are equivalent (not bit-identical: the cell-type
-  proportions of each pixel are optimized to a tighter tolerance), but it is
-  30-50 times faster on one core.
+  initialization for a given `seed`, so results are equivalent (not
+  bit-identical: the cell-type proportions of each pixel are optimized to a
+  tighter tolerance), but it is 30-50 times faster on one core.
++ `topicmodels` (and with it the GSL system library) is no longer required.
+  The models returned by `fitLDA()` are now "STdeconvolveLDA" objects instead
+  of "LDA_VEM" objects of `topicmodels`. They have the same slots (`k`,
+  `alpha`, `beta`, `gamma`, `terms`, `documents`, `loglikelihood`, `logLiks`,
+  `iter`, `n`, `Dim`), except for `wordassignments`, which is no longer
+  computed, and `control`, which is a list. Functions of `topicmodels`, such
+  as `posterior()` and `perplexity()`, do not work on the new objects: use
+  `getBetaTheta()` and the `perplexities` returned by `fitLDA()`. Models that
+  were fitted and saved with previous versions still work with
+  `getBetaTheta()`, `optimalModel()` and `perplexityPlot()`.
 + `ncores` in `fitLDA()` is now the number of threads used to fit each model.
   The fitted models do not depend on the number of threads. `BiocParallel` is
   no longer used.

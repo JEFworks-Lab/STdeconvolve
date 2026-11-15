@@ -2,7 +2,7 @@ Package: STdeconvolve
 Type: Package
 Title: Reference-free Cell-Type Deconvolution of Multi-Cellular Spatially
     Resolved Transcriptomics Data 
-Version: 1.3.3
+Version: 1.4.0
 Authors@R:
     c(person(given = "Brendan",
            family = "Miller",
@@ -38,7 +38,6 @@ LazyData: FALSE
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports:
-    topicmodels,
     Matrix,
     methods,
     mgcv,
@@ -68,6 +67,7 @@ Suggests:
     hash,
     dplyr,
     parallel,
-    magick
+    magick,
+    topicmodels
 VignetteBuilder:
     knitr

@@ -49,8 +49,8 @@ with mean proportion < perc.rare.thresh starts to increase steadily.
 \description{
 Fits an LDA model for each K by variational
 expectation-maximization. Access a given model in
-the returned list via: lda$models$k. The models are "LDA_VEM" objects as
-defined in the R package "topicmodels". The LDA models have slots with
+the returned list via: lda$models$k. The models are
+\linkS4class{STdeconvolveLDA} objects, which have slots with
 additional information.
 }
 \examples{

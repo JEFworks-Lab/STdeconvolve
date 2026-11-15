@@ -493,25 +493,6 @@ Rcpp::List lda_vem_cpp(const Rcpp::IntegerVector& csc_p,
     for (int k = 0; k < K; ++k)
       gamma_out[d + static_cast<size_t>(D) * k] = G[static_cast<size_t>(d) * K + k];
 
-  // most likely topic of every non-zero count (document-major order)
-  Rcpp::IntegerVector wa_i(nnz), wa_j(nnz);
-  Rcpp::NumericVector wa_v(nnz);
-  for (int d = 0; d < D; ++d) {
-    const double* e = &E[static_cast<size_t>(d) * K];
-    for (int n = rp[d]; n < rp[d + 1]; ++n) {
-      const double* b = &B[static_cast<size_t>(rj[n]) * K];
-      int best = 0;
-      double bv = e[0] * b[0];
-      for (int k = 1; k < K; ++k) {
-        const double v = e[k] * b[k];
-        if (v > bv) { bv = v; best = k; }
-      }
-      wa_i[n] = d + 1;
-      wa_j[n] = rj[n] + 1;
-      wa_v[n] = best + 1;
-    }
-  }
-
   double var_iters = 0.0;
   for (int t = 0; t < nthreads; ++t) var_iters += iters_by_thread[t];
 
@@ -522,8 +503,5 @@ Rcpp::List lda_vem_cpp(const Rcpp::IntegerVector& csc_p,
     Rcpp::Named("loglikelihood") = Rcpp::wrap(llh),
     Rcpp::Named("iter") = iter,
     Rcpp::Named("logLiks") = Rcpp::wrap(logLiks),
-    Rcpp::Named("wa_i") = wa_i,
-    Rcpp::Named("wa_j") = wa_j,
-    Rcpp::Named("wa_v") = wa_v,
     Rcpp::Named("var_iters") = var_iters);
 }

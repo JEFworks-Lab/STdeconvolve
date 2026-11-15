@@ -15,8 +15,9 @@ getBetaTheta(
 )
 }
 \arguments{
-\item{lda}{an LDA model from "topicmodels" R package. From list of models returned by
-fitLDA}
+\item{lda}{an LDA model from the list of models returned by fitLDA.
+"LDA_VEM" models of the "topicmodels" R package, as returned by previous
+versions of fitLDA, are accepted as well.}
 
 \item{corpus}{If corpus is NULL, then it will use the original corpus that
 the model was fitted to. Otherwise, compute deconvolved topics from this

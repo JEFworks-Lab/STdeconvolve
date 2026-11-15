@@ -282,7 +282,7 @@ test_that("STdeconvolve fits models and visualizes results", {
 
 
 
-test_that("fitLDA() agrees with topicmodels and does not depend on input type or threads", {
+test_that("fitLDA() does not depend on input type or threads", {
   
   data(mOB)
   counts <- cleanCounts(mOB$counts, min.lib.size = 100)
@@ -291,11 +291,12 @@ test_that("fitLDA() agrees with topicmodels and does not depend on input type or
   ## dense matrix, 1 thread
   ldas <- fitLDA(t(as.matrix(corpus)), Ks = 4, plot=FALSE, verbose=FALSE)
   model <- ldas$models[[1]]
-  expect_s4_class(model, "LDA_VEM")
+  expect_s4_class(model, "STdeconvolveLDA")
+  expect_output(print(model), "4 cell-types")
   expect_equal(dim(model@gamma), c(260, 4))
   expect_equal(rowSums(model@gamma), rep(1, 260))
   expect_equal(rowSums(exp(model@beta)), rep(1, 4))
-  expect_equal(ldas$perplexities, topicmodels::perplexity(model))
+  expect_equal(ldas$perplexities, exp(-sum(model@loglikelihood) / sum(corpus)))
   ## the likelihood bound should not decrease from one EM iteration to the next
   expect_true(all(diff(model@logLiks) > -1e-6 * abs(model@logLiks[1])))
   
@@ -304,13 +305,6 @@ test_that("fitLDA() agrees with topicmodels and does not depend on input type or
   expect_identical(ldas2$models[[1]]@beta, model@beta)
   expect_identical(ldas2$models[[1]]@gamma, model@gamma)
   expect_identical(ldas2$models[[1]]@alpha, model@alpha)
-  
-  ## same model as topicmodels::LDA up to the convergence tolerances
-  ref <- topicmodels::LDA(ldas$fitCorpus, k=4,
-                          control=list(seed=0, verbose=0, keep=1, estimate.alpha=TRUE))
-  expect_equal(ldas$perplexities, topicmodels::perplexity(ref), tolerance=0.005)
-  expect_gt(min(diag(cor(t(exp(model@beta)), t(exp(ref@beta))))), 0.99)
-  expect_gt(min(diag(cor(model@gamma, ref@gamma))), 0.99)
   
   ## invalid input
   bad <- t(as.matrix(corpus))
@@ -344,13 +338,14 @@ test_that("getBetaTheta() deconvolves a new corpus with a fitted model", {
                        perc.filt = 0, verbose=FALSE, ncores=2)
   expect_identical(new2$theta, new$theta)
   
-  ## genes missing from the new corpus are treated as not detected,
-  ## and the result agrees with topicmodels
+  ## genes missing from the new corpus are treated as not detected
   sub <- shuffled[1:50, 1:150]
   new3 <- getBetaTheta(model, corpus = sub, perc.filt = 0, verbose=FALSE)
-  ref <- topicmodels::posterior(model, newdata = slam::as.simple_triplet_matrix(sub))$topics
   expect_equal(dim(new3$theta), c(50, 4))
-  expect_lt(max(abs(new3$theta - ref)), 0.02)
+  expect_equal(unname(rowSums(new3$theta)), rep(1, 50))
+  expect_equal(rownames(new3$theta), rownames(sub))
+  
+  expect_error(getBetaTheta(list(), verbose=FALSE), "fitted with fitLDA")
   
   ## pixels without any counts of the genes in the model
   colnames(sub) <- paste0("unknown", seq_len(ncol(sub)))
@@ -449,5 +444,40 @@ test_that("edge cases of the helper functions", {
   ## a single remaining cell-type keeps the matrix shape
   theta <- cbind("1" = c(0.99, 0.98), "2" = c(0.01, 0.02))
   expect_equal(dim(STdeconvolve:::filterTheta(theta, perc.filt=0.05, verbose=FALSE)), c(2, 1))
+  
+})
+
+
+test_that("models agree with topicmodels, and models of topicmodels are accepted", {
+  
+  skip_if_not_installed("topicmodels")
+  
+  data(mOB)
+  counts <- cleanCounts(mOB$counts, min.lib.size = 100)
+  corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow=0.05, verbose=FALSE)
+  x <- t(as.matrix(corpus))
+  ldas <- fitLDA(x, Ks = 4, plot=FALSE, verbose=FALSE)
+  model <- ldas$models[[1]]
+  
+  ## same model as topicmodels::LDA up to the convergence tolerances
+  ref <- topicmodels::LDA(ldas$fitCorpus, k=4,
+                          control=list(seed=0, verbose=0, keep=1, estimate.alpha=TRUE))
+  expect_equal(ldas$perplexities, topicmodels::perplexity(ref), tolerance=0.005)
+  expect_gt(min(diag(cor(t(exp(model@beta)), t(exp(ref@beta))))), 0.99)
+  expect_gt(min(diag(cor(model@gamma, ref@gamma))), 0.99)
+  
+  ## models fitted by previous versions of fitLDA() are "LDA_VEM" objects
+  post <- topicmodels::posterior(ref)
+  old <- getBetaTheta(ref, perc.filt = 0, verbose=FALSE)
+  expect_equal(old$theta, post$topics)
+  expect_equal(old$beta, post$terms)
+  expect_equal(optimalModel(list(models=list("4"=ref)), opt = 4)@k, 4L)
+  
+  ## cell-type proportions of new pixels, given the same model
+  sub <- x[1:50, 1:150]
+  new <- getBetaTheta(ref, corpus = sub, perc.filt = 0, verbose=FALSE)
+  refNew <- topicmodels::posterior(ref, newdata = slam::as.simple_triplet_matrix(sub))$topics
+  expect_equal(dimnames(new$theta), dimnames(refNew))
+  expect_lt(max(abs(new$theta - refNew)), 0.02)
   
 })

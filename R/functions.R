@@ -158,7 +158,7 @@ restrictCorpus <- function(counts,
 #' @return A list that contains
 #' \itemize{
 #' \item corpus: (pixels x genes) matrix of the counts of the selected genes
-#' \item slm: slam::as.simple_triplet_matrix(corpus); required format for topicmodels::LDA input
+#' \item slm: slam::as.simple_triplet_matrix(corpus)
 #' \item positions: matrix of x and y coordinates of pixels rownames = pixels, colnames = "x", "y"
 #' }
 #' 
@@ -337,7 +337,7 @@ preprocess <- function(dat,
   corpus <- t(as.matrix(countsClean))
   
   # last filter: each row must have at least 1 non-zero entry
-  # to be compatible with `topicmodels`.
+  # to fit an LDA model.
   if(verbose){
     message("- Check that each pixel has at least 1 non-zero gene count entry..", "\n")
   }
@@ -374,8 +374,8 @@ preprocess <- function(dat,
 #'
 #' @description Fits an LDA model for each K by variational
 #'     expectation-maximization. Access a given model in
-#'     the returned list via: lda$models$k. The models are "LDA_VEM" objects as
-#'     defined in the R package "topicmodels". The LDA models have slots with
+#'     the returned list via: lda$models$k. The models are
+#'     \linkS4class{STdeconvolveLDA} objects, which have slots with
 #'     additional information.
 #'
 #' @param counts Gene expression counts with pixels as rows and genes as columns.
@@ -511,8 +511,9 @@ fitLDA <- function(counts,
 #' Pull out cell-type proportions across pixels (theta) and
 #' cell-type gene probabilities (beta) matrices from fitted LDA models from fitLDA
 #'
-#' @param lda an LDA model from "topicmodels" R package. From list of models returned by
-#'     fitLDA
+#' @param lda an LDA model from the list of models returned by fitLDA.
+#'     "LDA_VEM" models of the "topicmodels" R package, as returned by previous
+#'     versions of fitLDA, are accepted as well.
 #' @param corpus If corpus is NULL, then it will use the original corpus that
 #'     the model was fitted to. Otherwise, compute deconvolved topics from this
 #'     new corpus. Needs to be pixels x genes and nonnegative integer counts. 
@@ -546,30 +547,28 @@ fitLDA <- function(counts,
 #' @export
 getBetaTheta <- function(lda, corpus=NULL, perc.filt=0.05, betaScale=1, verbose=TRUE, ncores=1) {
   
+  checkModel(lda)
+  
   ## If corpus is NULL, then it will use the original fitted data
   ## otherwise, use new corpus to predict topic proportions based on the 
-  ## model. pixels x genes, with nonzero integer counts. Also converted
-  ## to slam matrix format to be compatible with topicmodels package.
+  ## model. pixels x genes, with nonzero integer counts.
   if(is.null(corpus)){
-    result <- topicmodels::posterior(lda)
-  } else if (methods::is(lda, "LDA_VEM")) {
+    theta <- lda@gamma
+    pixels <- lda@documents
+  } else {
     corpus <- asCorpus(corpus, what="corpus")
     corpus <- matchGenes(corpus, lda)
     if (any(Matrix::rowSums(corpus) == 0)) {
       stop("Each row (pixel) of `corpus` needs to contain at least one non-zero count of a gene in the model")
     }
-    result <- topicmodels::posterior(ldaVEM(corpus, model=lda, ncores=ncores))
-  } else {
-    corpus <- asCorpus(corpus, what="corpus")
-    tm <- methods::as(corpus, "TsparseMatrix")
-    corpus <- slam::simple_triplet_matrix(i=tm@i + 1L, j=tm@j + 1L, v=tm@x,
-                                          nrow=nrow(corpus), ncol=ncol(corpus),
-                                          dimnames=dimnames(corpus))
-    result <- topicmodels::posterior(lda, newdata = corpus)
+    theta <- ldaVEM(corpus, model=lda, ncores=ncores)@gamma
+    pixels <- rownames(corpus)
   }
   
-  theta <- result$topics
-  beta <- result$terms
+  celltypes <- as.character(seq_len(lda@k))
+  dimnames(theta) <- list(if (length(pixels) == nrow(theta)) pixels, celltypes)
+  beta <- exp(lda@beta)
+  dimnames(beta) <- list(celltypes, if (length(lda@terms) == ncol(beta)) lda@terms)
   
   ## filter out cell-types with low proportions in pixels
   if(verbose){
