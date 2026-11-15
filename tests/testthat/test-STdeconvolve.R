@@ -451,6 +451,7 @@ test_that("edge cases of the helper functions", {
 test_that("models agree with topicmodels, and models of topicmodels are accepted", {
   
   skip_if_not_installed("topicmodels")
+  skip_if_not_installed("slam")
   
   data(mOB)
   counts <- cleanCounts(mOB$counts, min.lib.size = 100)
@@ -460,11 +461,16 @@ test_that("models agree with topicmodels, and models of topicmodels are accepted
   model <- ldas$models[[1]]
   
   ## same model as topicmodels::LDA up to the convergence tolerances
-  ref <- topicmodels::LDA(ldas$fitCorpus, k=4,
+  expect_s4_class(ldas$fitCorpus, "dgCMatrix")
+  stm <- slam::as.simple_triplet_matrix(x)
+  ref <- topicmodels::LDA(stm, k=4,
                           control=list(seed=0, verbose=0, keep=1, estimate.alpha=TRUE))
   expect_equal(ldas$perplexities, topicmodels::perplexity(ref), tolerance=0.005)
   expect_gt(min(diag(cor(t(exp(model@beta)), t(exp(ref@beta))))), 0.99)
   expect_gt(min(diag(cor(model@gamma, ref@gamma))), 0.99)
+  
+  ## a corpus in the format of previous versions is still accepted
+  expect_identical(fitLDA(stm, Ks = 4, plot=FALSE, verbose=FALSE)$models[[1]]@beta, model@beta)
   
   ## models fitted by previous versions of fitLDA() are "LDA_VEM" objects
   post <- topicmodels::posterior(ref)

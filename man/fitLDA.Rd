@@ -42,7 +42,8 @@ A list that contains
 with mean proportion < perc.rare.thresh starts to increase steadily.
 \item numRare: number of cell-types with mean pixel proportion < perc.rare.thresh for each K
 \item perplexities: perplexity scores for each model
-\item fitCorpus: the corpus that was used to fit each model
+\item fitCorpus: the corpus that was used to fit each model, as a sparse
+matrix (dgCMatrix) from the Matrix package
 \item testCorpus: the corpus used to compute model perplexity.
 }
 }

@@ -43,7 +43,6 @@ Imports:
     mgcv,
     ggplot2 (>= 3.4.0),
     viridis,
-    slam,
     stats,
     clue,
     reshape2,

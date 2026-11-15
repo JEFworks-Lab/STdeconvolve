@@ -15,6 +15,10 @@
   `getBetaTheta()` and the `perplexities` returned by `fitLDA()`. Models that
   were fitted and saved with previous versions still work with
   `getBetaTheta()`, `optimalModel()` and `perplexityPlot()`.
++ `slam` is no longer required either. `fitCorpus` and `testCorpus` returned
+  by `fitLDA()` and `slm` returned by `preprocess()` are now sparse matrices
+  (dgCMatrix) from the `Matrix` package instead of `slam` matrices. `slam`
+  matrices are still accepted as input by `fitLDA()` and `getBetaTheta()`.
 + `ncores` in `fitLDA()` is now the number of threads used to fit each model.
   The fitted models do not depend on the number of threads. `BiocParallel` is
   no longer used.

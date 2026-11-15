@@ -77,7 +77,7 @@ of the "basis" functions in the GAM used to fit, higher = "smoother"
 A list that contains
 \itemize{
 \item corpus: (pixels x genes) matrix of the counts of the selected genes
-\item slm: slam::as.simple_triplet_matrix(corpus)
+\item slm: the corpus as a sparse matrix (dgCMatrix) from the Matrix package
 \item positions: matrix of x and y coordinates of pixels rownames = pixels, colnames = "x", "y"
 }
 }

@@ -158,7 +158,7 @@ restrictCorpus <- function(counts,
 #' @return A list that contains
 #' \itemize{
 #' \item corpus: (pixels x genes) matrix of the counts of the selected genes
-#' \item slm: slam::as.simple_triplet_matrix(corpus)
+#' \item slm: the corpus as a sparse matrix (dgCMatrix) from the Matrix package
 #' \item positions: matrix of x and y coordinates of pixels rownames = pixels, colnames = "x", "y"
 #' }
 #' 
@@ -342,9 +342,8 @@ preprocess <- function(dat,
     message("- Check that each pixel has at least 1 non-zero gene count entry..", "\n")
   }
   corpus <- corpus[which(!rowSums(corpus) == 0), , drop=FALSE]
-  corpus_slm <- slam::as.simple_triplet_matrix(corpus)
-  message("Final corpus:", "\n")
-  print(corpus_slm)
+  corpus_slm <- methods::as(corpus, "CsparseMatrix")
+  message("Final corpus: ", nrow(corpus), " pixels x ", ncol(corpus), " genes", "\n")
   
   # get pixel positions if pixel colnames contain the positions
   # this is the case for some ST datasets like Stahl 2016 sets
@@ -398,7 +397,8 @@ preprocess <- function(dat,
 #'     with mean proportion < perc.rare.thresh starts to increase steadily.
 #' \item numRare: number of cell-types with mean pixel proportion < perc.rare.thresh for each K
 #' \item perplexities: perplexity scores for each model
-#' \item fitCorpus: the corpus that was used to fit each model
+#' \item fitCorpus: the corpus that was used to fit each model, as a sparse
+#'     matrix (dgCMatrix) from the Matrix package
 #' \item testCorpus: the corpus used to compute model perplexity.
 #' }
 #' 
@@ -430,10 +430,7 @@ fitLDA <- function(counts,
   corpus <- asCorpus(counts, what="counts")
   
   ## all pixels are used both to fit the models and to compute their perplexity
-  tm <- methods::as(corpus, "TsparseMatrix")
-  corpusFit <- slam::simple_triplet_matrix(i=tm@i + 1L, j=tm@j + 1L, v=tm@x,
-                                           nrow=nrow(corpus), ncol=ncol(corpus),
-                                           dimnames=dimnames(corpus))
+  corpusFit <- corpus
   corpusTest <- corpusFit
   
   start_time <- Sys.time()

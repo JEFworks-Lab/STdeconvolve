@@ -7,7 +7,8 @@ NULL
 #'
 #' @param counts pixels (rows) x genes (columns) counts. A base matrix, a
 #'     data.frame, a sparse matrix from the Matrix package or a
-#'     slam::simple_triplet_matrix.
+#'     simple_triplet_matrix of the slam package (as returned by previous
+#'     versions of preprocess() and fitLDA()).
 #' @param what name of the argument, used in error messages
 #'
 #' @return a dgCMatrix without explicit zeros
