@@ -5,6 +5,11 @@
   initialization for a given `seed`, so results are equivalent (not
   bit-identical: the cell-type proportions of each pixel are optimized to a
   tighter tolerance), but it is 30-50 times faster on one core.
++ `fitLDA()` has a new argument `warm.start`. With `warm.start = TRUE` the
+  model with the largest K is fitted first and each model with a smaller K
+  starts from the model before it, after merging its most similar cell-types.
+  Fitting a range of Ks is then 2-3 times faster. Off by default, because the
+  model for a given K then depends on the other values in `Ks`.
 + `topicmodels` (and with it the GSL system library) is no longer required.
   The models returned by `fitLDA()` are now "STdeconvolveLDA" objects instead
   of "LDA_VEM" objects of `topicmodels`. They have the same slots (`k`,

@@ -487,3 +487,30 @@ test_that("models agree with topicmodels, and models of topicmodels are accepted
   expect_lt(max(abs(new$theta - refNew)), 0.02)
   
 })
+
+
+test_that("fitLDA with a warm start fits models that are as good", {
+  data(mOB)
+  counts <- cleanCounts(mOB$counts, min.lib.size = 100, verbose = FALSE)
+  corpus <- t(as.matrix(restrictCorpus(counts, removeAbove = 1.0, removeBelow = 0.05,
+                                       verbose = FALSE)))
+  Ks <- c(4, 8, 6)
+  cold <- fitLDA(corpus, Ks = Ks, plot = FALSE, verbose = FALSE)
+  warm <- fitLDA(corpus, Ks = Ks, plot = FALSE, verbose = FALSE, warm.start = TRUE)
+  
+  expect_equal(names(warm$models), as.character(Ks))
+  expect_equal(unname(sapply(warm$models, slot, "k")), Ks)
+  ## the model with the largest K is the same, the others are close
+  expect_equal(warm$models[["8"]]@beta, cold$models[["8"]]@beta)
+  expect_true(all(warm$perplexities < cold$perplexities * 1.01))
+  for (m in warm$models) {
+    expect_equal(rowSums(exp(m@beta)), rep(1, m@k))
+    expect_equal(rowSums(m@gamma), rep(1, nrow(corpus)))
+  }
+  
+  ## merging keeps the gene distributions normalised
+  mergeCellTypes <- getFromNamespace("mergeCellTypes", "STdeconvolve")
+  merged <- mergeCellTypes(cold$models[["8"]], cold$fitCorpus, 3)
+  expect_equal(dim(merged), c(3, ncol(corpus)))
+  expect_equal(rowSums(merged), rep(1, 3))
+})

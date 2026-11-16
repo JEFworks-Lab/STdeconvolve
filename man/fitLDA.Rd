@@ -11,7 +11,8 @@ fitLDA(
   perc.rare.thresh = 0.05,
   ncores = 1,
   plot = TRUE,
-  verbose = TRUE
+  verbose = TRUE,
+  warm.start = FALSE
 )
 }
 \arguments{
@@ -31,6 +32,14 @@ The fitted models do not depend on the number of threads.}
 \item{plot}{Boolean for plotting (default: TRUE)}
 
 \item{verbose}{Boolean for verbosity (default: TRUE)}
+
+\item{warm.start}{Fit the model with the largest K first and start each
+model with a smaller K from the model before it, after merging its most
+similar cell-types, instead of fitting each model from a random
+initialization. Fitting all models then takes little more time than
+fitting the model with the largest K. The models are as good (their
+perplexity is similar or lower), but the model for a given K then depends
+on the other values in \code{Ks} (default: FALSE)}
 }
 \value{
 A list that contains

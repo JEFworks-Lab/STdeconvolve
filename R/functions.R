@@ -387,6 +387,13 @@ preprocess <- function(dat,
 #'     The fitted models do not depend on the number of threads.
 #' @param plot Boolean for plotting (default: TRUE)
 #' @param verbose Boolean for verbosity (default: TRUE)
+#' @param warm.start Fit the model with the largest K first and start each
+#'     model with a smaller K from the model before it, after merging its most
+#'     similar cell-types, instead of fitting each model from a random
+#'     initialization. Fitting all models then takes little more time than
+#'     fitting the model with the largest K. The models are as good (their
+#'     perplexity is similar or lower), but the model for a given K then depends
+#'     on the other values in `Ks` (default: FALSE)
 #'
 #' @return A list that contains
 #' \itemize{
@@ -419,7 +426,8 @@ fitLDA <- function(counts,
                    perc.rare.thresh=0.05,
                    ncores=1,
                    plot=TRUE,
-                   verbose=TRUE) {
+                   verbose=TRUE,
+                   warm.start=FALSE) {
   
   if ( min(Ks) < 2 | !isTRUE(all(Ks == floor(Ks))) ){
     stop("`Ks` must be a vector of integers of at least 2.")
@@ -434,11 +442,22 @@ fitLDA <- function(counts,
   corpusTest <- corpusFit
   
   start_time <- Sys.time()
-  fitted_models <- lapply(Ks, function(k){
-    if(verbose) message("now fitting LDA model with K = ", k)
-    ldaVEM(corpus, k=k, seed=seed, ncores=ncores)
-  })
+  fitted_models <- vector("list", length(Ks))
   names(fitted_models) <- Ks
+  previous <- NULL
+  ## with a warm start: largest K first, each smaller K starts from the
+  ## model before it
+  for (i in if (warm.start) order(Ks, decreasing=TRUE) else seq_along(Ks)) {
+    k <- Ks[i]
+    if(verbose) message("now fitting LDA model with K = ", k)
+    if (is.null(previous)) {
+      fitted_models[[i]] <- ldaVEM(corpus, k=k, seed=seed, ncores=ncores)
+    } else {
+      fitted_models[[i]] <- ldaVEM(corpus, init=mergeCellTypes(previous, corpus, k),
+                                   seed=seed, alpha=previous@alpha, ncores=ncores)
+    }
+    if (warm.start) previous <- fitted_models[[i]]
+  }
   
   if(verbose) {
     total_t <- round(difftime(Sys.time(), start_time, units="mins"), 2)

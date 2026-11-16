@@ -109,6 +109,8 @@ checkModel <- function(lda) {
 #' @param model a fitted model. If given, its cell-type gene
 #'     distributions (and alpha) are kept fixed and only the cell-type
 #'     proportions of the pixels in `corpus` are inferred.
+#' @param init cell-types x genes matrix of gene probabilities to start the
+#'     fit from, instead of the random initialization (see mergeCellTypes())
 #' @param seed seed for the random initialization
 #' @param alpha initial value of the Dirichlet parameter of the cell-type
 #'     proportions (default: 50/k)
@@ -123,7 +125,7 @@ checkModel <- function(lda) {
 #' @return an "STdeconvolveLDA" object
 #'
 #' @noRd
-ldaVEM <- function(corpus, k, model=NULL, seed=0, alpha=50/k, estimate.alpha=TRUE,
+ldaVEM <- function(corpus, k, model=NULL, init=NULL, seed=0, alpha=50/k, estimate.alpha=TRUE,
                    em.max.iter=1000L, em.tol=1e-4,
                    var.max.iter=500L, var.tol=1e-6,
                    ncores=1) {
@@ -134,8 +136,8 @@ ldaVEM <- function(corpus, k, model=NULL, seed=0, alpha=50/k, estimate.alpha=TRU
     estimate.alpha <- FALSE
     em.max.iter <- 0L
     init <- exp(model@beta)
-  } else {
-    init <- NULL
+  } else if (!is.null(init)) {
+    k <- nrow(init)
   }
   
   fit <- lda_vem_cpp(corpus@p, corpus@i, corpus@x,
@@ -163,6 +165,47 @@ ldaVEM <- function(corpus, k, model=NULL, seed=0, alpha=50/k, estimate.alpha=TRU
                logLiks=fit$logLiks,
                n=as.integer(sum(corpus@x)),
                alpha=fit$alpha)
+}
+
+
+#' Reduce the number of cell-types of a fitted model by merging cell-types
+#'
+#' @description Repeatedly merges the two cell-types whose merge loses the
+#'     least likelihood of the counts assigned to them (the weighted
+#'     Jensen-Shannon divergence of their gene distributions), until `k`
+#'     cell-types are left. The result is a starting point for fitting a model
+#'     with `k` cell-types that needs few EM iterations.
+#'
+#' @param model fitted LDA model with more than `k` cell-types
+#' @param corpus pixels x genes dgCMatrix the model was fitted to
+#' @param k number of cell-types to keep
+#'
+#' @return k x genes matrix of gene probabilities
+#'
+#' @noRd
+mergeCellTypes <- function(model, corpus, k) {
+  b <- exp(model@beta)
+  ## counts assigned to each cell-type
+  gamma <- model@gamma * (model@k * model@alpha + Matrix::rowSums(corpus)) - model@alpha
+  mass <- pmax(colSums(gamma), 1e-8)
+  while (nrow(b) > k) {
+    n <- b * mass
+    ent <- rowSums(n * log(b))
+    best <- c(Inf, 0, 0)
+    for (i in seq_len(nrow(b) - 1)) {
+      js <- (i + 1):nrow(b)
+      m <- t(n[js, , drop=FALSE]) + n[i, ]
+      loss <- ent[i] + ent[js] - (colSums(m * log(m)) - (mass[i] + mass[js]) * log(mass[i] + mass[js]))
+      if (min(loss) < best[1]) best <- c(min(loss), i, js[which.min(loss)])
+    }
+    i <- best[2]
+    j <- best[3]
+    b[i, ] <- (n[i, ] + n[j, ]) / (mass[i] + mass[j])
+    mass[i] <- mass[i] + mass[j]
+    b <- b[-j, , drop=FALSE]
+    mass <- mass[-j]
+  }
+  b
 }
 
 
