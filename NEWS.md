@@ -10,6 +10,11 @@
   starts from the model before it, after merging its most similar cell-types.
   Fitting a range of Ks is then 2-3 times faster. Off by default, because the
   model for a given K then depends on the other values in `Ks`.
++ `fitLDA()` has a new argument `max.counts` for data with very many pixels
+  (e.g. Visium HD). The cell-type gene expression profiles are fitted on a
+  random subset of the pixels that together have about `max.counts` counts,
+  and the cell-type proportions of all pixels are then inferred with the
+  fitted model. Off by default. See the new tutorial `docs/visium_hd.md`.
 + `topicmodels` (and with it the GSL system library) is no longer required.
   The models returned by `fitLDA()` are now "STdeconvolveLDA" objects instead
   of "LDA_VEM" objects of `topicmodels`. They have the same slots (`k`,

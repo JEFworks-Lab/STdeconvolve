@@ -514,3 +514,28 @@ test_that("fitLDA with a warm start fits models that are as good", {
   expect_equal(dim(merged), c(3, ncol(corpus)))
   expect_equal(rowSums(merged), rep(1, 3))
 })
+
+
+test_that("fitLDA can fit on a subset of the pixels", {
+  data(mOB)
+  counts <- cleanCounts(mOB$counts, min.lib.size = 100, verbose = FALSE)
+  corpus <- t(as.matrix(restrictCorpus(counts, removeAbove = 1.0, removeBelow = 0.05,
+                                       verbose = FALSE)))
+  set.seed(42)
+  before <- .Random.seed
+  full <- fitLDA(corpus, Ks = c(3, 5), plot = FALSE, verbose = FALSE)
+  sub <- fitLDA(corpus, Ks = c(3, 5), plot = FALSE, verbose = FALSE, max.counts = sum(corpus) / 2,
+                warm.start = TRUE)
+  ## the random number generator of the session is left alone
+  expect_identical(.Random.seed, before)
+  
+  for (m in sub$models) {
+    expect_equal(dim(m@gamma), c(nrow(corpus), m@k))
+    expect_equal(m@documents, rownames(corpus))
+    expect_length(m@loglikelihood, nrow(corpus))
+    expect_gt(m@iter, 0)
+  }
+  expect_true(all(sub$perplexities < full$perplexities * 1.05))
+  expect_equal(rownames(getBetaTheta(sub$models[[1]], verbose = FALSE)$theta), rownames(corpus))
+  expect_error(fitLDA(corpus, Ks = 3, max.counts = 0, plot = FALSE, verbose = FALSE), "max.counts")
+})

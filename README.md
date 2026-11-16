@@ -78,6 +78,7 @@ More details can be found in the tutorials.
 - [Additional features with `STdeconvolve`](https://github.com/JEFworks/STdeconvolve/blob/devel/docs/additional_features.md)
 - [Annotating deconvolved cell-types](https://github.com/JEFworks/STdeconvolve/blob/devel/docs/celltype_annotation.md)
 - [Analysis of 10X Visium data](https://github.com/JEFworks/STdeconvolve/blob/devel/docs/visium_10x.md)
+- [Analysis of 10X Visium HD data: many small bins](docs/visium_hd.md)
 - [Examples of when `STdeconvolve` may fail](https://github.com/JEFworks/STdeconvolve/blob/devel/docs/failure_examples.md)
 - [Discussion and examples of processing multiple datasets together or separately](https://github.com/JEFworks/STdeconvolve/blob/devel/docs/combining_datasets.md)
 

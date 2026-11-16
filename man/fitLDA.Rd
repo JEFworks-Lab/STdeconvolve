@@ -12,7 +12,8 @@ fitLDA(
   ncores = 1,
   plot = TRUE,
   verbose = TRUE,
-  warm.start = FALSE
+  warm.start = FALSE,
+  max.counts = Inf
 )
 }
 \arguments{
@@ -40,6 +41,16 @@ initialization. Fitting all models then takes little more time than
 fitting the model with the largest K. The models are as good (their
 perplexity is similar or lower), but the model for a given K then depends
 on the other values in \code{Ks} (default: FALSE)}
+
+\item{max.counts}{For data with very many pixels (e.g. Visium HD). If the
+corpus has more counts than this, the cell-type gene expression profiles
+are fitted on a random subset of the pixels (chosen with \code{seed}) that
+together have about \code{max.counts} counts, and the cell-type proportions
+of all pixels are then inferred with the fitted model. The limit is on
+the counts and not on the number of pixels, because the fewer counts a
+pixel has, the more pixels are needed to learn the expression profiles.
+About 5 million counts (\code{max.counts = 5e6}) give models that are as good
+as those fitted on all pixels (default: Inf, fit on all pixels)}
 }
 \value{
 A list that contains

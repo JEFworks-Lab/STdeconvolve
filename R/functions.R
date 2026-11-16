@@ -394,6 +394,15 @@ preprocess <- function(dat,
 #'     fitting the model with the largest K. The models are as good (their
 #'     perplexity is similar or lower), but the model for a given K then depends
 #'     on the other values in `Ks` (default: FALSE)
+#' @param max.counts For data with very many pixels (e.g. Visium HD). If the
+#'     corpus has more counts than this, the cell-type gene expression profiles
+#'     are fitted on a random subset of the pixels (chosen with `seed`) that
+#'     together have about `max.counts` counts, and the cell-type proportions
+#'     of all pixels are then inferred with the fitted model. The limit is on
+#'     the counts and not on the number of pixels, because the fewer counts a
+#'     pixel has, the more pixels are needed to learn the expression profiles.
+#'     About 5 million counts (`max.counts = 5e6`) give models that are as good
+#'     as those fitted on all pixels (default: Inf, fit on all pixels)
 #'
 #' @return A list that contains
 #' \itemize{
@@ -427,10 +436,14 @@ fitLDA <- function(counts,
                    ncores=1,
                    plot=TRUE,
                    verbose=TRUE,
-                   warm.start=FALSE) {
+                   warm.start=FALSE,
+                   max.counts=Inf) {
   
   if ( min(Ks) < 2 | !isTRUE(all(Ks == floor(Ks))) ){
     stop("`Ks` must be a vector of integers of at least 2.")
+  }
+  if (length(max.counts) != 1 || is.na(max.counts) || max.counts <= 0) {
+    stop("`max.counts` must be a positive number.")
   }
   
   ## pixels (rows) x genes (cols) sparse matrix; checks that the counts are
@@ -442,6 +455,26 @@ fitLDA <- function(counts,
   corpusTest <- corpusFit
   
   start_time <- Sys.time()
+  ## with many pixels, the gene expression profiles of the cell-types are
+  ## fitted on a random subset of the pixels
+  corpusSub <- corpus
+  if (sum(corpus@x) > max.counts) {
+    if (exists(".Random.seed", envir=globalenv(), inherits=FALSE)) {
+      old.seed <- get(".Random.seed", envir=globalenv(), inherits=FALSE)
+      on.exit(assign(".Random.seed", old.seed, envir=globalenv()), add=TRUE)
+    } else {
+      on.exit(suppressWarnings(rm(".Random.seed", envir=globalenv())), add=TRUE)
+    }
+    set.seed(seed)
+    ## pixels in random order, as many as fit in the limit
+    shuffled <- sample.int(nrow(corpus))
+    n <- max(1, sum(cumsum(Matrix::rowSums(corpus)[shuffled]) <= max.counts))
+    corpusSub <- corpus[sort(shuffled[seq_len(n)]), , drop=FALSE]
+    if(verbose) message("fitting the models on ", nrow(corpusSub), " of the ",
+                        nrow(corpus), " pixels")
+  }
+  subset <- nrow(corpusSub) < nrow(corpus)
+  
   fitted_models <- vector("list", length(Ks))
   names(fitted_models) <- Ks
   previous <- NULL
@@ -451,12 +484,21 @@ fitLDA <- function(counts,
     k <- Ks[i]
     if(verbose) message("now fitting LDA model with K = ", k)
     if (is.null(previous)) {
-      fitted_models[[i]] <- ldaVEM(corpus, k=k, seed=seed, ncores=ncores)
+      model <- ldaVEM(corpusSub, k=k, seed=seed, ncores=ncores)
     } else {
-      fitted_models[[i]] <- ldaVEM(corpus, init=mergeCellTypes(previous, corpus, k),
-                                   seed=seed, alpha=previous@alpha, ncores=ncores)
+      model <- ldaVEM(corpusSub, init=mergeCellTypes(previous, corpusSub, k),
+                      seed=seed, alpha=previous@alpha, ncores=ncores)
     }
-    if (warm.start) previous <- fitted_models[[i]]
+    if (warm.start) previous <- model
+    if (subset) {
+      ## cell-type proportions and likelihood of all pixels
+      all <- ldaVEM(corpus, model=model, ncores=ncores)
+      all@iter <- model@iter
+      all@logLiks <- model@logLiks
+      all@control <- model@control
+      model <- all
+    }
+    fitted_models[[i]] <- model
   }
   
   if(verbose) {
