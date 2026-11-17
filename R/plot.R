@@ -1,15 +1,22 @@
-#' Visualize all topic proportions across pixels with `scatterpie`
+## columns of the data that are referred to in ggplot2::aes()
+utils::globalVariables(c("x", "y", "wedge", "CellTypes", "Pixel.Groups", "Var1", "Var2",
+                         "value", "K", "rareCtsAdj", "perplexAdj", "alphaBool"))
+
+
+#' Visualize all topic proportions across pixels as pie charts
 #'
 #' @description Note: visualizes all cell-types in theta at once (could be
 #'     individual cell-types or cell-type-clusters) so for accuracy of the proportions
 #'     of each cell-type in a pixel, the row (pixel) should sum to 1.
 #'
-#' @param theta document (pixel) x cell-type proportion matrix
+#' @param theta document (pixel) x cell-type proportion matrix, or the list
+#'     returned by `getBetaTheta()`
 #' @param pos position of pixels, as data.frame with x and y columns
 #' @param topicOrder order of topics in theta to visualize as a numeric vector
 #'     and same length as topicCols (default: seq(ncol(theta)))
 #' @param topicCols Vector of colors for each of the cell-types to be visualized.
-#'     Same length and order as topicOrder (default: rainbow(ncol(theta)))
+#'     Same length and order as topicOrder (default: the colors of
+#'     `cellTypeColors()`, which are the same in all figures of this package)
 #' @param groups Indicates color of the scatterpie strokes (borders) with the goal of coloring them
 #'     by their assigned group. This can be a vector or factor indicating the group of each
 #'     pixel. Needs to be in the same order as the pixel rows in "theta" (default: NA)
@@ -37,14 +44,12 @@
 #' optLDA <- optimalModel(models = ldas, opt = 3)
 #' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 #' deconProp <- results$theta
-#' vizAllTopics(deconProp,pos, groups = annot, group_cols = rainbow(length(levels(annot))), r=0.4)
+#' vizAllTopics(deconProp,pos, groups = annot, group_cols = grDevices::rainbow(length(levels(annot))), r=0.4)
 #' 
-#' @importFrom grDevices rainbow
-#'
 #' @export
 vizAllTopics <- function(theta, pos,
                          topicOrder=seq(ncol(theta)),
-                         topicCols=rainbow(ncol(theta)),
+                         topicCols=cellTypeColors(ncol(theta))[topicOrder],
                          groups = NA,
                          group_cols = NA,
                          r = max(0.4, max(pos)/nrow(pos)*4),
@@ -52,6 +57,11 @@ vizAllTopics <- function(theta, pos,
                          showLegend = TRUE,
                          plotTitle = NA,
                          overlay = NA) {
+  
+  ## the list returned by getBetaTheta() is accepted
+  if (is.list(theta) && !is.data.frame(theta)) {
+    theta <- thetaOf(theta)
+  }
   
   ## check that theta and pos are either data.frames or matrices
   if( !is.matrix(theta) & !is.data.frame(theta) ){
@@ -65,90 +75,82 @@ vizAllTopics <- function(theta, pos,
     stop("`pos` must have exactly 2 columns named `x` and `y`.")
   }
   
+  # the default radius depends on all positions in `pos`
+  force(r)
+  
   # pixel cell-type distribution reordered based on topicOrder
-  theta_ordered <- theta[, topicOrder]
-  theta_ordered <- as.data.frame(theta_ordered)
-  colnames(theta_ordered) <- paste0("X", colnames(theta_ordered))
+  theta_ordered <- as.matrix(theta[, topicOrder, drop=FALSE])
+  # names of the cell-types as they appear in the legend
+  topicColumns <- make.names(paste0("X", colnames(theta_ordered)), unique=TRUE)
   
-  # ensure that `theta` and `pos` pixel rownames maintain same order
-  # after the merge so as to not mess up the order of `groups`
-  # if provided
-  # make sure only using the shared pixels
-  pixels <- intersect(rownames(theta_ordered), rownames(pos))
-  pixels <- rownames(theta_ordered)[which(rownames(theta_ordered) %in% pixels)]
+  # only the pixels that have a position are plotted, in the order of `theta`,
+  # so that the order of `groups` (if provided) is maintained
+  shared <- rownames(theta_ordered) %in% rownames(pos)
+  pixels <- rownames(theta_ordered)[shared]
+  theta_ordered <- theta_ordered[shared, , drop=FALSE]
+  pos <- as.matrix(pos[pixels, c("x", "y"), drop=FALSE])
   
-  # add columns "x", "y" with document positions from `pos`
-  theta_ordered_pos <- merge(data.frame(theta_ordered),
-                             data.frame(pos), by=0)
-  rownames(theta_ordered_pos) <- theta_ordered_pos[,"Row.names"]
-  ## make sure pixels in the original order before the merge
-  theta_ordered_pos <- theta_ordered_pos[pixels,]
-  
-  # first column after merge is "Row.names", last two are "x" and "y"
-  # problem is that data frame will replace "-" and " " with "."
-  topicColumns <- colnames(theta_ordered_pos)[2:(dim(theta_ordered_pos)[2]-2)]
+  # `groups` and `r` can be given for the pixels in `theta` or for the plotted pixels
+  perPixel <- function(v, name) {
+    if (length(v) == length(shared)) {
+      v[shared]
+    } else if (length(v) %in% c(1, length(pixels))) {
+      rep_len(v, length(pixels))
+    } else {
+      stop("`", name, "` must have one value for each pixel (row) in `theta`.")
+    }
+  }
   
   # color of piechart groups (lines of piechart):
   if (is.na(groups[1])) {
-    groups <- rep("0", dim(theta_ordered_pos)[1])
-    theta_ordered_pos$Pixel.Groups <- groups
+    groups <- rep("0", length(pixels))
   } else {
-    theta_ordered_pos$Pixel.Groups <- as.character(groups)
+    groups <- perPixel(as.character(groups), "groups")
   }
   if (is.na(group_cols[1])) {
     group_cols <- c("0" = "gray")
   }
+  r <- perPixel(r, "r")
   
-  message("Plotting scatterpies for ", dim(theta_ordered_pos)[1], " pixels with ", length(topicColumns),
+  message("Plotting scatterpies for ", length(pixels), " pixels with ", length(topicColumns),
       " cell-types...this could take a while if the dataset is large.", "\n")
   
-  if (!is.na(overlay[1])){
-    p <- ggplot2::ggplot(mapping = ggplot2::aes(x = 0:dim(overlay)[2], y = 0:dim(overlay)[1])) +
-      ggplot2::coord_equal(xlim = c(0,dim(overlay)[2]), ylim = c(0, dim(overlay)[1]), expand = FALSE) +
-      ggplot2::theme(
-        panel.grid = ggplot2::element_blank(),
-        axis.line = ggplot2::element_blank(),
-        axis.text.x = ggplot2::element_blank(),
-        axis.text.y = ggplot2::element_blank(),
-        axis.ticks = ggplot2::element_blank(),
-        axis.title.x = ggplot2::element_blank(),
-        axis.title.y = ggplot2::element_blank(),
-        panel.background = ggplot2::element_blank(),
-        plot.background = ggplot2::element_blank(),
-        legend.text = ggplot2::element_text(size = 12, colour = "black"),
-        legend.title = ggplot2::element_text(size = 12, colour = "black")
-      ) +
-      ggplot2::annotation_raster(overlay, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) +
-      scatterpie::geom_scatterpie(ggplot2::aes(x=x, y=y, group=Row.names, r=r, color = Pixel.Groups),
-                                  lwd = lwd,
-                                  data = theta_ordered_pos,
-                                  cols = topicColumns,
-                                  legend_name = "CellTypes") +
-      ggplot2::scale_fill_manual(values = as.vector(topicCols)) +
-      ggplot2::scale_color_manual(values = group_cols)
-  } else {
+  # the pies are drawn as one polygon for each cell-type in each pixel
+  wedges <- pieWedges(theta_ordered, x=pos[, "x"], y=pos[, "y"], r=r,
+                      n=if (length(pixels) > 1000) 120 else 360)
+  dat <- data.frame(x = wedges$x, y = wedges$y, wedge = wedges$wedge,
+                    CellTypes = factor(topicColumns[wedges$topic], levels = topicColumns),
+                    Pixel.Groups = groups[wedges$pixel])
+  
+  hasOverlay <- !is.na(overlay[1])
+  if (hasOverlay){
     p <- ggplot2::ggplot() +
-      ggplot2::theme(
-        panel.grid = ggplot2::element_blank(),
-        axis.line = ggplot2::element_blank(),
-        axis.text.x = ggplot2::element_blank(),
-        axis.text.y = ggplot2::element_blank(),
-        axis.ticks = ggplot2::element_blank(),
-        axis.title.x = ggplot2::element_blank(),
-        axis.title.y = ggplot2::element_blank(),
-        panel.background = ggplot2::element_blank(),
-        plot.background = ggplot2::element_blank(),
-        legend.text = ggplot2::element_text(size = 12, colour = "black"),
-        legend.title = ggplot2::element_text(size = 12, colour = "black")
-        ) +
-      scatterpie::geom_scatterpie(ggplot2::aes(x=x, y=y, group=Row.names, r=r, color = Pixel.Groups),
-                                  lwd = lwd,
-                                  data = theta_ordered_pos,
-                                  cols = topicColumns,
-                                  legend_name = "CellTypes") +
-      ggplot2::scale_fill_manual(values = as.vector(topicCols)) +
-      ggplot2::scale_color_manual(values = group_cols)
+      ggplot2::annotation_raster(overlay, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf)
+  } else {
+    p <- ggplot2::ggplot()
   }
+  
+  p <- p +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.line = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_blank(),
+      axis.text.y = ggplot2::element_blank(),
+      axis.ticks = ggplot2::element_blank(),
+      axis.title.x = ggplot2::element_blank(),
+      axis.title.y = ggplot2::element_blank(),
+      panel.background = ggplot2::element_blank(),
+      plot.background = ggplot2::element_blank(),
+      legend.text = ggplot2::element_text(size = 12, colour = "black"),
+      legend.title = ggplot2::element_text(size = 12, colour = "black")
+    ) +
+    ggplot2::geom_polygon(ggplot2::aes(x = x, y = y, group = wedge,
+                                       fill = CellTypes, color = Pixel.Groups),
+                          data = dat, linewidth = lwd) +
+    ggplot2::scale_fill_manual(values = as.vector(topicCols), drop = FALSE) +
+    ggplot2::scale_color_manual(values = group_cols) +
+    ## the legend of the groups shows the color of the lines only
+    ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(fill = NA)))
   
   if (!showLegend) {
     p <- p + ggplot2::theme(legend.position = "none")
@@ -158,9 +160,56 @@ vizAllTopics <- function(theta, pos,
     p <- p + ggplot2::ggtitle(plotTitle)
   }
   
-  p <- p + ggplot2::coord_equal()
+  if (hasOverlay) {
+    ## the pixel positions are in the coordinates of the image
+    p <- p + ggplot2::coord_equal(xlim = c(0, dim(overlay)[2]),
+                                  ylim = c(0, dim(overlay)[1]), expand = FALSE)
+  } else {
+    p <- p + ggplot2::coord_equal()
+  }
   
   return(p)
+}
+
+
+#' Outlines of the wedges of pie charts
+#'
+#' @description Each pie starts at 12 o'clock and the cell-types follow
+#'     clockwise in the order of the columns of `theta`.
+#'
+#' @param theta pixel (rows) x cell-type (columns) matrix. The rows are scaled to sum to 1.
+#' @param x,y positions of the centers of the pies, one for each row in `theta`
+#' @param r radius of each pie
+#' @param n number of line segments used for a full circle
+#'
+#' @return list with the coordinates `x` and `y` of the points of all wedges,
+#'     and for each point the index of its `wedge`, `pixel` and `topic`.
+#'     Cell-types with a proportion of 0 in a pixel have no wedge.
+#'
+#' @noRd
+pieWedges <- function(theta, x, y, r, n = 360) {
+  K <- ncol(theta)
+  ## work with cell-types x pixels, so that the wedges are ordered by pixel
+  prop <- t(theta / rowSums(theta))
+  prop[!is.finite(prop) | prop < 0] <- 0
+  end <- matrix(apply(prop, 2, cumsum), nrow = K)
+  keep <- which(prop > 0)
+  pixel <- (keep - 1L) %/% K + 1L
+  topic <- (keep - 1L) %% K + 1L
+  prop <- prop[keep]
+  to <- 2 * pi * end[keep]
+  from <- to - 2 * pi * prop
+  ## points along the arc, preceded by the center unless it is a full circle
+  segments <- pmax(1L, as.integer(ceiling(prop * n)))
+  center <- as.integer(prop < 1 - 1e-12)
+  npoints <- segments + 1L + center
+  wedge <- rep.int(seq_along(keep), npoints)
+  step <- sequence(npoints) - 1L - center[wedge]
+  angle <- from[wedge] + (to - from)[wedge] * pmax(step, 0L) / segments[wedge]
+  radius <- r[pixel][wedge] * (step >= 0L)
+  list(x = x[pixel][wedge] + radius * sin(angle),
+       y = y[pixel][wedge] + radius * cos(angle),
+       wedge = wedge, pixel = pixel[wedge], topic = topic[wedge])
 }
 
 
@@ -168,7 +217,8 @@ vizAllTopics <- function(theta, pos,
 #' 
 #' @description Visualize the pixel proportions of a single topic.
 #'
-#' @param theta document (pixel) x cell-type proportion matrix
+#' @param theta document (pixel) x cell-type proportion matrix, or the list
+#'     returned by `getBetaTheta()`
 #' @param pos position of pixels, as data.frame with `x` and `y` columns
 #' @param topic the index of the topic
 #' @param groups colors the pixel border lines based on a group or cell layer
@@ -211,11 +261,16 @@ vizTopic <- function(theta, pos, topic,
                      plotTitle = NA,
                      showLegend = TRUE) {
   
+  ## the list returned by getBetaTheta() is accepted
+  if (is.list(theta) && !is.data.frame(theta)) {
+    theta <- thetaOf(theta)
+  }
+  
   ## check that theta and pos are either data.frames or matrices
-  if( !is.matrix(theta) & !is.data.frame(theta) == FALSE ){
+  if( !is.matrix(theta) & !is.data.frame(theta) ){
     stop("`theta` must be a matrix or data.frame.")
   }
-  if( !is.matrix(pos) == FALSE & !is.data.frame(pos) == FALSE ){
+  if( !is.matrix(pos) & !is.data.frame(pos) ){
     stop("`pos` must be a matrix or data.frame with exactly 2 columns named `x` and `y`.")
   }
   
@@ -307,7 +362,8 @@ vizTopic <- function(theta, pos, topic,
 #'
 #' @param df data.frame where rows are spots and columns must be at least:
 #'      "x", "y" for spot positions in space and "gene" column that is counts
-#'      of a gene for each spot.
+#'      of a gene for each spot. If `pos` is given: a gene x pixel count
+#'      matrix, e.g. the output of `cleanCounts()`.
 #' @param gene column name of the gene counts in df to be visualized
 #' @param groups colors the spots lines based on a group or cell layer
 #'     they belong to. Needs to be a character vector in the order of the spot
@@ -320,6 +376,10 @@ vizTopic <- function(theta, pos, topic,
 #' @param alpha alpha value of colored pixels (default: 1)
 #' @param plotTitle option to add a title to the plot
 #' @param showLegend Boolean to show the plot legend
+#' @param pos positions of the pixels, as a matrix or data.frame with columns
+#'     `x` and `y` and the pixels as row names. If given, `df` is a gene x
+#'     pixel count matrix and does not need to be merged with the positions.
+#'     (default: NULL)
 #' 
 #' @return a plot where each point is a pixel colored by the expression level of the selected gene
 #' 
@@ -332,6 +392,9 @@ vizTopic <- function(theta, pos, topic,
 #' vizGeneCounts(df = df, gene = "Sox11",
 #'     size = 3, stroke = 0.1, plotTitle = "Sox11",
 #'     winsorize = 0.05, showLegend = TRUE)
+#' ## the same plot without merging the positions and the counts
+#' vizGeneCounts(counts, gene = "Sox11", pos = pos,
+#'     size = 3, stroke = 0.1, plotTitle = "Sox11", winsorize = 0.05)
 #' 
 #' @export
 vizGeneCounts <- function(df, gene,
@@ -341,7 +404,25 @@ vizGeneCounts <- function(df, gene,
                           size = 7, stroke = 0.5,
                           alpha = 1,
                           plotTitle = NA,
-                          showLegend = TRUE) {
+                          showLegend = TRUE,
+                          pos = NULL) {
+  
+  if (!is.null(pos)) {
+    ## `df` is a gene x pixel count matrix
+    if (!gene %in% rownames(df)) {
+      stop("`gene` is not a gene (row) of the count matrix.")
+    }
+    pixels <- colnames(df)[colnames(df) %in% rownames(pos)]
+    if (length(pixels) == 0) {
+      stop("None of the pixels (columns) of the count matrix have a position in `pos`.")
+    }
+    if (length(groups) == ncol(df)) {
+      groups <- groups[colnames(df) %in% rownames(pos)]
+    }
+    expr <- as.numeric(df[gene, pixels])
+    df <- data.frame(x = as.numeric(pos[pixels, "x"]), y = as.numeric(pos[pixels, "y"]))
+    df[[gene]] <- expr
+  }
   
   counts <- df[,gene]
   
@@ -465,7 +546,7 @@ correlationPlot <- function(mat, colLabs = NA, rowLabs = NA, title = NA, annotat
                    legend.title = ggplot2::element_text(size = 15, colour = "black", angle = 90),
                    panel.background = ggplot2::element_blank(),
                    ## border around plot
-                   panel.border = ggplot2::element_rect(fill = NA, color = "black", size = 2),
+                   panel.border = ggplot2::element_rect(fill = NA, color = "black", linewidth = 2),
                    plot.background = ggplot2::element_blank()
                    # legend.position="none"
       ) +
@@ -523,7 +604,7 @@ correlationPlot <- function(mat, colLabs = NA, rowLabs = NA, title = NA, annotat
 #' counts <- cleanCounts(cd, min.lib.size = 100)
 #' corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
 #' ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,5))
-#' perplexityPlot(models = ldas, corpus = corpus)
+#' perplexityPlot(models = ldas, corpus = t(as.matrix(corpus)))
 #' 
 #' @importFrom methods slot
 #' 
@@ -535,17 +616,38 @@ perplexityPlot <- function(models, corpus = NULL, perc.rare.thresh = 0.05){
   pScores <- models$perplexities
   
   out <- lapply(1:length(Ks), function(i) {
-    apply(getBetaTheta(fitted_models[[i]], corpus = corpus, verbose = FALSE)$theta, 2, mean)
+    colMeans(getBetaTheta(fitted_models[[i]], corpus = corpus, verbose = FALSE)$theta)
   })
   ## number of cell-types present at fewer than `perc.rare.thresh` on average across pixels
   numrare <- unlist(lapply(out, function(x) sum(x < perc.rare.thresh)))
+  
+  plt <- plotPerplexity(Ks = Ks, numrare = numrare, pScores = pScores,
+                        alphas = unlist(sapply(fitted_models, slot, "alpha")),
+                        perc.rare.thresh = perc.rare.thresh)
+  print(plt)
+}
+
+
+
+#' Plot of the perplexity and number of rare cell-types versus K
+#'
+#' @param Ks fitted numbers of cell-types
+#' @param numrare number of cell-types with a low mean proportion for each K
+#' @param pScores perplexity for each K
+#' @param alphas alpha of the fitted model for each K
+#' @param perc.rare.thresh threshold on the mean proportion used for `numrare`
+#'
+#' @return ggplot object
+#'
+#' @noRd
+plotPerplexity <- function(Ks, numrare, pScores, alphas, perc.rare.thresh) {
   
   dat <- data.frame(K = as.double(Ks),
                     rareCts = numrare,
                     perplexity = pScores,
                     rareCtsAdj = scale0_1(numrare),
                     perplexAdj = scale0_1(pScores),
-                    alphas = unlist(sapply(fitted_models, slot, "alpha")))
+                    alphas = alphas)
   dat[["alpha < 1"]] <- ifelse(dat$alphas < 1, 'gray90', 'gray50')
   dat$alphaBool <- ifelse(dat$alphas < 1, 0, 1)
   
@@ -572,10 +674,10 @@ perplexityPlot <- function(models, corpus = NULL, perc.rare.thresh = 0.05){
   }
   
   plt <- ggplot2::ggplot(dat) +
-    ggplot2::geom_point(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", lwd = 2) +
-    ggplot2::geom_point(ggplot2::aes(y=perplexAdj, x=K), col="red", lwd = 2) +
-    ggplot2::geom_line(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", lwd = 2) +
-    ggplot2::geom_line(ggplot2::aes(y=perplexAdj, x=K), col="red", lwd = 2) +
+    ggplot2::geom_point(ggplot2::aes(y=rareCtsAdj, x=K), col="blue") +
+    ggplot2::geom_point(ggplot2::aes(y=perplexAdj, x=K), col="red") +
+    ggplot2::geom_line(ggplot2::aes(y=rareCtsAdj, x=K), col="blue", linewidth = 2) +
+    ggplot2::geom_line(ggplot2::aes(y=perplexAdj, x=K), col="red", linewidth = 2) +
     ggplot2::geom_bar(ggplot2::aes(x = K, y = alphaBool), fill = dat$`alpha < 1`, stat = "identity", width = 1, alpha = 0.5) +
     ggplot2::scale_y_continuous(name=paste0("# cell-types with mean proportion < ", round(perc.rare.thresh*100, 2), "%"), breaks = prim_ax_breaks, labels = prim_ax_labs,
                                 sec.axis= ggplot2::sec_axis(~ ., name="perplexity", breaks = sec_ax_breaks, labels = round(sec_ax_labs, 2))) +
@@ -588,7 +690,7 @@ perplexityPlot <- function(models, corpus = NULL, perc.rare.thresh = 0.05){
       plot.title = ggplot2::element_text(size=15, face=NULL),
       # plot.subtitle = ggplot2::element_text(size=13, face=NULL),
       panel.grid.minor = ggplot2::element_blank(),
-      panel.grid.major = ggplot2::element_line(color = "black", size = 0.1),
+      panel.grid.major = ggplot2::element_line(color = "black", linewidth = 0.1),
       panel.ontop = TRUE,
       axis.title.y.left = ggplot2::element_text(color="blue", size = 13),
       axis.text.y.left = ggplot2::element_text(color="blue", size = 13),
@@ -597,6 +699,5 @@ perplexityPlot <- function(models, corpus = NULL, perc.rare.thresh = 0.05){
       axis.text.x = ggplot2::element_text(angle = 0, size = 13),
       axis.title.x = ggplot2::element_text(size=13)
     )
-  print(plt)
+  plt
 }
-

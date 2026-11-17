@@ -11,11 +11,14 @@ fitLDA(
   perc.rare.thresh = 0.05,
   ncores = 1,
   plot = TRUE,
-  verbose = TRUE
+  verbose = TRUE,
+  warm.start = FALSE,
+  max.counts = Inf
 )
 }
 \arguments{
-\item{counts}{Gene expression counts with pixels as rows and genes as columns}
+\item{counts}{Gene expression counts with pixels as rows and genes as columns.
+A matrix or a sparse matrix from the Matrix package.}
 
 \item{Ks}{vector of K parameters, or number of cell-types, to fit models with}
 
@@ -24,11 +27,30 @@ fitLDA(
 \item{perc.rare.thresh}{the number of deconvolved cell-types with mean pixel proportion below this fraction used to assess
 performance of fitted models for each K. Recorded for each K. (default: 0.05)}
 
-\item{ncores}{Number of cores for parallelization (default: 1). Suggest: parallel::detectCores()}
+\item{ncores}{Number of threads used to fit each model (default: 1). Suggest: parallel::detectCores().
+The fitted models do not depend on the number of threads.}
 
 \item{plot}{Boolean for plotting (default: TRUE)}
 
 \item{verbose}{Boolean for verbosity (default: TRUE)}
+
+\item{warm.start}{Fit the model with the largest K first and start each
+model with a smaller K from the model before it, after merging its most
+similar cell-types, instead of fitting each model from a random
+initialization. Fitting all models then takes little more time than
+fitting the model with the largest K. The models are as good (their
+perplexity is similar or lower), but the model for a given K then depends
+on the other values in \code{Ks} (default: FALSE)}
+
+\item{max.counts}{For data with very many pixels (e.g. Visium HD). If the
+corpus has more counts than this, the cell-type gene expression profiles
+are fitted on a random subset of the pixels (chosen with \code{seed}) that
+together have about \code{max.counts} counts, and the cell-type proportions
+of all pixels are then inferred with the fitted model. The limit is on
+the counts and not on the number of pixels, because the fewer counts a
+pixel has, the more pixels are needed to learn the expression profiles.
+About 5 million counts (\code{max.counts = 5e6}) give models that are as good
+as those fitted on all pixels (default: Inf, fit on all pixels)}
 }
 \value{
 A list that contains
@@ -40,16 +62,17 @@ A list that contains
 with mean proportion < perc.rare.thresh starts to increase steadily.
 \item numRare: number of cell-types with mean pixel proportion < perc.rare.thresh for each K
 \item perplexities: perplexity scores for each model
-\item fitCorpus: the corpus that was used to fit each model
+\item fitCorpus: the corpus that was used to fit each model, as a sparse
+matrix (dgCMatrix) from the Matrix package
 \item testCorpus: the corpus used to compute model perplexity.
 }
 }
 \description{
-The input for topicmodels::LDA needs to be a
-slam::as.simple_triplet_matrix (docs x words). Access a given model in
-the returned list via: lda$models$k. The models are objects from
-the R package "topicmodels". The LDA models have slots with additional
-information.
+Fits an LDA model for each K by variational
+expectation-maximization. Access a given model in
+the returned list via: lda$models$k. The models are
+\linkS4class{STdeconvolveLDA} objects, which have slots with
+additional information.
 }
 \examples{
 data(mOB)

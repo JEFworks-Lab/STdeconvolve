@@ -31,6 +31,6 @@ cd <- mOB$counts
 counts <- cleanCounts(cd, min.lib.size = 100)
 corpus <- restrictCorpus(counts, removeAbove=1.0, removeBelow = 0.05)
 ldas <- fitLDA(t(as.matrix(corpus)), Ks = seq(2,5))
-perplexityPlot(models = ldas, corpus = corpus)
+perplexityPlot(models = ldas, corpus = t(as.matrix(corpus)))
 
 }

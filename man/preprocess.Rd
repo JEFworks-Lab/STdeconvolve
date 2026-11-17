@@ -24,7 +24,8 @@ preprocess(
 )
 }
 \arguments{
-\item{dat}{pixel (row) x gene (columns) mtx with gene counts OR path to it}
+\item{dat}{pixel (row) x gene (columns) mtx with gene counts OR path to it.
+Can be a sparse matrix from the Matrix package.}
 
 \item{extractPos}{Boolean to extract pixel positional coordinates from pixel name
 names
@@ -76,7 +77,7 @@ of the "basis" functions in the GAM used to fit, higher = "smoother"
 A list that contains
 \itemize{
 \item corpus: (pixels x genes) matrix of the counts of the selected genes
-\item slm: slam::as.simple_triplet_matrix(corpus); required format for topicmodels::LDA input
+\item slm: the corpus as a sparse matrix (dgCMatrix) from the Matrix package
 \item positions: matrix of x and y coordinates of pixels rownames = pixels, colnames = "x", "y"
 }
 }

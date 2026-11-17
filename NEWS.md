@@ -1,3 +1,95 @@
+# Version 1.4.0 (2026-11-15)
+
++ `fitLDA()` fits the LDA models with a new C++ implementation of variational
+  EM instead of `topicmodels::LDA()`. It fits the same model with the same
+  initialization for a given `seed`, so results are equivalent (not
+  bit-identical: the cell-type proportions of each pixel are optimized to a
+  tighter tolerance), but it is 30-50 times faster on one core.
++ `fitLDA()` has a new argument `warm.start`. With `warm.start = TRUE` the
+  model with the largest K is fitted first and each model with a smaller K
+  starts from the model before it, after merging its most similar cell-types.
+  Fitting a range of Ks is then 2-3 times faster. Off by default, because the
+  model for a given K then depends on the other values in `Ks`.
++ `fitLDA()` has a new argument `max.counts` for data with very many pixels
+  (e.g. Visium HD). The cell-type gene expression profiles are fitted on a
+  random subset of the pixels that together have about `max.counts` counts,
+  and the cell-type proportions of all pixels are then inferred with the
+  fitted model. Off by default. See the new tutorial `docs/visium_hd.md`.
++ `cleanCounts()`, `restrictCorpus()` and `getOverdispersedGenes()` are
+  faster on large sparse matrices (`restrictCorpus()` about 4 times on Visium
+  HD data): the statistics of the genes are computed in one pass over the
+  counts and the matrix is subsetted once. Results are unchanged.
++ New figures of the results: `vizTopGenes()` (dot plot of the most specific
+  genes of each cell-type), `vizTopicMaps()` (a map of each cell-type in one
+  figure), `vizDominantTopic()` (the cell-type with the highest proportion in
+  each pixel), `vizTopicMarkers()` (a cell-type next to its most specific
+  genes), `vizTopicCorrelation()` (similarity and co-occurrence of the
+  cell-types) and `vizTopicAbundance()`. The maps work with any number of
+  pixels: with more than 20000 pixels they are drawn as an image.
++ `vizReport()` makes this standard set of figures with one call and can
+  write them to a PDF file.
++ The figure functions accept the list returned by `getBetaTheta()` directly,
+  e.g. `vizAllTopics(results, pos)`. `vizGeneCounts()` accepts a count matrix
+  and `pos` instead of a merged data.frame.
++ `cellTypeColors()` gives each cell-type the same color in all figures. It
+  replaces `rainbow()` as the default of `topicCols` in `vizAllTopics()`, so
+  the default colors of the pie charts have changed. With `topicOrder`, the
+  default colors now follow the cell-types instead of their order.
++ `topGenes()` has a new argument `specific` to return the genes with the
+  highest fold change versus the other cell-types.
++ `topicmodels` (and with it the GSL system library) is no longer required.
+  The models returned by `fitLDA()` are now "STdeconvolveLDA" objects instead
+  of "LDA_VEM" objects of `topicmodels`. They have the same slots (`k`,
+  `alpha`, `beta`, `gamma`, `terms`, `documents`, `loglikelihood`, `logLiks`,
+  `iter`, `n`, `Dim`), except for `wordassignments`, which is no longer
+  computed, and `control`, which is a list. Functions of `topicmodels`, such
+  as `posterior()` and `perplexity()`, do not work on the new objects: use
+  `getBetaTheta()` and the `perplexities` returned by `fitLDA()`. Models that
+  were fitted and saved with previous versions still work with
+  `getBetaTheta()`, `optimalModel()` and `perplexityPlot()`.
++ `slam` is no longer required either. `fitCorpus` and `testCorpus` returned
+  by `fitLDA()` and `slm` returned by `preprocess()` are now sparse matrices
+  (dgCMatrix) from the `Matrix` package instead of `slam` matrices. `slam`
+  matrices are still accepted as input by `fitLDA()` and `getBetaTheta()`.
++ `ncores` in `fitLDA()` is now the number of threads used to fit each model.
+  The fitted models do not depend on the number of threads. `BiocParallel` is
+  no longer used.
++ `fitLDA()` and `getBetaTheta()` accept sparse matrices, and
+  `getBetaTheta()` with a new `corpus` uses the C++ implementation as well
+  (new argument `ncores`).
++ `restrictCorpus()`, `preprocess()` and `getOverdispersedGenes()` keep the
+  counts sparse (2-3 times faster, much less memory, same results), and
+  `preprocess()` accepts sparse matrices.
++ `getBetaTheta()` and `perplexityPlot()` now stop with an error if a pixel in
+  `corpus` has no counts of any gene in the model, e.g. when a genes x pixels
+  matrix is given instead of pixels x genes. Previously this silently returned
+  equal proportions of all cell-types for such pixels.
++ Fitting is faster when the number of cell-types is large: cell-types that
+  are absent from a pixel are skipped while the proportions of that pixel are
+  optimized.
++ `vizAllTopics()` draws the pie charts as polygons with `ggplot2` directly
+  (about 10 times faster to render, same appearance). `scatterpie` is no
+  longer needed. `groups` and `r` can be given for all pixels in `theta` when
+  only some of them have a position.
++ Bug fixes:
+    + `vizAllTopics()` with `overlay`: the limits of the image were dropped,
+      so the pies were not aligned with the image.
+    + `vizTopic()` did not accept a data.frame for `theta`.
+    + `preprocess()` failed when `genes.to.remove` had more than one pattern,
+      opened a graphics device with `plot = FALSE`, and continued after a
+      path to a file that does not exist.
+    + `fitLDA()` returned empty `kneedOptK` and `ctPropOptK` for fewer than 3
+      values in `Ks`, so `optimalModel(opt = "kneed")` failed. The K with the
+      lowest value is used in that case.
+    + `annotateCellTypesGSEA()` did not order gene sets with equal adjusted
+      p-values by their enrichment score.
+    + `getCorrMtx()` with `thresh` printed its warnings instead of raising
+      them, and `filterTheta()` (used by `getBetaTheta()`) returned a vector
+      when a single cell-type remained.
+    + `ggplot2` deprecation warnings in `fitLDA()`, `perplexityPlot()` and
+      `correlationPlot()` (requires `ggplot2` >= 3.4.0).
+
+
 # Version 1.3.2 (2024-11-07)
 
 + Remove `liger` as a dependency. Replace with `fgsea` Korotkevich G, Sukhov V, Sergushichev A (2019). “Fast gene set enrichment analysis.” bioRxiv. doi:10.1101/060012, http://biorxiv.org/content/early/2016/06/20/060012. 

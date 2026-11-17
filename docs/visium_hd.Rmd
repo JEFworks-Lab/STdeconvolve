@@ -1,0 +1,454 @@
+---
+title: "Analysis of 10X Visium HD data"
+output:
+  github_document:
+    html_preview: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, dpi = 110, fig.retina = 1)
+```
+
+# Summary
+
+Visium HD measures gene expression in 2 µm squares, which are usually
+analysed after binning them into 8 µm or 16 µm bins. Compared to the
+datasets in the other tutorials, such a dataset has
+
+- **very many pixels**: hundreds of thousands of 8 µm bins instead of a few
+  thousand spots, and
+- **few counts per pixel**: a few hundred instead of tens of thousands.
+
+`STdeconvolve` works on such data, but two default settings were chosen for
+datasets with a few thousand large spots and should be changed:
+
+1. `removeBelow` of `restrictCorpus()` removes the genes that are detected in
+   few pixels. Its default of 5% removes the marker genes of every cell-type
+   that covers a small part of the tissue.
+2. `max.counts` of `fitLDA()` fits the models on a random subset of the
+   pixels. This is many times faster and gives the same models, because the
+   gene expression profiles of the cell-types are well determined by far
+   fewer than all pixels.
+
+This tutorial shows both on the 8 µm bins of a mouse kidney, and ends with
+what to expect from the 2 µm squares.
+
+# Data
+
+We use the [Visium HD mouse kidney
+dataset](https://www.10xgenomics.com/datasets/visium-hd-cytassist-gene-expression-libraries-of-mouse-kidney)
+of 10X Genomics. The counts of all bin sizes are in one archive (9.5 GB), of
+which we need the filtered count matrix and the bin positions of the 8 µm
+bins, and the count matrix of the 2 µm squares for the last section.
+
+```{r download}
+f <- "visiumHDTutorial/"
+files <- c("binned_outputs/square_008um/filtered_feature_bc_matrix.h5",
+           "binned_outputs/square_008um/spatial/tissue_positions.parquet",
+           "binned_outputs/square_002um/filtered_feature_bc_matrix.h5")
+
+if (!all(file.exists(paste0(f, files)))) {
+  dir.create(f, showWarnings = FALSE)
+  options(timeout = 3600)
+  archive <- paste0(f, "Visium_HD_Mouse_Kidney_binned_outputs.tar.gz")
+  download.file(paste0("https://cf.10xgenomics.com/samples/spatial-exp/3.0.0/",
+                       "Visium_HD_Mouse_Kidney/Visium_HD_Mouse_Kidney_binned_outputs.tar.gz"),
+                destfile = archive)
+  untar(archive, files = files, exdir = f)
+}
+```
+
+The count matrices are stored in the HDF5 format of 10X Genomics. This
+function reads one as a sparse genes x bins matrix. It needs the `hdf5r`
+package; the bin positions are read with the `arrow` package.
+
+```{r read_function}
+library(STdeconvolve)
+library(Matrix)
+library(ggplot2)
+
+read10xH5 <- function(file) {
+  h5 <- hdf5r::H5File$new(file, mode = "r")
+  on.exit(h5$close_all())
+  m <- h5[["matrix"]]
+  sparseMatrix(i = m[["indices"]][] + 1L,
+               p = m[["indptr"]][],
+               x = as.numeric(m[["data"]][]),
+               dims = m[["shape"]][],
+               dimnames = list(make.unique(m[["features/name"]][]),
+                               m[["barcodes"]][]))
+}
+```
+
+```{r load}
+cd <- read10xH5(paste0(f, files[1]))
+dim(cd)
+
+pos <- as.data.frame(arrow::read_parquet(paste0(f, files[2])))
+## position of each bin on the grid of bins. Rows are counted from the top.
+pos <- data.frame(x = pos$array_col, y = -pos$array_row, row.names = pos$barcode)
+pos <- pos[colnames(cd), ]
+```
+
+There are `r format(ncol(cd), big.mark = ",")` bins. Half of them have fewer
+than `r median(colSums(cd))` counts:
+
+```{r libsize}
+summary(colSums(cd))
+```
+
+# Cleaning
+
+We keep the bins with at least 100 counts.
+
+```{r clean}
+counts <- cleanCounts(cd, min.lib.size = 100)
+dim(counts)
+```
+
+# Selecting genes: `removeBelow`
+
+`restrictCorpus()` selects the genes for the model in two steps. It first
+removes the genes that are detected in more than a fraction `removeAbove` or
+in less than a fraction `removeBelow` of the pixels, and then keeps the (up
+to `nTopOD = 1000`) most overdispersed of the remaining genes.
+
+The default `removeBelow = 0.05` asks for genes that are detected in at least
+5% of the pixels. With the large spots of other technologies, where every
+spot contains several cells and many counts, this removes noise. A small bin
+with few counts is different: a gene is only detected in the bins that
+contain a cell expressing it, and often not even there. Marker genes of
+cell-types that make up a small part of the tissue are therefore detected in
+far fewer than 5% of the bins.
+
+Here is the fraction of bins in which some well-known marker genes of kidney
+cell-types are detected:
+
+```{r markers}
+markers <- c("proximal tubule S1" = "Slc5a2", "proximal tubule" = "Slc34a1",
+             "proximal tubule S3" = "Slc7a13", "thick ascending limb" = "Umod",
+             "distal convoluted tubule" = "Slc12a3", "principal cell" = "Aqp2",
+             "intercalated cell" = "Atp6v1b1", "intercalated cell B" = "Slc26a4",
+             "podocyte" = "Nphs2", "juxtaglomerular cell" = "Ren1",
+             "endothelial cell" = "Emcn", "fibroblast" = "Col1a1",
+             "smooth muscle" = "Acta2", "macrophage" = "C1qa",
+             "urothelium" = "Upk1b")
+detected <- rowSums(counts[markers, ] > 0) / ncol(counts)
+data.frame(celltype = names(markers), gene = markers,
+           percent.of.bins = round(100 * detected, 2), row.names = NULL)
+```
+
+More than half of these genes are detected in less than 5% of the bins.
+With the default setting, the model would never see them:
+
+```{r corpus_default}
+corpusDefault <- restrictCorpus(counts, removeAbove = 1.0, removeBelow = 0.05,
+                                verbose = FALSE)
+dim(corpusDefault)
+setdiff(markers, rownames(corpusDefault))
+```
+
+Only `r nrow(corpusDefault)` genes are left, and podocytes, juxtaglomerular
+cells, intercalated cells, fibroblasts, smooth muscle, macrophages and
+urothelium have lost their marker genes. Podocytes, for example, are found
+only in the glomeruli, which fill about half a percent of the bins.
+
+With `removeBelow = 0.005` (half a percent of the bins, here about
+`r format(round(0.005 * ncol(counts)), big.mark = ",")` bins) the full 1,000
+genes are selected and all of these markers are among them:
+
+```{r corpus}
+corpus <- restrictCorpus(counts, removeAbove = 1.0, removeBelow = 0.005,
+                         verbose = FALSE)
+dim(corpus)
+setdiff(markers, rownames(corpus))
+```
+
+As a rule of thumb, set `removeBelow` below the fraction of the pixels that
+you expect the rarest cell-type of interest to occupy. A gene that is
+detected in a few thousand bins is still supported by plenty of data, so
+there is little risk in a low value for a dataset of this size.
+
+`fitLDA()` needs a pixels x genes matrix in which each pixel has at least one
+count:
+
+```{r transpose}
+corpus <- t(corpus)
+corpus <- corpus[rowSums(corpus) > 0, ]
+dim(corpus)
+mean(rowSums(corpus))
+```
+
+# Fitting the models: `max.counts`
+
+An LDA model has two parts: the gene expression profile of each cell-type
+(`beta`, shared by all pixels) and the proportions of the cell-types in each
+pixel (`theta`). Fitting alternates between the two, and nearly all the time
+is spent on the proportions of the pixels, again and again while the
+profiles improve.
+
+The profiles are estimated from the counts of all pixels together. Beyond a
+few million counts they hardly change when more pixels are added, so there
+is no need to visit every pixel in every iteration. With `max.counts`,
+`fitLDA()`
+
+1. picks pixels at random until they have `max.counts` counts together,
+2. fits the model on these pixels only,
+3. computes the cell-type proportions of **all** pixels with the fitted
+   profiles, which takes a single pass over the data.
+
+The models that are returned contain the proportions of all pixels, and the
+perplexity is computed on all pixels as well, so everything downstream works
+as usual.
+
+The limit is on the number of counts and not on the number of pixels because
+the counts are what the profiles are estimated from: the fewer counts a
+pixel has, the more pixels are needed. `max.counts = 5e6` (5 million counts)
+is a good value for any bin size.
+
+To see the effect, we fit a model with 12 cell-types on all bins and on a
+subset. Set `ncores` to the number of cores of your computer; the bins are
+processed in parallel.
+
+```{r fit_compare}
+ncores <- parallel::detectCores()
+
+system.time(
+  ldaAll <- fitLDA(corpus, Ks = 12, ncores = ncores, plot = FALSE, verbose = FALSE)
+)
+
+system.time(
+  ldaSubset <- fitLDA(corpus, Ks = 12, ncores = ncores, plot = FALSE, max.counts = 5e6)
+)
+```
+
+The second fit used about a tenth of the bins and is several times faster.
+The two models describe the data equally well. The perplexity (lower is
+better) of both is computed on all bins:
+
+```{r fit_compare_perplexity}
+c(all = ldaAll$perplexities, subset = ldaSubset$perplexities)
+```
+
+Their cell-types are the same, too. We match the cell-types of the two models
+and look at the correlation of their gene expression profiles:
+
+```{r fit_compare_beta}
+betaAll <- getBetaTheta(ldaAll$models[[1]], perc.filt = 0, verbose = FALSE)$beta
+betaSubset <- getBetaTheta(ldaSubset$models[[1]], perc.filt = 0, verbose = FALSE)$beta
+corMtx <- getCorrMtx(betaAll, betaSubset, type = "b", verbose = FALSE)
+pairs <- lsatPairs(corMtx)
+round(sort(corMtx[cbind(pairs$rowix, pairs$colsix)]), 2)
+```
+
+Nearly all cell-types of one model have a counterpart with almost the same
+profile in the other. Do not expect a perfect match for every cell-type: LDA
+models fitted from different starting points differ in this way as well,
+typically by dividing one group of similar cells differently.
+
+## Choosing the number of cell-types
+
+The number of cell-types `K` is chosen by fitting models for a range of
+values. With `max.counts` this takes seconds per model. `warm.start = TRUE`
+saves more time: the model with the largest `K` is fitted first, and each
+smaller model starts from the previous one after merging its two most
+similar cell-types, instead of starting from scratch.
+
+```{r fit, fig.width=7, fig.height=4.5}
+system.time(
+  ldas <- fitLDA(corpus, Ks = seq(6, 24, by = 2), ncores = ncores,
+                 max.counts = 5e6, warm.start = TRUE, verbose = FALSE)
+)
+```
+
+The perplexity (red) improves up to `K = 12` to `14` and gets worse after
+that, while the number of cell-types with a mean proportion below 5% (blue)
+grows with `K`. In a tissue that is
+measured at this resolution, cell-types with a small mean proportion are
+expected (see the glomeruli above), so we do not take them as a sign of
+overfitting here, and continue with the model with the lowest perplexity.
+
+```{r optimal}
+optLDA <- optimalModel(models = ldas, opt = "min")
+optLDA
+```
+
+# Results
+
+```{r results}
+results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000, verbose = FALSE)
+deconProp <- results$theta
+deconGexp <- results$beta
+dim(deconProp)
+```
+
+The genes that are most specific to each cell-type, by their fold change
+over the mean of all cell-types:
+
+```{r top_genes}
+foldChange <- log2(t(t(deconGexp + 1e-6) / (colMeans(deconGexp) + 1e-6)))
+topSpecific <- t(apply(foldChange, 1, function(x) names(sort(x, decreasing = TRUE))[1:8]))
+data.frame(mean.proportion = round(colMeans(deconProp), 3),
+           top.genes = apply(topSpecific, 1, paste, collapse = " "))
+```
+
+`vizTopGenes()` shows the same genes as a dot plot. The largest dot of a
+gene is at the cell-type with its highest expression:
+
+```{r top_genes_plot, fig.width=8, fig.height=11, dpi=130}
+vizTopGenes(results, n = 4)
+```
+
+Several cell-types are easy to recognise: the first segment of the proximal
+tubule (cell-type 12: *Slc5a2*), the thick ascending limb (2: *Umod*,
+*Cldn16*), the distal convoluted tubule (1: *Slc12a3*, *Calb1*), the
+collecting duct (10: *Aqp6*, *Foxi1*, *Hsd11b2*) and the fat next to the
+kidney (13: *Ucp1*, *Cidea*, *Fabp4*).
+
+The cell-types in which the marker genes from above are most specific:
+
+```{r marker_celltypes}
+inCorpus <- markers[markers %in% colnames(foldChange)]
+data.frame(celltype = names(inCorpus), gene = inCorpus,
+           deconvolved.celltype = apply(foldChange[, inCorpus], 2, which.max),
+           log2.fold.change = round(apply(foldChange[, inCorpus], 2, max), 1),
+           row.names = NULL)
+```
+
+The marker genes that the default `removeBelow` would have removed are used
+by the model: the intercalated cell markers are specific to the collecting
+duct cell-type, and the others to cell-type 14, which combines smooth muscle
+and urothelium (*Acta2*, *Myh11*, *Upk1b*, *Upk3a*) with other rare cells.
+With `K = 14`, the rarest cells do not get a cell-type of their own; a model
+with a larger `K` divides them further.
+
+## Maps
+
+With hundreds of thousands of bins, drawing a pie chart for every bin with
+`vizAllTopics()` is neither fast nor readable. `vizTopicMaps()` draws one
+map per cell-type. With more than 20000 pixels it draws an image instead of
+a point for each pixel: here each cell of the image is the mean of 3 x 3
+bins (see its argument `resolution`). With `scale = "free"`, each panel has
+its own color scale, from 0 to the largest proportion of the cell-type,
+which is stated in the title of the panel:
+
+```{r maps, fig.width=10, fig.height=10, dpi=130}
+vizTopicMaps(results, pos, scale = "free")
+```
+
+`vizDominantTopic()` summarises all cell-types in one map, with the
+cell-type that has the highest proportion in each cell of the image:
+
+```{r dominant, fig.width=8, fig.height=7, dpi=130}
+vizDominantTopic(results, pos)
+```
+
+A cell-type can be checked against its most specific genes with
+`vizTopicMarkers()`. The bins with a high proportion of the cell-type
+should be the bins where its genes are expressed:
+
+```{r celltype_markers, fig.width=8, fig.height=8, dpi=130}
+vizTopicMarkers(results, pos, counts, topic = "2")
+```
+
+`vizReport(results, pos, counts, file = "report.pdf")` writes all of these
+figures, and one figure like the last one for every cell-type, to a PDF
+file. For this dataset that takes about 20 seconds.
+
+The pie charts are useful for a small region. Here are 60 x 60 bins (480 µm
+x 480 µm) of the cortex, at the right edge of the section:
+
+```{r zoom, fig.width=7, fig.height=6, dpi=130, message=FALSE}
+center <- c(x = 670, y = -418)
+region <- rownames(deconProp)[abs(pos[rownames(deconProp), "x"] - center["x"]) < 30 &
+                              abs(pos[rownames(deconProp), "y"] - center["y"]) < 30]
+vizAllTopics(deconProp[region, ], pos[region, ], r = 0.5, lwd = 0) +
+  guides(colour = "none")
+```
+
+# What about the 2 µm squares?
+
+The 2 µm squares can be analysed in the same way, with two more changes.
+They contain very few counts:
+
+```{r load_2um}
+cd2 <- read10xH5(paste0(f, files[3]))
+dim(cd2)
+summary(colSums(cd2))
+```
+
+- `min.lib.size = 100` in `cleanCounts()` would remove
+  `r round(100 * mean(colSums(cd2) < 100))`% of the squares. Use a small value
+  such as 10.
+- `removeBelow` needs to be lower still, for example 0.001: the default of
+  0.05 leaves `r sum(rowSums(cd2 > 0) > 0.05 * ncol(cd2))` genes.
+
+`max.counts = 5e6` needs no change. This is where a limit on the counts
+instead of the pixels matters: 5 million counts are about 50,000 of the 8 µm
+bins, but about 700,000 of the 2 µm squares.
+
+However, we recommend fitting the models on the 8 µm bins, as above. A
+square with a handful of counts in the selected genes says very little
+about which cell-types it contains. The model can still learn expression
+profiles from millions of such squares, but in our tests the profiles were
+less distinct than those of the 8 µm bins, the fit needed about 140
+iterations instead of about 20, and every cell-type ended up with a similar
+mean proportion.
+
+If you want maps at the resolution of 2 µm, you can apply the model of the
+8 µm bins to the 2 µm squares. `getBetaTheta()` computes the cell-type
+proportions of new pixels when it is given their counts:
+
+```{r transfer}
+corpus2 <- t(cd2[colnames(corpus), ])
+corpus2 <- corpus2[rowSums(corpus2) >= 3, ]
+dim(corpus2)
+
+system.time(
+  deconProp2 <- getBetaTheta(optLDA, corpus = corpus2, perc.filt = 0,
+                             ncores = ncores, verbose = FALSE)$theta
+)
+```
+
+The names of the squares contain their row and column on the grid of 2 µm
+squares; an 8 µm bin covers 4 x 4 of them. We look at the region from above
+and at the cell-type that is most common in it, at both resolutions:
+
+```{r transfer_map, fig.width=10, fig.height=4.5, dpi=130}
+rc <- do.call(rbind, strsplit(rownames(corpus2), "_|-"))
+pos2 <- data.frame(x = (as.integer(rc[, 4]) + 0.5) / 4 - 0.5,
+                   y = -((as.integer(rc[, 3]) + 0.5) / 4 - 0.5),
+                   row.names = rownames(corpus2))
+region2 <- rownames(pos2)[abs(pos2$x - center["x"]) < 30 & abs(pos2$y - center["y"]) < 30]
+ct <- names(which.max(colMeans(deconProp[region, ])))
+
+df <- rbind(data.frame(pos[region, ], proportion = deconProp[region, ct],
+                       size = 1, bins = "8 µm bins"),
+            data.frame(pos2[region2, ], proportion = deconProp2[region2, ct],
+                       size = 0.25, bins = "2 µm squares, model of the 8 µm bins"))
+df$bins <- factor(df$bins, levels = unique(df$bins))
+ggplot(df, aes(x = x, y = y, fill = proportion, width = size, height = size)) +
+  geom_tile() +
+  facet_wrap(~ bins) +
+  viridis::scale_fill_viridis(option = "A", direction = -1, limits = c(0, 1)) +
+  coord_equal() +
+  theme_void() +
+  ggtitle(paste("cell-type", ct))
+```
+
+The 2 µm map shows finer detail, but each square is noisy, and the squares
+with fewer than 3 counts in the selected genes (white) were left out.
+
+# Recommendations
+
+| | large spots (ST, Visium) | Visium HD, 8 µm bins | Visium HD, 2 µm squares |
+|---|---|---|---|
+| `cleanCounts(min.lib.size = )` | 100 | 100 | 10 |
+| `restrictCorpus(removeBelow = )` | 0.05 | 0.005 | 0.001 |
+| `fitLDA(max.counts = )` | not needed | 5e6 | 5e6 |
+| `fitLDA(warm.start = )` | optional | `TRUE` for a range of `Ks` | `TRUE` for a range of `Ks` |
+| `fitLDA(ncores = )` | | all cores | all cores |
+
+```{r session}
+sessionInfo()
+```

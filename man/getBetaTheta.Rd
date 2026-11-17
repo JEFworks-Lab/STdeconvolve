@@ -10,12 +10,14 @@ getBetaTheta(
   corpus = NULL,
   perc.filt = 0.05,
   betaScale = 1,
-  verbose = TRUE
+  verbose = TRUE,
+  ncores = 1
 )
 }
 \arguments{
-\item{lda}{an LDA model from "topicmodels" R package. From list of models returned by
-fitLDA}
+\item{lda}{an LDA model from the list of models returned by fitLDA.
+"LDA_VEM" models of the "topicmodels" R package, as returned by previous
+versions of fitLDA, are accepted as well.}
 
 \item{corpus}{If corpus is NULL, then it will use the original corpus that
 the model was fitted to. Otherwise, compute deconvolved topics from this
@@ -27,6 +29,8 @@ Each row needs at least 1 nonzero entry (default: NULL)}
 \item{betaScale}{factor to scale the predicted cell-type gene expression profiles (default: 1)}
 
 \item{verbose}{Boolean for verbosity (default: TRUE)}
+
+\item{ncores}{Number of threads used when \code{corpus} is given (default: 1)}
 }
 \value{
 A list that contains

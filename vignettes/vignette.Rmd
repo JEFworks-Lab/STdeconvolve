@@ -146,6 +146,64 @@ vizTopic(theta = deconProp, pos = pos, topic = "5", plotTitle = "X5",
          high = "red")
 ```
 
+### A standard set of figures
+
+A result is easier to judge from several perspectives. The following functions
+take the list returned by `getBetaTheta()` directly, and each cell-type has the
+same color in all of them (see `cellTypeColors()`).
+
+What is each cell-type? The genes that are most specific to it, i.e. with the
+highest fold change versus the other cell-types:
+
+```{r, visualize_top_genes, fig.width=7, fig.height=7}
+vizTopGenes(results, n = 5)
+```
+
+Where is each cell-type? One map per cell-type. With `scale = "free"`, each
+panel has its own color scale, which shows the pattern of cell-types with low
+proportions:
+
+```{r, visualize_maps, fig.width=9, fig.height=7}
+vizTopicMaps(results, pos, scale = "free")
+```
+
+Are the pixels with a cell-type the pixels where its genes are expressed?
+
+```{r, visualize_markers, fig.width=8, fig.height=6}
+vizTopicMarkers(results, pos, counts, topic = "5")
+```
+
+How abundant is each cell-type, and which cell-type has the highest proportion
+in each pixel?
+
+```{r, visualize_abundance, fig.width=7, fig.height=4}
+vizTopicAbundance(results)
+```
+
+```{r, visualize_dominant, fig.width=8, fig.height=4}
+vizDominantTopic(results, pos)
+```
+
+Are some cell-types very similar? This can indicate that the number of
+cell-types K is too high. `type = "beta"` compares the gene expression of the
+cell-types and `type = "theta"` their proportions across the pixels:
+
+```{r, visualize_similarity, fig.width=6, fig.height=5}
+vizTopicCorrelation(results, type = "beta")
+```
+
+`vizReport()` makes all of these figures with one call. It returns them as a
+list and, with `file`, writes them to a PDF file with one figure per page:
+
+```{r, visualize_report}
+plots <- vizReport(results, pos, counts, verbose = FALSE)
+names(plots)
+```
+
+```{r, visualize_report_file, eval=FALSE}
+vizReport(results, pos, counts, file = "STdeconvolve_report.pdf")
+```
+
 With deconvolved cell-types in hand, we will now go over two different
 strategies for annotating the deconvolved cell-types.
 
