@@ -8,7 +8,7 @@ vizAllTopics(
   theta,
   pos,
   topicOrder = seq(ncol(theta)),
-  topicCols = rainbow(ncol(theta)),
+  topicCols = cellTypeColors(ncol(theta))[topicOrder],
   groups = NA,
   group_cols = NA,
   r = max(0.4, max(pos)/nrow(pos) * 4),
@@ -19,7 +19,8 @@ vizAllTopics(
 )
 }
 \arguments{
-\item{theta}{document (pixel) x cell-type proportion matrix}
+\item{theta}{document (pixel) x cell-type proportion matrix, or the list
+returned by \code{getBetaTheta()}}
 
 \item{pos}{position of pixels, as data.frame with x and y columns}
 
@@ -27,7 +28,8 @@ vizAllTopics(
 and same length as topicCols (default: seq(ncol(theta)))}
 
 \item{topicCols}{Vector of colors for each of the cell-types to be visualized.
-Same length and order as topicOrder (default: rainbow(ncol(theta)))}
+Same length and order as topicOrder (default: the colors of
+\code{cellTypeColors()}, which are the same in all figures of this package)}
 
 \item{groups}{Indicates color of the scatterpie strokes (borders) with the goal of coloring them
 by their assigned group. This can be a vector or factor indicating the group of each
@@ -68,6 +70,6 @@ ldas <- fitLDA(t(as.matrix(corpus)), Ks = 3)
 optLDA <- optimalModel(models = ldas, opt = 3)
 results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 deconProp <- results$theta
-vizAllTopics(deconProp,pos, groups = annot, group_cols = rainbow(length(levels(annot))), r=0.4)
+vizAllTopics(deconProp,pos, groups = annot, group_cols = grDevices::rainbow(length(levels(annot))), r=0.4)
 
 }

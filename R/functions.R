@@ -959,9 +959,13 @@ filterTheta <- function(theta, perc.filt=0.05, verbose=TRUE){
 #' 
 #' @param beta beta matrix (cell-type gene distribution matrix)
 #' @param n number of top genes for each deconvolved cell-type to return (default: 10)
+#' @param specific if TRUE, return the genes that are most specific to each
+#'     cell-type instead of its most expressed genes: the genes with the
+#'     highest log2 fold change of their probability in the cell-type versus
+#'     their mean probability in the other cell-types (default: FALSE)
 #' 
-#' @return a list where each item is a vector of the top genes and their associated probabilities for
-#'     a given deconvolved cell-type
+#' @return a list where each item is a vector of the top genes and their associated probabilities
+#'     (or log2 fold changes, if `specific` is TRUE) for a given deconvolved cell-type
 #'     
 #' @examples 
 #' data(mOB)
@@ -976,7 +980,10 @@ filterTheta <- function(theta, perc.filt=0.05, verbose=TRUE){
 #' genes <- topGenes(deconGexp)
 #' 
 #' @export
-topGenes <- function(beta, n=10){
+topGenes <- function(beta, n=10, specific=FALSE){
+  if (specific) {
+    beta <- geneSpecificity(as.matrix(beta))
+  }
   topgenes <- lapply(seq(nrow(beta)), function(ct){
     sort(beta[ct,], decreasing=TRUE)[1:n]
   })

@@ -15,13 +15,15 @@ vizGeneCounts(
   stroke = 0.5,
   alpha = 1,
   plotTitle = NA,
-  showLegend = TRUE
+  showLegend = TRUE,
+  pos = NULL
 )
 }
 \arguments{
 \item{df}{data.frame where rows are spots and columns must be at least:
 "x", "y" for spot positions in space and "gene" column that is counts
-of a gene for each spot.}
+of a gene for each spot. If \code{pos} is given: a gene x pixel count
+matrix, e.g. the output of \code{cleanCounts()}.}
 
 \item{gene}{column name of the gene counts in df to be visualized}
 
@@ -43,6 +45,11 @@ rows in df. Ex: c("0", "1", "0", ...)}
 \item{plotTitle}{option to add a title to the plot}
 
 \item{showLegend}{Boolean to show the plot legend}
+
+\item{pos}{positions of the pixels, as a matrix or data.frame with columns
+\code{x} and \code{y} and the pixels as row names. If given, \code{df} is a gene x
+pixel count matrix and does not need to be merged with the positions.
+(default: NULL)}
 }
 \value{
 a plot where each point is a pixel colored by the expression level of the selected gene
@@ -59,5 +66,8 @@ df <- merge(as.data.frame(pos), as.data.frame(t(as.matrix(counts))), by = 0)
 vizGeneCounts(df = df, gene = "Sox11",
     size = 3, stroke = 0.1, plotTitle = "Sox11",
     winsorize = 0.05, showLegend = TRUE)
+## the same plot without merging the positions and the counts
+vizGeneCounts(counts, gene = "Sox11", pos = pos,
+    size = 3, stroke = 0.1, plotTitle = "Sox11", winsorize = 0.05)
 
 }

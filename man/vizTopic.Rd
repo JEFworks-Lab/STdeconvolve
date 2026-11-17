@@ -20,7 +20,8 @@ vizTopic(
 )
 }
 \arguments{
-\item{theta}{document (pixel) x cell-type proportion matrix}
+\item{theta}{document (pixel) x cell-type proportion matrix, or the list
+returned by \code{getBetaTheta()}}
 
 \item{pos}{position of pixels, as data.frame with \code{x} and \code{y} columns}
 

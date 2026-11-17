@@ -4,16 +4,21 @@
 \alias{topGenes}
 \title{Returns top n genes of each deconvolved cell-type for a given beta matrix}
 \usage{
-topGenes(beta, n = 10)
+topGenes(beta, n = 10, specific = FALSE)
 }
 \arguments{
 \item{beta}{beta matrix (cell-type gene distribution matrix)}
 
 \item{n}{number of top genes for each deconvolved cell-type to return (default: 10)}
+
+\item{specific}{if TRUE, return the genes that are most specific to each
+cell-type instead of its most expressed genes: the genes with the
+highest log2 fold change of their probability in the cell-type versus
+their mean probability in the other cell-types (default: FALSE)}
 }
 \value{
-a list where each item is a vector of the top genes and their associated probabilities for
-a given deconvolved cell-type
+a list where each item is a vector of the top genes and their associated probabilities
+(or log2 fold changes, if \code{specific} is TRUE) for a given deconvolved cell-type
 }
 \description{
 For a given beta matrix (cell-type gene distribution matrix),

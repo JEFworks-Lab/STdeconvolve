@@ -19,6 +19,24 @@
   faster on large sparse matrices (`restrictCorpus()` about 4 times on Visium
   HD data): the statistics of the genes are computed in one pass over the
   counts and the matrix is subsetted once. Results are unchanged.
++ New figures of the results: `vizTopGenes()` (dot plot of the most specific
+  genes of each cell-type), `vizTopicMaps()` (a map of each cell-type in one
+  figure), `vizDominantTopic()` (the cell-type with the highest proportion in
+  each pixel), `vizTopicMarkers()` (a cell-type next to its most specific
+  genes), `vizTopicCorrelation()` (similarity and co-occurrence of the
+  cell-types) and `vizTopicAbundance()`. The maps work with any number of
+  pixels: with more than 20000 pixels they are drawn as an image.
++ `vizReport()` makes this standard set of figures with one call and can
+  write them to a PDF file.
++ The figure functions accept the list returned by `getBetaTheta()` directly,
+  e.g. `vizAllTopics(results, pos)`. `vizGeneCounts()` accepts a count matrix
+  and `pos` instead of a merged data.frame.
++ `cellTypeColors()` gives each cell-type the same color in all figures. It
+  replaces `rainbow()` as the default of `topicCols` in `vizAllTopics()`, so
+  the default colors of the pie charts have changed. With `topicOrder`, the
+  default colors now follow the cell-types instead of their order.
++ `topGenes()` has a new argument `specific` to return the genes with the
+  highest fold change versus the other cell-types.
 + `topicmodels` (and with it the GSL system library) is no longer required.
   The models returned by `fitLDA()` are now "STdeconvolveLDA" objects instead
   of "LDA_VEM" objects of `topicmodels`. They have the same slots (`k`,

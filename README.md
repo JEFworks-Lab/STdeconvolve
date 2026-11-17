@@ -71,6 +71,14 @@ vizAllTopics(deconProp, pos,
 
 <img src="https://github.com/JEFworks/STdeconvolve/blob/devel/docs/getting_started_files/figure-markdown_github/getting_started_proportions-1.png?raw=true"/>
 
+The standard set of figures of a result (the most specific genes of each
+cell-type, a map of each cell-type, a cell-type next to its genes, the
+similarity of the cell-types, ...) can be made with one call:
+
+```r
+vizReport(results, pos, counts, file = "STdeconvolve_report.pdf")
+```
+
 More details can be found in the tutorials.
 
 ## Tutorials

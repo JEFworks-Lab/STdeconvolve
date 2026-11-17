@@ -579,3 +579,154 @@ test_that("the sparse helpers of cleanCounts and restrictCorpus match the Matrix
   od <- getOverdispersedGenes(clean, details = TRUE, verbose = FALSE)
   expect_equal(as.matrix(od$mat), as.matrix(clean) * od$df$gsf)
 })
+
+
+test_that("the figures of the results are made from the list of getBetaTheta()", {
+  
+  data(mOB)
+  pos <- mOB$pos
+  counts <- cleanCounts(mOB$counts, min.lib.size = 100, verbose = FALSE)
+  corpus <- restrictCorpus(counts, removeAbove = 1.0, removeBelow = 0.05, verbose = FALSE)
+  ldas <- fitLDA(t(as.matrix(corpus)), Ks = 4, plot = FALSE, verbose = FALSE)
+  results <- getBetaTheta(optimalModel(ldas, opt = 4), verbose = FALSE)
+  theta <- results$theta
+  
+  ## the colors depend on the position of the cell-type only
+  cols <- cellTypeColors(results)
+  expect_equal(names(cols), colnames(theta))
+  expect_equal(unname(cols), unname(cellTypeColors(8)[1:4]))
+  expect_equal(cellTypeColors(theta), cols)
+  expect_equal(anyDuplicated(cellTypeColors(24)), 0)
+  expect_equal(anyDuplicated(cellTypeColors(40)), 0)
+  
+  ## the most specific genes have the highest fold change versus the other cell-types
+  top <- topGenes(results$beta, n = 3, specific = TRUE)
+  expect_equal(names(top), rownames(results$beta))
+  fc <- log2((results$beta[1, ] + 0.1 / ncol(results$beta)) /
+               (colMeans(results$beta[-1, ]) + 0.1 / ncol(results$beta)))
+  expect_equal(top[[1]], sort(fc, decreasing = TRUE)[1:3])
+  expect_equal(topGenes(results$beta, n = 3), topGenes(results$beta, n = 3, specific = FALSE))
+  
+  ## the existing functions accept the list and give the same plot
+  p1 <- suppressMessages(vizAllTopics(results, pos))
+  p2 <- suppressMessages(vizAllTopics(theta, pos))
+  expect_equal(p1$layers[[1]]$data, p2$layers[[1]]$data)
+  expect_equal(vizTopic(results, pos, topic = "2")$layers[[1]]$data,
+               vizTopic(theta, pos, topic = "2")$layers[[1]]$data)
+  ## the color follows the cell-type if the order is changed
+  p3 <- suppressMessages(vizAllTopics(theta, pos, topicOrder = c(3, 1)))
+  built <- ggplot2::ggplot_build(p3)$data[[1]]
+  expect_setequal(unique(built$fill), unname(cols[c(3, 1)]))
+  expect_equal(unique(built$fill[p3$layers[[1]]$data$CellTypes == "X3"]), unname(cols[3]))
+  
+  ## gene counts with positions instead of a merged data.frame
+  df <- merge(as.data.frame(pos), as.data.frame(t(as.matrix(counts))), by = 0)
+  rownames(df) <- df$Row.names
+  p <- vizGeneCounts(counts, gene = "Sox11", pos = pos)
+  expect_equal(p$layers[[1]]$data$Sox11, df[colnames(counts), "Sox11"])
+  expect_error(vizGeneCounts(counts, gene = "notAGene", pos = pos), "not a gene")
+  
+  ## maps: one point per pixel and panel
+  p <- vizTopicMaps(results, pos)
+  expect_s3_class(p, "ggplot")
+  d <- p$layers[[1]]$data
+  expect_equal(nrow(d), length(theta))
+  expect_equal(d$value[d$panel == "Cell-type 2"], unname(theta[, "2"]))
+  expect_silent(ggplot2::ggplot_build(p))
+  d <- vizTopicMaps(theta, pos, topics = c("3", "1"), scale = "free")$layers[[1]]$data
+  expect_equal(nlevels(d$panel), 2)
+  expect_equal(max(d$value), 1)
+  expect_equal(as.vector(tapply(d$value, d$panel, max)), c(1, 1))
+  
+  ## pixels without a position are left out, as in vizAllTopics()
+  d <- vizTopicMaps(theta, pos[5:20, ])$layers[[1]]$data
+  expect_equal(nrow(d), 16 * 4)
+  expect_error(vizTopicMaps(theta, pos[, "x", drop = FALSE]), "x.*y")
+  
+  ## dominant cell-type
+  p <- vizDominantTopic(results, pos)
+  expect_equal(as.character(p$layers[[1]]$data$value),
+               colnames(theta)[apply(theta, 1, which.max)])
+  expect_silent(ggplot2::ggplot_build(p))
+  
+  ## an image for many pixels: each grid cell has the mean of its pixels
+  grid <- expand.grid(x = 1:40, y = 1:30)
+  rownames(grid) <- paste0("p", seq_len(nrow(grid)))
+  big <- cbind("1" = grid$x / 40, "2" = 1 - grid$x / 40)
+  rownames(big) <- rownames(grid)
+  m <- STdeconvolve:::mapData(big, grid, raster = TRUE, resolution = 20)
+  expect_true(m$raster)
+  expect_equal(length(m$x), 20 * 15)
+  expect_equal(sort(unique(m$x)), seq(1.5, 39.5, by = 2))
+  expect_equal(as.numeric(m$values[m$x == 1.5 & m$y == 1.5, "1"]), 1.5 / 40)
+  ## the cells are weighted
+  w <- STdeconvolve:::mapData(big, grid, raster = TRUE, resolution = 20, weights = grid$x)
+  expect_equal(as.numeric(w$values[w$x == 1.5 & w$y == 1.5, "1"]), (1 * 1 + 2 * 2) / 3 / 40)
+  ## empty columns of the grid do not make the image uneven
+  holes <- grid$x != 7 & grid$x != 8
+  p <- vizDominantTopic(big[holes, ], grid[holes, ], raster = TRUE, resolution = 20)
+  expect_silent(ggplot2::ggplot_build(p))
+  expect_silent(ggplot2::ggplot_build(vizTopicMaps(big[holes, ], grid[holes, ], raster = TRUE)))
+  ## positions that are not on a grid
+  set.seed(1)
+  scattered <- cbind(x = runif(1200), y = runif(1200))
+  m <- STdeconvolve:::mapData(big, scattered, raster = TRUE)
+  expect_lte(length(m$x), 17 * 17)
+  expect_equal(sum(m$values[, 1] + m$values[, 2], na.rm = TRUE), sum(!is.na(m$values[, 1])))
+  
+  ## abundance
+  d <- vizTopicAbundance(results)$data
+  expect_equal(d$value, unname(colMeans(theta)))
+  expect_equal(as.character(d$celltype[which.max(d$value)]), rev(levels(d$celltype))[1])
+  
+  ## top genes: each gene once, with the size 1 in its highest cell-type
+  p <- vizTopGenes(results, n = 4)
+  d <- p$data
+  expect_equal(nlevels(d$gene), length(unique(unlist(lapply(topGenes(results$beta, 4, TRUE), names)))))
+  expect_equal(as.vector(tapply(d$relative, d$gene, max)), rep(1, nlevels(d$gene)))
+  expect_silent(ggplot2::ggplot_build(p))
+  expect_equal(levels(vizTopGenes(results$beta, genes = c("Sox11", "Camk4"))$data$gene),
+               c("Camk4", "Sox11"))
+  expect_warning(vizTopGenes(results, genes = c("Sox11", "notAGene")), "notAGene")
+  
+  ## a cell-type and its genes
+  p <- vizTopicMarkers(results, pos, counts, topic = 2, n = 2)
+  d <- p$layers[[1]]$data
+  expect_equal(nlevels(d$panel), 3)
+  expect_match(levels(d$panel)[1], "^Cell-type 2")
+  genes <- names(topGenes(results$beta, 2, TRUE)[["2"]])
+  expect_equal(sub(" .*", "", levels(d$panel)[-1]), genes)
+  expect_silent(ggplot2::ggplot_build(p))
+  d <- vizTopicMarkers(theta, pos, counts, topic = "1", genes = "Sox11",
+                       normalize = FALSE, winsorize = 0)$layers[[1]]$data
+  expect_equal(d$value[as.integer(d$panel) == 2],
+               unname(counts["Sox11", rownames(theta)] / max(counts["Sox11", ])))
+  expect_error(vizTopicMarkers(theta, pos, counts, topic = "1"), "genes")
+  expect_error(vizTopicMarkers(results, pos, counts, topic = "9"), "not a cell-type")
+  
+  ## similarity of the cell-types
+  for (type in c("beta", "theta")) {
+    p <- vizTopicCorrelation(results, type = type)
+    d <- p$data
+    expect_equal(nrow(d), 16)
+    expect_equal(d$value[as.character(d$row) == as.character(d$column)], rep(1, 4))
+    expect_silent(ggplot2::ggplot_build(p))
+  }
+  d <- vizTopicCorrelation(theta, type = "theta", cluster = FALSE)$data
+  expect_equal(matrix(d$value, 4), unname(cor(theta)))
+  
+  ## the report
+  plots <- vizReport(results, pos, counts, verbose = FALSE)
+  expect_equal(names(plots), c("abundance", "topGenes", "maps", "dominant", "pies",
+                               "similarity", "cooccurrence", paste0("markers", 1:4)))
+  expect_true(all(vapply(plots, inherits, logical(1), "ggplot")))
+  expect_false("pies" %in% names(vizReport(results, pos, max.pies = 10)))
+  file <- tempfile(fileext = ".pdf")
+  device <- grDevices::dev.cur()
+  expect_message(vizReport(results, pos, file = file), "Wrote 7 figures")
+  expect_gt(file.size(file), 1000)
+  expect_equal(grDevices::dev.cur(), device)
+  unlink(file)
+  expect_error(vizReport(theta, pos), "getBetaTheta")
+  
+})

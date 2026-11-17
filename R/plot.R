@@ -9,12 +9,14 @@ utils::globalVariables(c("x", "y", "wedge", "CellTypes", "Pixel.Groups", "Var1",
 #'     individual cell-types or cell-type-clusters) so for accuracy of the proportions
 #'     of each cell-type in a pixel, the row (pixel) should sum to 1.
 #'
-#' @param theta document (pixel) x cell-type proportion matrix
+#' @param theta document (pixel) x cell-type proportion matrix, or the list
+#'     returned by `getBetaTheta()`
 #' @param pos position of pixels, as data.frame with x and y columns
 #' @param topicOrder order of topics in theta to visualize as a numeric vector
 #'     and same length as topicCols (default: seq(ncol(theta)))
 #' @param topicCols Vector of colors for each of the cell-types to be visualized.
-#'     Same length and order as topicOrder (default: rainbow(ncol(theta)))
+#'     Same length and order as topicOrder (default: the colors of
+#'     `cellTypeColors()`, which are the same in all figures of this package)
 #' @param groups Indicates color of the scatterpie strokes (borders) with the goal of coloring them
 #'     by their assigned group. This can be a vector or factor indicating the group of each
 #'     pixel. Needs to be in the same order as the pixel rows in "theta" (default: NA)
@@ -42,14 +44,12 @@ utils::globalVariables(c("x", "y", "wedge", "CellTypes", "Pixel.Groups", "Var1",
 #' optLDA <- optimalModel(models = ldas, opt = 3)
 #' results <- getBetaTheta(optLDA, perc.filt = 0.05, betaScale = 1000)
 #' deconProp <- results$theta
-#' vizAllTopics(deconProp,pos, groups = annot, group_cols = rainbow(length(levels(annot))), r=0.4)
+#' vizAllTopics(deconProp,pos, groups = annot, group_cols = grDevices::rainbow(length(levels(annot))), r=0.4)
 #' 
-#' @importFrom grDevices rainbow
-#'
 #' @export
 vizAllTopics <- function(theta, pos,
                          topicOrder=seq(ncol(theta)),
-                         topicCols=rainbow(ncol(theta)),
+                         topicCols=cellTypeColors(ncol(theta))[topicOrder],
                          groups = NA,
                          group_cols = NA,
                          r = max(0.4, max(pos)/nrow(pos)*4),
@@ -57,6 +57,11 @@ vizAllTopics <- function(theta, pos,
                          showLegend = TRUE,
                          plotTitle = NA,
                          overlay = NA) {
+  
+  ## the list returned by getBetaTheta() is accepted
+  if (is.list(theta) && !is.data.frame(theta)) {
+    theta <- thetaOf(theta)
+  }
   
   ## check that theta and pos are either data.frames or matrices
   if( !is.matrix(theta) & !is.data.frame(theta) ){
@@ -212,7 +217,8 @@ pieWedges <- function(theta, x, y, r, n = 360) {
 #' 
 #' @description Visualize the pixel proportions of a single topic.
 #'
-#' @param theta document (pixel) x cell-type proportion matrix
+#' @param theta document (pixel) x cell-type proportion matrix, or the list
+#'     returned by `getBetaTheta()`
 #' @param pos position of pixels, as data.frame with `x` and `y` columns
 #' @param topic the index of the topic
 #' @param groups colors the pixel border lines based on a group or cell layer
@@ -254,6 +260,11 @@ vizTopic <- function(theta, pos, topic,
                      high = "red",
                      plotTitle = NA,
                      showLegend = TRUE) {
+  
+  ## the list returned by getBetaTheta() is accepted
+  if (is.list(theta) && !is.data.frame(theta)) {
+    theta <- thetaOf(theta)
+  }
   
   ## check that theta and pos are either data.frames or matrices
   if( !is.matrix(theta) & !is.data.frame(theta) ){
@@ -351,7 +362,8 @@ vizTopic <- function(theta, pos, topic,
 #'
 #' @param df data.frame where rows are spots and columns must be at least:
 #'      "x", "y" for spot positions in space and "gene" column that is counts
-#'      of a gene for each spot.
+#'      of a gene for each spot. If `pos` is given: a gene x pixel count
+#'      matrix, e.g. the output of `cleanCounts()`.
 #' @param gene column name of the gene counts in df to be visualized
 #' @param groups colors the spots lines based on a group or cell layer
 #'     they belong to. Needs to be a character vector in the order of the spot
@@ -364,6 +376,10 @@ vizTopic <- function(theta, pos, topic,
 #' @param alpha alpha value of colored pixels (default: 1)
 #' @param plotTitle option to add a title to the plot
 #' @param showLegend Boolean to show the plot legend
+#' @param pos positions of the pixels, as a matrix or data.frame with columns
+#'     `x` and `y` and the pixels as row names. If given, `df` is a gene x
+#'     pixel count matrix and does not need to be merged with the positions.
+#'     (default: NULL)
 #' 
 #' @return a plot where each point is a pixel colored by the expression level of the selected gene
 #' 
@@ -376,6 +392,9 @@ vizTopic <- function(theta, pos, topic,
 #' vizGeneCounts(df = df, gene = "Sox11",
 #'     size = 3, stroke = 0.1, plotTitle = "Sox11",
 #'     winsorize = 0.05, showLegend = TRUE)
+#' ## the same plot without merging the positions and the counts
+#' vizGeneCounts(counts, gene = "Sox11", pos = pos,
+#'     size = 3, stroke = 0.1, plotTitle = "Sox11", winsorize = 0.05)
 #' 
 #' @export
 vizGeneCounts <- function(df, gene,
@@ -385,7 +404,25 @@ vizGeneCounts <- function(df, gene,
                           size = 7, stroke = 0.5,
                           alpha = 1,
                           plotTitle = NA,
-                          showLegend = TRUE) {
+                          showLegend = TRUE,
+                          pos = NULL) {
+  
+  if (!is.null(pos)) {
+    ## `df` is a gene x pixel count matrix
+    if (!gene %in% rownames(df)) {
+      stop("`gene` is not a gene (row) of the count matrix.")
+    }
+    pixels <- colnames(df)[colnames(df) %in% rownames(pos)]
+    if (length(pixels) == 0) {
+      stop("None of the pixels (columns) of the count matrix have a position in `pos`.")
+    }
+    if (length(groups) == ncol(df)) {
+      groups <- groups[colnames(df) %in% rownames(pos)]
+    }
+    expr <- as.numeric(df[gene, pixels])
+    df <- data.frame(x = as.numeric(pos[pixels, "x"]), y = as.numeric(pos[pixels, "y"]))
+    df[[gene]] <- expr
+  }
   
   counts <- df[,gene]
   

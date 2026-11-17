@@ -260,7 +260,7 @@ system.time(
 ```
 
     ##    user  system elapsed 
-    ## 259.843   1.159  19.627
+    ## 259.576   2.604  21.002
 
 ``` r
 system.time(
@@ -279,7 +279,7 @@ system.time(
     ## Time to compute cell-types at low proportions was 0 mins
 
     ##    user  system elapsed 
-    ##  33.097   0.287   3.309
+    ##  33.413   0.369   3.364
 
 The second fit used about a tenth of the bins and is several times
 faster. The two models describe the data equally well. The perplexity
@@ -336,7 +336,7 @@ system.time(
 ![](visium_hd_files/figure-gfm/fit-1.png)<!-- -->
 
     ##    user  system elapsed 
-    ## 214.908   1.938  21.620
+    ## 216.281   3.141  22.974
 
 The perplexity (red) improves up to `K = 12` to `14` and gets worse
 after that, while the number of cell-types with a mean proportion below
@@ -389,6 +389,15 @@ data.frame(mean.proportion = round(colMeans(deconProp), 3),
     ## 13           0.025                              Fabp4 Fasn Cfd Car3 Thrsp Cox8b Cidea Ucp1
     ## 14           0.059                         Tagln Acta2 Myh11 Upk1b Upk3a Sprr1a Mgp Sema3g
 
+`vizTopGenes()` shows the same genes as a dot plot. The largest dot of a
+gene is at the cell-type with its highest expression:
+
+``` r
+vizTopGenes(results, n = 4)
+```
+
+![](visium_hd_files/figure-gfm/top_genes_plot-1.png)<!-- -->
+
 Several cell-types are easy to recognise: the first segment of the
 proximal tubule (cell-type 12: *Slc5a2*), the thick ascending limb (2:
 *Umod*, *Cldn16*), the distal convoluted tubule (1: *Slc12a3*, *Calb1*),
@@ -433,31 +442,42 @@ further.
 ## Maps
 
 With hundreds of thousands of bins, drawing a pie chart for every bin
-with `vizAllTopics()` is neither fast nor readable. The bins lie on a
-regular grid, so the proportion of a cell-type can be drawn as an image
-with one cell per bin:
+with `vizAllTopics()` is neither fast nor readable. `vizTopicMaps()`
+draws one map per cell-type. With more than 20000 pixels it draws an
+image instead of a point for each pixel: here each cell of the image is
+the mean of 3 x 3 bins (see its argument `resolution`). With
+`scale = "free"`, each panel has its own color scale, from 0 to the
+largest proportion of the cell-type, which is stated in the title of the
+panel:
 
 ``` r
-plotProportions <- function(theta, pos, celltypes) {
-  df <- do.call(rbind, lapply(celltypes, function(ct) {
-    data.frame(pos[rownames(theta), ], proportion = theta[, ct],
-               celltype = paste("cell-type", ct))
-  }))
-  df$celltype <- factor(df$celltype, levels = paste("cell-type", celltypes))
-  ggplot(df, aes(x = x, y = y, fill = proportion)) +
-    geom_raster() +
-    facet_wrap(~ celltype) +
-    viridis::scale_fill_viridis(option = "A", direction = -1, limits = c(0, 1)) +
-    coord_equal() +
-    theme_void()
-}
-```
-
-``` r
-plotProportions(deconProp, pos, celltypes = colnames(deconProp))
+vizTopicMaps(results, pos, scale = "free")
 ```
 
 ![](visium_hd_files/figure-gfm/maps-1.png)<!-- -->
+
+`vizDominantTopic()` summarises all cell-types in one map, with the
+cell-type that has the highest proportion in each cell of the image:
+
+``` r
+vizDominantTopic(results, pos)
+```
+
+![](visium_hd_files/figure-gfm/dominant-1.png)<!-- -->
+
+A cell-type can be checked against its most specific genes with
+`vizTopicMarkers()`. The bins with a high proportion of the cell-type
+should be the bins where its genes are expressed:
+
+``` r
+vizTopicMarkers(results, pos, counts, topic = "2")
+```
+
+![](visium_hd_files/figure-gfm/celltype_markers-1.png)<!-- -->
+
+`vizReport(results, pos, counts, file = "report.pdf")` writes all of
+these figures, and one figure like the last one for every cell-type, to
+a PDF file. For this dataset that takes about 20 seconds.
 
 The pie charts are useful for a small region. Here are 60 x 60 bins (480
 µm x 480 µm) of the cortex, at the right edge of the section:
@@ -528,7 +548,7 @@ system.time(
 ```
 
     ##    user  system elapsed 
-    ##  28.273   0.652   5.908
+    ##  27.968   0.763   6.068
 
 The names of the squares contain their row and column on the grid of 2
 µm squares; an 8 µm bin covers 4 x 4 of them. We look at the region from
