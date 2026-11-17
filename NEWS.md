@@ -15,6 +15,10 @@
   random subset of the pixels that together have about `max.counts` counts,
   and the cell-type proportions of all pixels are then inferred with the
   fitted model. Off by default. See the new tutorial `docs/visium_hd.md`.
++ `cleanCounts()`, `restrictCorpus()` and `getOverdispersedGenes()` are
+  faster on large sparse matrices (`restrictCorpus()` about 4 times on Visium
+  HD data): the statistics of the genes are computed in one pass over the
+  counts and the matrix is subsetted once. Results are unchanged.
 + `topicmodels` (and with it the GSL system library) is no longer required.
   The models returned by `fitLDA()` are now "STdeconvolveLDA" objects instead
   of "LDA_VEM" objects of `topicmodels`. They have the same slots (`k`,

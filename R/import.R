@@ -79,9 +79,16 @@ cleanCounts <- function(counts,
   }
   ix_col <- Matrix::colSums(counts)
   ix_col <- ix_col > min.lib.size & ix_col < max.lib.size
-  counts <- counts[, ix_col]
-  counts <- counts[Matrix::rowSums(counts) > min.reads, ]
-  counts <- counts[Matrix::rowSums(counts > 0) > min.detected, ]
+  if (methods::is(counts, "dgCMatrix")) {
+    ## counts of the genes in the remaining pixels, then one subset
+    stats <- csc_row_stats(counts@p, counts@i, counts@x, nrow(counts), ix_col, FALSE)
+    counts <- subsetCounts(counts, rows=which(stats$sum > min.reads & stats$detected > min.detected),
+                           cols=ix_col)
+  } else {
+    counts <- counts[, ix_col]
+    counts <- counts[Matrix::rowSums(counts) > min.reads, ]
+    counts <- counts[Matrix::rowSums(counts > 0) > min.detected, ]
+  }
   if (verbose) {
     message("Resulting matrix has ", ncol(counts), " cells and ", nrow(counts), " genes")
   }
@@ -91,6 +98,49 @@ cleanCounts <- function(counts,
     hist(log10(Matrix::rowSums(counts)+1), breaks=20, main='Datasets Per Gene')
   }
   return(counts)
+}
+
+
+#' Subset the rows and columns of a dgCMatrix in one pass
+#'
+#' @description Same result as `counts[rows, cols]`, which subsets the rows and
+#'     the columns one after the other.
+#'
+#' @param counts dgCMatrix
+#' @param rows indices of the rows to keep, in the order of the result
+#' @param cols logical vector, the columns to keep (default: all)
+#'
+#' @return dgCMatrix
+#'
+#' @noRd
+subsetCounts <- function(counts, rows, cols=NULL) {
+  if (anyDuplicated(rows)) {
+    return(if (is.null(cols)) counts[rows, , drop=FALSE] else counts[rows, cols, drop=FALSE])
+  }
+  map <- integer(nrow(counts))
+  map[rows] <- seq_along(rows)
+  sub <- csc_subset(counts@p, counts@i, counts@x, map, if (is.null(cols)) logical(0) else cols)
+  dn <- dimnames(counts)
+  if (!is.null(dn[[1]])) dn[[1]] <- dn[[1]][rows]
+  if (!is.null(dn[[2]]) && !is.null(cols)) dn[[2]] <- dn[[2]][cols]
+  methods::new("dgCMatrix", i=sub$i, p=sub$p, x=sub$x,
+               Dim=c(length(rows), length(sub$p) - 1L), Dimnames=dn)
+}
+
+
+#' Mean and variance of each gene (row) of a genes x pixels count matrix
+#'
+#' @param counts dgCMatrix
+#'
+#' @return list with the mean `m`, the variance `v` and the number of pixels
+#'     `detected` in which each gene has a count above 0
+#'
+#' @noRd
+geneStats <- function(counts) {
+  stats <- csc_row_stats(counts@p, counts@i, counts@x, nrow(counts), logical(0), TRUE)
+  list(m=stats$sum / ncol(counts),
+       v=stats$ssdev / (ncol(counts) - 1),
+       detected=stats$detected)
 }
 
 
@@ -144,23 +194,57 @@ getOverdispersedGenes <- function(counts,
     }
     counts <- Matrix::Matrix(counts, sparse = TRUE)
   }
-  
-  mat <- Matrix::t(counts) ## make rows as cells, cols as genes
+  counts <- methods::as(methods::as(methods::as(counts, "dMatrix"), "generalMatrix"), "CsparseMatrix")
   
   if(verbose) {
     message("Calculating variance fit ...")
   }
-  ## mean and variance of each gene, computed from the non-zero counts only:
-  ## sum (x - m)^2 = sum over non-zero x of (x - m)^2 + (number of zeros) * m^2
-  mat <- methods::as(mat, "CsparseMatrix")
-  gm <- Matrix::colMeans(mat)
-  nz <- diff(mat@p)
-  dev <- mat
-  dev@x <- (mat@x - rep(gm, nz))^2
-  gv <- (Matrix::colSums(dev) + (nrow(mat) - nz) * gm^2) / (nrow(mat) - 1)
+  stats <- geneStats(counts)
+  od <- overdispersion(gm=stats$m, gv=stats$v, genes=rownames(counts), n.obs=ncol(counts),
+                       gam.k=gam.k, alpha=alpha, plot=plot,
+                       use.unadjusted.pvals=use.unadjusted.pvals, do.par=do.par,
+                       max.adjusted.variance=max.adjusted.variance,
+                       min.adjusted.variance=min.adjusted.variance, verbose=verbose)
+  
+  if(!details) {
+    return(od$ods)
+  } else {
+    ## variance normalize (scale each gene) and return normalization factor
+    norm.mat <- counts
+    norm.mat@x <- counts@x * od$df$gsf[counts@i + 1L]
+    return(list(mat=norm.mat, ods=od$ods, df=od$df))
+  }
+}
+
+
+#' Find the overdispersed genes from the mean and variance of each gene
+#'
+#' @description The part of getOverdispersedGenes() that does not need the
+#'     counts.
+#'
+#' @param gm,gv mean and variance of each gene across the pixels
+#' @param genes names of the genes
+#' @param n.obs number of pixels
+#' @param gam.k,alpha,plot,use.unadjusted.pvals,do.par,max.adjusted.variance,min.adjusted.variance,verbose
+#'     see getOverdispersedGenes()
+#'
+#' @return list with the names of the overdispersed genes `ods` and the data
+#'     frame of normalization parameters `df`
+#'
+#' @noRd
+overdispersion <- function(gm, gv, genes, n.obs,
+                           gam.k=5,
+                           alpha=0.05,
+                           plot=FALSE,
+                           use.unadjusted.pvals=FALSE,
+                           do.par=TRUE,
+                           max.adjusted.variance=1e3,
+                           min.adjusted.variance=1e-3,
+                           verbose=TRUE) {
+  
   dfm <- log(gm)
   dfv <- log(gv)
-  names(dfm) <- names(dfv) <- colnames(mat)
+  names(dfm) <- names(dfv) <- genes
   df <- data.frame(m=dfm, v=dfv)
   
   vi <- which(is.finite(dfv))
@@ -181,8 +265,7 @@ getOverdispersedGenes <- function(counts,
   }
   df$res <- -Inf
   df$res[vi] <- resid(m,type='response')
-  n.feat <- ncol(mat) ## gene
-  n.obs <- nrow(mat) ## cell
+  n.feat <- length(gm) ## gene
   df$lp <- as.numeric(pf(exp(df$res),n.obs,n.obs,lower.tail=FALSE,log.p=TRUE)) ## degrees of freedom based on number of cells to focus on cellular differences in expression
   df$lpa <- bh.adjust(df$lp,log=TRUE)
   df$qv <- as.numeric(qchisq(df$lp, n.feat-1, lower.tail = FALSE,log.p=TRUE)/n.feat) ## we are interested in how variable each feature (gene) is relative to the total number of features
@@ -215,13 +298,7 @@ getOverdispersedGenes <- function(counts,
     graphics::points(df$m[ods],df$qv[ods],col=2,pch='.')
   }
   
-  if(!details) {
-    return(colnames(mat)[ods])
-  } else {
-    ## variance normalize and return normalization factor
-    norm.mat <- counts*df$gsf
-    return(list(mat=norm.mat, ods=colnames(mat)[ods], df=df))
-  }
+  list(ods=genes[ods], df=df)
 }
 
 

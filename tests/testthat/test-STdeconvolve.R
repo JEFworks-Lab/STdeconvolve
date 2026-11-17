@@ -539,3 +539,43 @@ test_that("fitLDA can fit on a subset of the pixels", {
   expect_equal(rownames(getBetaTheta(sub$models[[1]], verbose = FALSE)$theta), rownames(corpus))
   expect_error(fitLDA(corpus, Ks = 3, max.counts = 0, plot = FALSE, verbose = FALSE), "max.counts")
 })
+
+
+test_that("the sparse helpers of cleanCounts and restrictCorpus match the Matrix package", {
+  subsetCounts <- getFromNamespace("subsetCounts", "STdeconvolve")
+  geneStats <- getFromNamespace("geneStats", "STdeconvolve")
+  set.seed(1)
+  m <- Matrix::rsparsematrix(60, 40, density = 0.2, rand.x = function(n) rpois(n, 3) + 1)
+  dimnames(m) <- list(paste0("g", 1:60), paste0("p", 1:40))
+  m <- methods::as(m, "CsparseMatrix")
+  
+  ## rows in a new order, and a subset of the columns
+  rows <- c(50, 3, 17, 4, 60)
+  cols <- rep(c(TRUE, FALSE, TRUE, TRUE), 10)
+  expect_identical(subsetCounts(m, rows, cols), m[rows, cols])
+  expect_identical(subsetCounts(m, rows), m[rows, ])
+  expect_identical(subsetCounts(m, c(2, 2, 5)), m[c(2, 2, 5), ])
+  
+  stats <- geneStats(m)
+  dense <- as.matrix(m)
+  expect_equal(stats$m, unname(rowMeans(dense)))
+  expect_equal(stats$v, unname(apply(dense, 1, var)))
+  expect_equal(stats$detected, unname(rowSums(dense > 0)))
+  
+  ## dense, triplet and compressed input give the same result
+  data(mOB)
+  cd <- mOB$counts
+  clean <- cleanCounts(cd, min.lib.size = 100, min.reads = 10, min.detected = 5)
+  expect_equal(as.matrix(cleanCounts(as.matrix(cd), min.lib.size = 100, min.reads = 10, min.detected = 5)),
+               as.matrix(clean))
+  expect_equal(as.matrix(cleanCounts(methods::as(cd, "TsparseMatrix"), min.lib.size = 100,
+                                     min.reads = 10, min.detected = 5)),
+               as.matrix(clean))
+  corpus <- restrictCorpus(clean, removeAbove = 0.95, removeBelow = 0.05, verbose = FALSE)
+  expect_equal(as.matrix(restrictCorpus(as.matrix(clean), removeAbove = 0.95, removeBelow = 0.05,
+                                        verbose = FALSE)),
+               as.matrix(corpus))
+  expect_equal(as.matrix(corpus), as.matrix(clean)[rownames(corpus), ])
+  od <- getOverdispersedGenes(clean, details = TRUE, verbose = FALSE)
+  expect_equal(as.matrix(od$mat), as.matrix(clean) * od$df$gsf)
+})

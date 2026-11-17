@@ -33,41 +33,41 @@ restrictCorpus <- function(counts,
                            plot=FALSE,
                            verbose=TRUE) {
   
-  ## number of pixels each gene is detected in
-  detected <- Matrix::rowSums(counts > 0)
+  if (!methods::is(counts, "dgCMatrix")) {
+    if (!methods::is(counts, "Matrix")) counts <- Matrix::Matrix(counts, sparse=TRUE)
+    counts <- methods::as(methods::as(methods::as(counts, "dMatrix"), "generalMatrix"), "CsparseMatrix")
+  }
+  
+  ## mean and variance of each gene and the number of pixels it is detected
+  ## in, from one pass over the counts. The genes are filtered on these, and
+  ## the counts are only subsetted once, at the end.
+  stats <- geneStats(counts)
+  detected <- stats$detected
   
   ## remove genes that are present in more than X% of pixels
-  vi <- detected >= ncol(counts)*removeAbove
+  above <- detected >= ncol(counts)*removeAbove
   if(verbose) {
-    message(paste0('Removing ', sum(vi), ' genes present in ',
+    message(paste0('Removing ', sum(above), ' genes present in ',
                    removeAbove*100, '% or more of pixels...'))
-  }
-  counts <- counts[!vi,]
-  detected <- detected[!vi]
-  if(verbose) {
-    message(paste0(nrow(counts), ' genes remaining...'))
+    message(paste0(sum(!above), ' genes remaining...'))
   }
   
   ## remove genes that are present in less than X% of pixels
-  vi <- detected <= ncol(counts)*removeBelow
+  below <- detected <= ncol(counts)*removeBelow
   if(verbose) {
-    message(paste0('Removing ', sum(vi), ' genes present in ',
+    message(paste0('Removing ', sum(below & !above), ' genes present in ',
                    removeBelow*100, '% or less of pixels...'))
+    message(paste0(sum(!above & !below), ' genes remaining...'))
   }
-  counts <- counts[!vi,]
-  if(verbose) {
-    message(paste0(nrow(counts), ' genes remaining...'))
-  }
+  keep <- which(!above & !below)
   
   ## overdispersed genes
   if(verbose) {
     message(paste0('Restricting to overdispersed genes with alpha = ', alpha, '...'))
+    message("Calculating variance fit ...")
   }
-  OD <- getOverdispersedGenes(counts,
-                              alpha=alpha,
-                              plot=plot,
-                              details=TRUE,
-                              verbose=verbose)
+  OD <- overdispersion(gm=stats$m[keep], gv=stats$v[keep], genes=rownames(counts)[keep],
+                       n.obs=ncol(counts), alpha=alpha, plot=plot, verbose=verbose)
 
   # option to select just the top n overdispersed genes based on
   # log p-val adjusted
@@ -88,7 +88,11 @@ restrictCorpus <- function(counts,
   } else {
     od_genes <- OD$ods
   }
-  countsFiltRestricted <- counts[od_genes,]
+  if (is.null(rownames(counts)) || anyDuplicated(rownames(counts))) {
+    countsFiltRestricted <- counts[keep, , drop=FALSE][od_genes,]
+  } else {
+    countsFiltRestricted <- subsetCounts(counts, rows=match(od_genes, rownames(counts)))
+  }
   
   if (plot) {
     par(mfrow=c(1,2), mar=rep(5,4))

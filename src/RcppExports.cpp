@@ -36,9 +36,42 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// csc_row_stats
+Rcpp::List csc_row_stats(const Rcpp::IntegerVector& p, const Rcpp::IntegerVector& i, const Rcpp::NumericVector& x, int nrow, const Rcpp::LogicalVector& cols, bool deviations);
+RcppExport SEXP _STdeconvolve_csc_row_stats(SEXP pSEXP, SEXP iSEXP, SEXP xSEXP, SEXP nrowSEXP, SEXP colsSEXP, SEXP deviationsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type p(pSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type i(iSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type x(xSEXP);
+    Rcpp::traits::input_parameter< int >::type nrow(nrowSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::LogicalVector& >::type cols(colsSEXP);
+    Rcpp::traits::input_parameter< bool >::type deviations(deviationsSEXP);
+    rcpp_result_gen = Rcpp::wrap(csc_row_stats(p, i, x, nrow, cols, deviations));
+    return rcpp_result_gen;
+END_RCPP
+}
+// csc_subset
+Rcpp::List csc_subset(const Rcpp::IntegerVector& p, const Rcpp::IntegerVector& i, const Rcpp::NumericVector& x, const Rcpp::IntegerVector& row_map, const Rcpp::LogicalVector& cols);
+RcppExport SEXP _STdeconvolve_csc_subset(SEXP pSEXP, SEXP iSEXP, SEXP xSEXP, SEXP row_mapSEXP, SEXP colsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type p(pSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type i(iSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type x(xSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type row_map(row_mapSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::LogicalVector& >::type cols(colsSEXP);
+    rcpp_result_gen = Rcpp::wrap(csc_subset(p, i, x, row_map, cols));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_STdeconvolve_lda_vem_cpp", (DL_FUNC) &_STdeconvolve_lda_vem_cpp, 16},
+    {"_STdeconvolve_csc_row_stats", (DL_FUNC) &_STdeconvolve_csc_row_stats, 6},
+    {"_STdeconvolve_csc_subset", (DL_FUNC) &_STdeconvolve_csc_subset, 5},
     {NULL, NULL, 0}
 };
 

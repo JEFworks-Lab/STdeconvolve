@@ -5,3 +5,11 @@ lda_vem_cpp <- function(csc_p, csc_i, csc_x, D, V, K, alpha, estimate_alpha, ini
     .Call(`_STdeconvolve_lda_vem_cpp`, csc_p, csc_i, csc_x, D, V, K, alpha, estimate_alpha, init_beta, seed, em_max_iter, em_tol, var_max_iter, var_tol, nthreads, accelerate)
 }
 
+csc_row_stats <- function(p, i, x, nrow, cols, deviations) {
+    .Call(`_STdeconvolve_csc_row_stats`, p, i, x, nrow, cols, deviations)
+}
+
+csc_subset <- function(p, i, x, row_map, cols) {
+    .Call(`_STdeconvolve_csc_subset`, p, i, x, row_map, cols)
+}
+
